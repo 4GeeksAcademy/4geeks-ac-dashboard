@@ -228,6 +228,9 @@ function renderGrouped(rows){
           <option value="assignTo">Owner</option>
           <option value="reason">Reason</option>
           <option value="bucket">Status bucket</option>
+          <option value="leadSentiment">Lead sentiment</option>
+          <option value="classification">Classification</option>
+          <option value="dealQuality">Deal quality</option>
         </select>
         <span class="pill count-tag">${rows.length} deals in current filter</span>
       </div>
@@ -266,7 +269,7 @@ function drawGroupTable(rows, field){
   });
 }
 
-const IND_COLS = [['id','ID'],['name','Name'],['email','Email'],['date','Date'],['region','Region'],['course','Course'],['source','Source'],['campaign','Campaign'],['location','Location'],['assignTo','Owner'],['dealValue','Value'],['bucket','Bucket'],['reason','Reason']];
+const IND_COLS = [['id','ID'],['name','Name'],['email','Email'],['date','Date'],['region','Region'],['course','Course'],['source','Source'],['campaign','Campaign'],['location','Location'],['assignTo','Owner'],['dealValue','Value'],['bucket','Bucket'],['reason','Reason'],['admissionsScore','Adm. Score'],['leadSentiment','Sentiment'],['dealQuality','Deal Quality'],['feedback','Feedback']];
 
 function renderIndividual(rows){
   const el = document.getElementById('tab-individual');
@@ -303,6 +306,10 @@ function drawIndividualTable(rows){
         <td>${r.dealValue ? '$'+Number(r.dealValue).toLocaleString() : '-'}</td>
         <td><span class="badge ${BUCKET_CLASS[r.bucket]}">${BUCKET_LABEL[r.bucket]}</span></td>
         <td>${r.reason||'-'}</td>
+        <td>${r.admissionsScore||'-'}</td>
+        <td>${r.leadSentiment||'-'}</td>
+        <td>${r.dealQuality||'-'}</td>
+        <td>${r.feedback||'-'}</td>
       </tr>`).join('')}</tbody>
   `;
   if(sorted.length>500){
