@@ -9,16 +9,26 @@ const state = { region:'all', bucket:'all', source:'all', medium:'all', campaign
 let sortState = { field:'date', dir:'desc' };
 
 async function loadData(region){
-  document.getElementById('freshness').textContent = 'Loading from ActiveCampaign…';
   const url = region && region!=='all' ? `/api/summary?region=${encodeURIComponent(region)}` : '/api/summary';
-  const res = await fetch(url);
-  if(!res.ok){
-    const err = await res.json().catch(()=>({error:res.statusText}));
-    document.getElementById('freshness').innerHTML = `<span style="color:#ff6b6b">Failed to load: ${err.error||res.statusText}</span>`;
-    document.querySelector('.wrap').insertAdjacentHTML('beforeend', `<div class="error">Could not reach ActiveCampaign. Check AC_API_URL / AC_API_KEY env vars, or open <a href="/api/schema" style="color:#ff9d6b">/api/schema</a> to debug.</div>`);
-    throw new Error(err.error||res.statusText);
+  let data = null;
+  for(let attempt=0; attempt<180; attempt++){
+    const res = await fetch(url);
+    if(res.status===202){
+      const body = await res.json().catch(()=>({}));
+      document.getElementById('freshness').textContent = body.lastError ? `Loading from ActiveCampaign… (retrying after error: ${body.lastError})` : 'Loading from ActiveCampaign… (first load can take a few minutes)';
+      await new Promise(r=>setTimeout(r, 3000));
+      continue;
+    }
+    if(!res.ok){
+      const err = await res.json().catch(()=>({error:res.statusText}));
+      document.getElementById('freshness').innerHTML = `<span style="color:#ff6b6b">Failed to load: ${err.error||res.statusText}</span>`;
+      document.querySelector('.wrap').insertAdjacentHTML('beforeend', `<div class="error">Could not reach ActiveCampaign. Check AC_API_URL / AC_API_KEY env vars, or open <a href="/api/schema" style="color:#ff9d6b">/api/schema</a> to debug.</div>`);
+      throw new Error(err.error||res.statusText);
+    }
+    data = await res.json();
+    break;
   }
-  const data = await res.json();
+  if(!data) throw new Error('Timed out waiting for ActiveCampaign data');
   ALL = data.records;
   META = { generatedAt: data.generatedAt, cacheAgeSeconds: data.cacheAgeSeconds };
   renderFreshness();
