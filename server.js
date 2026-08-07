@@ -9,6 +9,15 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const CACHE_TTL_MS = Number(process.env.CACHE_TTL_SECONDS || 300) * 1000;
 
+// How far back to pull deals/contacts from ActiveCampaign. The account has
+// ~47k deals across all pipelines going back to 2016 -- pulling everything
+// is slow and, worse, silently truncates data for whichever pipeline sorts
+// last once AC's pagination cap is hit (this is what caused LATAM lost
+// reasons to show up empty). Scoping to a rolling window keeps requests
+// fast and complete for the window that actually matters day-to-day.
+const DATA_WINDOW_MONTHS = Number(process.env.DATA_WINDOW_MONTHS || 6);
+const DATA_WINDOW_MS = DATA_WINDOW_MONTHS * 30 * 24 * 60 * 60 * 1000;
+
 let client;
 try {
   client = new ActiveCampaignClient({ apiUrl: process.env.AC_API_URL, apiKey: process.env.AC_API_KEY });
@@ -24,23 +33,31 @@ async function getRecords() {
   const now = Date.now();
   if (cache.records && now - cache.at < CACHE_TTL_MS) return cache.records;
 
-  const [deals, contactsRaw, dealCustomFieldData, fieldValuesRaw] = await Promise.all([
-    client.listDeals({}),
-    client.listContacts({}),
-    client.listDealCustomFieldData(),
-    client.listAllFieldValues(),
+const windowStart = new Date(now - DATA_WINDOW_MS).toISOString().slice(0, 10);
+
+const [deals, contactsRaw] = await Promise.all([
+  client.listDeals({ createdAfter: windowStart }),
+  client.listContacts({ createdAfter: windowStart }),
   ]);
 
-  const contactsById = new Map(contactsRaw.map((c) => [String(c.id), c]));
+const dealIds = deals.map((d) => d.id);
+  const contactIds = contactsRaw.map((c) => c.id);
 
-  const contactFieldValuesById = new Map();
+const [dealCustomFieldData, fieldValuesRaw] = await Promise.all([
+  client.listDealCustomFieldDataForDeals(dealIds),
+  client.listContactFieldValuesForContacts(contactIds),
+  ]);
+
+const contactsById = new Map(contactsRaw.map((c) => [String(c.id), c]));
+
+const contactFieldValuesById = new Map();
   fieldValuesRaw.forEach((fv) => {
     const key = String(fv.contact);
     if (!contactFieldValuesById.has(key)) contactFieldValuesById.set(key, []);
     contactFieldValuesById.get(key).push(fv);
   });
 
-  const records = buildDataset({ deals, dealCustomFieldData, contactsById, contactFieldValuesById });
+const records = buildDataset({ deals, dealCustomFieldData, contactsById, contactFieldValuesById });
   cache = { at: now, records };
   return records;
 }
@@ -57,7 +74,7 @@ app.get('/api/schema', async (req, res) => {
       client.listDealStages(),
       client.listDealCustomFieldMeta(),
       client.listContactCustomFieldMeta(),
-    ]);
+      ]);
     res.json({ pipelines, stages, dealFields, contactFields, currentRegionMap: PIPELINE_REGION_MAP });
   } catch (e) {
     res.status(502).json({ error: e.message });
@@ -68,11 +85,12 @@ app.get('/api/summary', async (req, res) => {
   if (!client) return res.status(500).json({ error: 'AC_API_URL / AC_API_KEY not configured' });
   try {
     const region = req.query.region; // 'USA' | 'Spain' | 'LATAM' | undefined = all
-    let records = await getRecords();
+  let records = await getRecords();
     if (region && region !== 'all') records = records.filter((r) => r.region === region);
     res.json({
       generatedAt: new Date().toISOString(),
       cacheAgeSeconds: Math.round((Date.now() - cache.at) / 1000),
+      dataWindowMonths: DATA_WINDOW_MONTHS,
       summary: summarize(records),
       byRegion: groupBy(records, 'region'),
       records,
