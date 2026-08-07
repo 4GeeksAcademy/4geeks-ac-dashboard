@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>4Geeks — Live Lead & Deal Dashboard</title>
+<link rel="stylesheet" href="/styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <h1>4Geeks — Live Lead &amp; Deal Dashboard</h1>
+  <p class="subtitle">USA · Spain · LATAM — pulled directly from ActiveCampaign deals + contacts.</p>
+  <div class="freshness" id="freshness">Loading…</div>
+
+  <div class="kpis" id="kpis"></div>
+  <div class="filters" id="filters"></div>
+
+  <div class="tabs" id="tabs">
+    <div class="tab active" data-tab="overview">Overview (Combined)</div>
+    <div class="tab" data-tab="regions">Compare Regions</div>
+    <div class="tab" data-tab="grouped">Grouped / Pivot</div>
+    <div class="tab" data-tab="individual">Individual Leads</div>
+  </div>
+
+  <div id="tab-overview"></div>
+  <div id="tab-regions" style="display:none"></div>
+  <div id="tab-grouped" style="display:none"></div>
+  <div id="tab-individual" style="display:none"></div>
+
+  <div class="footer">4Geeks Academy · Live data from ActiveCampaign · Cached briefly server-side, click Refresh for the latest</div>
+</div>
+<script src="/dashboard.js"></script>
+</body>
+</html>
