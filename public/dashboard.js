@@ -7,6 +7,22 @@ const REGIONS = ['USA','Spain','LATAM'];
 
 const state = { region:'all', bucket:'all', source:'all', medium:'all', campaign:'all', location:'all', course:'all', assignTo:'all', reason:'all', q:'', dateFrom:'', dateTo:'' };
 let sortState = { field:'date', dir:'desc' };
+function syncStateFromUrl(){
+  const params = new URLSearchParams(location.search);
+  Object.keys(state).forEach(k=>{ if(params.has(k)) state[k] = params.get(k); });
+}
+function syncStateToUrl(){
+  const params = new URLSearchParams();
+  Object.entries(state).forEach(([k,v])=>{ if(v && v!=='all') params.set(k, v); });
+  const qs = params.toString();
+  history.replaceState(null, '', qs ? `${location.pathname}?${qs}` : location.pathname);
+}
+function showToast(msg){
+  const t = document.createElement('div');
+  t.className = 'toast'; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=> t.remove(), 2200);
+}
 
 async function loadData(region){
   const url = region && region!=='all' ? `/api/summary?region=${encodeURIComponent(region)}` : '/api/summary';
@@ -37,13 +53,18 @@ async function loadData(region){
 function renderFreshness(){
   const el = document.getElementById('freshness');
   const t = META.generatedAt ? new Date(META.generatedAt).toLocaleString() : '—';
-  el.innerHTML = `Data as of ${t} (cached ${META.cacheAgeSeconds ?? '?'}s ago) <button id="btn-refresh">Refresh now</button>`;
+  el.innerHTML = `Data as of ${t} (cached ${META.cacheAgeSeconds ?? '?'}s ago) <button id="btn-refresh">Refresh now</button> <button id="btn-copy-link" class="ghost">Copy link to this view</button>`;
   document.getElementById('btn-refresh').addEventListener('click', async ()=>{
     document.getElementById('btn-refresh').textContent = 'Refreshing…';
     await fetch('/api/refresh', { method:'POST' });
     await loadData(state.region);
     buildFilters();
     renderAll();
+  });
+  document.getElementById('btn-copy-link').addEventListener('click', async ()=>{
+    syncStateToUrl();
+    try{ await navigator.clipboard.writeText(location.href); showToast('Link copied to clipboard'); }
+    catch(e){ showToast('Could not copy link'); }
   });
 }
 
@@ -107,6 +128,12 @@ function buildFilters(){
     <div class="filt"><label>Search</label><input type="text" id="f-q" placeholder="name, email, id, campaign..."></div>
     <div class="filt"><label>&nbsp;</label><button class="ghost" id="f-reset">Reset filters</button></div>
   `;
+  ['region','bucket','source','medium','campaign','location','course','assignTo','reason'].forEach(k=>{
+    const elx = document.getElementById('f-'+k); if(elx && state[k]) elx.value = state[k];
+  });
+  if(state.dateFrom) document.getElementById('f-from').value = state.dateFrom;
+  if(state.dateTo) document.getElementById('f-to').value = state.dateTo;
+  if(state.q) document.getElementById('f-q').value = state.q;
   ['region','bucket','source','medium','campaign','location','course','assignTo','reason'].forEach(k=>{
     document.getElementById('f-'+k).addEventListener('change', async e=>{
       state[k]=e.target.value;
@@ -474,6 +501,7 @@ document.getElementById('tabs').addEventListener('click', e=>{
 });
 
 function renderAll(){
+  syncStateToUrl();
   const rows = filtered();
   renderKpis(rows);
   const active = document.querySelector('.tab.active').dataset.tab;
@@ -486,7 +514,8 @@ function renderAll(){
 
 (async function init(){
   try{
-    await loadData();
+    syncStateFromUrl();
+    await loadData(state.region && state.region!=='all' ? state.region : undefined);
     buildFilters();
     renderAll();
   }catch(e){
