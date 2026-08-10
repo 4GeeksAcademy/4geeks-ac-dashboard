@@ -48,6 +48,14 @@ function renderFreshness(){
 }
 
 function uniq(field){ const s=new Set(); ALL.forEach(r=>{ if(r[field]) s.add(r[field]); }); return Array.from(s).sort(); }
+// The Lost Reasons field is a multiselect on the AC side (a deal can have 2+
+// reasons checked), so `r.reasons` is always an array (possibly empty) while
+// `r.reason` is a comma-joined display string. Anywhere we count/filter/group
+// by reason we need to explode that array per-deal instead of treating the
+// joined string as one atomic value -- otherwise "A" and "A, B" look like two
+// unrelated reasons instead of both counting toward reason "A".
+function uniqReasons(){ const s=new Set(); ALL.forEach(r=>{ (r.reasons||[]).forEach(x=>{ if(x) s.add(x); }); }); return Array.from(s).sort(); }
+function countByReasons(rows){ const m={}; rows.forEach(r=>{ (r.reasons||[]).forEach(x=>{ if(x) m[x]=(m[x]||0)+1; }); }); return m; }
 
 function filtered(){
   return ALL.filter(r=>{
@@ -59,7 +67,7 @@ function filtered(){
     if(state.location!=='all' && r.location!==state.location) return false;
     if(state.course!=='all' && r.course!==state.course) return false;
     if(state.assignTo!=='all' && r.assignTo!==state.assignTo) return false;
-    if(state.reason!=='all' && r.reason!==state.reason) return false;
+    if(state.reason!=='all' && !(r.reasons||[]).includes(state.reason)) return false;
     if(state.dateFrom && (!r.date || r.date < state.dateFrom)) return false;
     if(state.dateTo && (!r.date || r.date > state.dateTo)) return false;
     if(state.q){
@@ -93,7 +101,7 @@ function buildFilters(){
     ${selectHtml('f-location','Location','location')}
     ${selectHtml('f-course','Course','course')}
     ${selectHtml('f-assignTo','Owner','assignTo')}
-    ${selectHtml('f-reason','Reason','reason')}
+    ${selectHtml('f-reason','Reason','', uniqReasons().map(v=>({v,l:v})))}
     <div class="filt"><label>From date</label><input type="date" id="f-from"></div>
     <div class="filt"><label>To date</label><input type="date" id="f-to"></div>
     <div class="filt"><label>Search</label><input type="text" id="f-q" placeholder="name, email, id, campaign..."></div>
@@ -141,8 +149,8 @@ function renderKpis(rows){
   `;
 }
 
-function renderBarList(elId, rows, field, topN, jumpField){
-  const counts = countBy(rows, field);
+function renderBarList(elId, rows, field, topN, jumpField, countsOverride){
+  const counts = countsOverride || countBy(rows, field);
   const total = rows.length || 1;
   const top = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,topN);
   const max = top.length ? top[0][1] : 1;
@@ -216,7 +224,7 @@ function renderRegions(){
   el.innerHTML = `<div class="grid3">${cols}</div>`;
   REGIONS.forEach(region=>{
     const rows = ALL.filter(r=>r.region===region && (r.bucket==='Lost - Classified'));
-    renderBarList(`reg-reason-${region}`, rows, 'reason', 5, 'reason');
+    renderBarList(`reg-reason-${region}`, rows, 'reason', 5, 'reason', countByReasons(rows));
     renderBarList(`reg-camp-${region}`, ALL.filter(r=>r.region===region), 'campaign', 5, 'campaign');
   });
 }
@@ -255,13 +263,15 @@ function renderGrouped(rows){
 function drawGroupTable(rows, field){
   const groups = {};
   rows.forEach(r=>{
-    const k = r[field] || '(none)';
-    if(!groups[k]) groups[k] = {total:0,won:0,lostc:0,lostu:0,other:0};
-    groups[k].total++;
-    if(r.bucket==='Won') groups[k].won++;
-    else if(r.bucket==='Lost - Classified') groups[k].lostc++;
-    else if(r.bucket==='Lost - Unclassified') groups[k].lostu++;
-    else groups[k].other++;
+          const keys = field==='reason' ? ((r.reasons&&r.reasons.length)?r.reasons:['(none)']) : [r[field] || '(none)'];
+          keys.forEach(k=>{
+                    if(!groups[k]) groups[k] = {total:0,won:0,lostc:0,lostu:0,other:0};
+                    groups[k].total++;
+                    if(r.bucket==='Won') groups[k].won++;
+                    else if(r.bucket==='Lost - Classified') groups[k].lostc++;
+                    else if(r.bucket==='Lost - Unclassified') groups[k].lostu++;
+                    else groups[k].other++;
+          });
   });
   const entries = Object.entries(groups).sort((a,b)=>b[1].total-a[1].total);
   const table = document.getElementById('grp-table');
@@ -377,7 +387,7 @@ function buildAIContext(rows){
     topLocations: top('location',10),
     topCourses: top('course',10),
     topOwners: top('assignTo',10),
-    topLostReasons: Object.entries(countBy(lostRows,'reason')).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([k,v])=>({reason:k,count:v})),
+    topLostReasons: Object.entries(countByReasons(lostRows)).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([k,v])=>({reason:k,count:v})),
     byWeek: countBy(rows,'week'),
     sampleDeals: rows.slice(0,25).map(r=>({date:r.date, region:r.region, course:r.course, source:r.source, medium:r.medium, campaign:r.campaign, location:r.location, bucket:r.bucket, reason:r.reason, feedback:r.feedback, dealValue:r.dealValue})),
   };
