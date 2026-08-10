@@ -58,3 +58,15 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 .footer{color:var(--muted);font-size:11px;margin-top:24px;text-align:center;}
 .count-tag{color:var(--muted);font-weight:400;font-size:12px;}
 .loading{color:var(--muted);padding:40px;text-align:center;}
+
+.ai-box{display:flex;flex-direction:column;gap:10px;}
+.ai-box textarea{width:100%;min-height:70px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;padding:10px 12px;resize:vertical;}
+.ai-box textarea:focus{outline:1px solid var(--accent);}
+.ai-suggestions{display:flex;flex-wrap:wrap;gap:8px;}
+.ai-suggestions button{background:var(--panel2);border:1px solid var(--border);color:var(--muted);font-weight:500;}
+.ai-suggestions button:hover{color:var(--text);border-color:var(--accent);}
+.ai-history{display:flex;flex-direction:column;gap:16px;margin-top:18px;}
+.ai-entry{border-top:1px solid var(--border);padding-top:14px;}
+.ai-q{color:var(--accent2);font-weight:600;font-size:13px;margin-bottom:8px;}
+.ai-answer{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:14px 16px;font-size:13.5px;line-height:1.55;white-space:pre-wrap;}
+.ai-answer.loading{color:var(--muted);font-style:italic;}
