@@ -82,6 +82,8 @@ if (client) {
 }
 
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json({ limit: '2mb' }));
+
 
 app.get('/api/status', (req, res) => {
   res.json({
@@ -127,5 +129,47 @@ app.get('/api/schema', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// Free-text "ask AI" panel on the dashboard. The client sends the question
+// plus an already-aggregated JSON summary of whatever is currently filtered
+// on screen (not the raw record list -- keeps token usage sane even when
+// thousands of deals are in view). Requires ANTHROPIC_API_KEY to be set.
+app.post('/api/ask', async (req, res) => {
+    if (!process.env.ANTHROPIC_API_KEY) {
+        return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on the server' });
+    }
+    const { question, context } = req.body || {};
+    if (!question || typeof question !== 'string') {
+        return res.status(400).json({ error: 'question is required' });
+    }
+    try {
+        const system = 'You are a sharp, concise data analyst helping the 4Geeks Academy admissions/sales team read their ActiveCampaign deal pipeline. You are given a JSON summary of the deals currently shown on their dashboard (already filtered to what they are looking at) -- counts, breakdowns by region/source/campaign/etc, and a small sample of individual deals. Answer the question using ONLY this data. Cite concrete numbers and percentages. If the data cannot answer the question, say so plainly instead of guessing. Keep the answer tight -- a short paragraph or a few bullet points, not a full report.';
+        const userContent = `Question: ${question}\n\nDashboard data (JSON):\n${JSON.stringify(context || {})}`;
+        const r = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+                'x-api-key': process.env.ANTHROPIC_API_KEY,
+                'anthropic-version': '2023-06-01',
+            },
+            body: JSON.stringify({
+                model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
+                max_tokens: 1024,
+                system,
+                messages: [{ role: 'user', content: userContent }],
+            }),
+        });
+        if (!r.ok) {
+            const errText = await r.text();
+            return res.status(502).json({ error: `Anthropic API error (${r.status}): ${errText.slice(0, 300)}` });
+        }
+        const data = await r.json();
+        const answer = (data.content || []).map((b) => b.text || '').join('\n').trim();
+        res.json({ answer });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 
 app.listen(PORT, () => console.log(`4Geeks AC dashboard listening on :${PORT}`));
