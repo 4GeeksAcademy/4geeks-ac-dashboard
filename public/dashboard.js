@@ -467,7 +467,7 @@ document.getElementById('tabs').addEventListener('click', e=>{
   if(!t) return;
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
   t.classList.add('active');
-  ['overview','regions','grouped','individual,'ai''].forEach(name=>{
+  ['overview','regions','grouped','individual','ai'].forEach(name=>{
     document.getElementById('tab-'+name).style.display = (name===t.dataset.tab) ? 'block':'none';
   });
   renderAll();
