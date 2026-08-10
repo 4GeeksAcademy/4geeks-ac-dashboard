@@ -355,12 +355,109 @@ function exportCsv(rows){
   a.click();
 }
 
+let aiHistory = [];
+
+function buildAIContext(rows){
+  const top = (field, n)=> Object.entries(countBy(rows, field)).sort((a,b)=>b[1]-a[1]).slice(0,n).map(([k,v])=>({value:k, count:v}));
+  const lostRows = rows.filter(r=>r.bucket==='Lost - Classified');
+  return {
+    activeFilters: state,
+    totalDeals: rows.length,
+    kpis: {
+      won: rows.filter(r=>r.bucket==='Won').length,
+      lostClassified: lostRows.length,
+      lostUnclassified: rows.filter(r=>r.bucket==='Lost - Unclassified').length,
+      activeOther: rows.filter(r=>r.bucket==='Active / Other').length,
+    },
+    byRegion: countBy(rows,'region'),
+    byBucket: countBy(rows,'bucket'),
+    topSources: top('source',10),
+    topMediums: top('medium',10),
+    topCampaigns: top('campaign',10),
+    topLocations: top('location',10),
+    topCourses: top('course',10),
+    topOwners: top('assignTo',10),
+    topLostReasons: Object.entries(countBy(lostRows,'reason')).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([k,v])=>({reason:k,count:v})),
+    byWeek: countBy(rows,'week'),
+    sampleDeals: rows.slice(0,25).map(r=>({date:r.date, region:r.region, course:r.course, source:r.source, medium:r.medium, campaign:r.campaign, location:r.location, bucket:r.bucket, reason:r.reason, feedback:r.feedback, dealValue:r.dealValue})),
+  };
+}
+
+async function askAI(rows){
+  const qEl = document.getElementById('ai-question');
+  const question = (qEl.value||'').trim();
+  if(!question) return;
+  const entry = { question, loading:true };
+  aiHistory.push(entry);
+  renderAIHistory();
+  qEl.value = '';
+  try{
+    const context = buildAIContext(rows);
+    const res = await fetch('/api/ask', {
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body: JSON.stringify({ question, context }),
+    });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok) throw new Error(data.error || res.statusText);
+    entry.loading = false;
+    entry.answer = data.answer || '(no answer returned)';
+  } catch(e){
+    entry.loading = false;
+    entry.error = e.message;
+  }
+  renderAIHistory();
+}
+
+function renderAIHistory(){
+  const el = document.getElementById('ai-history');
+  if(!el) return;
+  el.innerHTML = aiHistory.slice().reverse().map(h=>`
+  <div class="ai-entry">
+  <div class="ai-q">${h.question}</div>
+  <div class="ai-answer${h.loading?' loading':''}">${h.loading ? 'Thinking…' : (h.error ? `<span style="color:#ff6b6b">${h.error}</span>` : h.answer)}</div>
+  </div>
+  `).join('');
+}
+
+function renderAI(rows){
+  const el = document.getElementById('tab-ai');
+  el.innerHTML = `
+  <div class="panel">
+  <h2>Ask AI about this view <span class="count-tag">(${rows.length} deals in current filter)</span></h2>
+  <div class="ai-box">
+  <textarea id="ai-question" placeholder="e.g. Why is LATAM losing more deals in June? Which campaigns convert best? Summarize this view for a leadership update."></textarea>
+  <div class="ai-suggestions">
+  <button class="ghost" data-q="Summarize this view: key trends, the biggest problem, and one concrete recommendation.">Summarize this view</button>
+  <button class="ghost" data-q="What are the top reasons deals are lost here, and what should we do about each one?">Top loss reasons + fixes</button>
+  <button class="ghost" data-q="Which sources and campaigns are performing best and worst in this filtered view?">Best/worst campaigns</button>
+  <button class="ghost" data-q="Are there any notable trends over time (by week) in this data?">Trends over time</button>
+  </div>
+  <div><button id="ai-ask">Ask</button></div>
+  </div>
+  <div id="ai-history" class="ai-history"></div>
+  </div>
+  `;
+  document.querySelectorAll('.ai-suggestions button').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      document.getElementById('ai-question').value = b.dataset.q;
+      askAI(rows);
+    });
+  });
+  document.getElementById('ai-ask').addEventListener('click', ()=> askAI(rows));
+  document.getElementById('ai-question').addEventListener('keydown', e=>{
+    if(e.key==='Enter' && (e.metaKey||e.ctrlKey)) askAI(rows);
+  });
+  renderAIHistory();
+}
+
+
 document.getElementById('tabs').addEventListener('click', e=>{
   const t = e.target.closest('.tab');
   if(!t) return;
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
   t.classList.add('active');
-  ['overview','regions','grouped','individual'].forEach(name=>{
+  ['overview','regions','grouped','individual,'ai''].forEach(name=>{
     document.getElementById('tab-'+name).style.display = (name===t.dataset.tab) ? 'block':'none';
   });
   renderAll();
@@ -374,6 +471,7 @@ function renderAll(){
   if(active==='regions') renderRegions();
   if(active==='grouped') renderGrouped(rows);
   if(active==='individual') renderIndividual(rows);
+  if(active==='ai') renderAI(rows);
 }
 
 (async function init(){
