@@ -5,7 +5,7 @@ const BUCKET_LABEL = { 'Won':'Won', 'Lost - Classified':'Lost (classified)', 'Lo
 const BUCKET_CLASS = { 'Won':'b-won', 'Lost - Classified':'b-lostc', 'Lost - Unclassified':'b-lostu', 'Active / Other':'b-other' };
 const REGIONS = ['USA','Spain','LATAM'];
 
-const state = { region:'all', bucket:'all', source:'all', medium:'all', campaign:'all', location:'all', course:'all', assignTo:'all', reason:'all', q:'', dateFrom:'', dateTo:'' };
+const state = { region:'all', bucket:'all', source:'all', medium:'all', campaign:'all', location:'all', course:'all', assignTo:'all', reason:'all', q:'', dateFrom:'', dateTo:'', admissionsScore:'all', leadSentiment:'all', admissionsConversationType:'all', classification:'all', dealQuality:'all' };
 let sortState = { field:'date', dir:'desc' };
 function syncStateFromUrl(){
   const params = new URLSearchParams(location.search);
@@ -89,6 +89,11 @@ function filtered(){
     if(state.course!=='all' && r.course!==state.course) return false;
     if(state.assignTo!=='all' && r.assignTo!==state.assignTo) return false;
     if(state.reason!=='all' && !(r.reasons||[]).includes(state.reason)) return false;
+    if(state.admissionsScore!=='all' && r.admissionsScore!==state.admissionsScore) return false;
+    if(state.leadSentiment!=='all' && r.leadSentiment!==state.leadSentiment) return false;
+    if(state.admissionsConversationType!=='all' && r.admissionsConversationType!==state.admissionsConversationType) return false;
+    if(state.classification!=='all' && r.classification!==state.classification) return false;
+    if(state.dealQuality!=='all' && r.dealQuality!==state.dealQuality) return false;
     if(state.dateFrom && (!r.date || r.date < state.dateFrom)) return false;
     if(state.dateTo && (!r.date || r.date > state.dateTo)) return false;
     if(state.q){
@@ -112,45 +117,62 @@ function selectHtml(id,label,field,extraOptions){
 }
 
 function buildFilters(){
-  const el = document.getElementById('filters');
-  el.innerHTML = `
-    ${selectHtml('f-region','Region','', REGIONS.map(v=>({v,l:v})))}
-    ${selectHtml('f-bucket','Status bucket','bucket', Object.keys(BUCKET_LABEL).map(v=>({v,l:BUCKET_LABEL[v]})))}
-    ${selectHtml('f-source','UTM Source','source')}
-    ${selectHtml('f-medium','UTM Medium','medium')}
-    ${selectHtml('f-campaign','Campaign','campaign')}
-    ${selectHtml('f-location','Location','location')}
-    ${selectHtml('f-course','Course','course')}
-    ${selectHtml('f-assignTo','Owner','assignTo')}
-    ${selectHtml('f-reason','Reason','', uniqReasons().map(v=>({v,l:v})))}
-    <div class="filt"><label>From date</label><input type="date" id="f-from"></div>
-    <div class="filt"><label>To date</label><input type="date" id="f-to"></div>
-    <div class="filt"><label>Search</label><input type="text" id="f-q" placeholder="name, email, id, campaign..."></div>
-    <div class="filt"><label>&nbsp;</label><button class="ghost" id="f-reset">Reset filters</button></div>
-  `;
-  ['region','bucket','source','medium','campaign','location','course','assignTo','reason'].forEach(k=>{
-    const elx = document.getElementById('f-'+k); if(elx && state[k]) elx.value = state[k];
-  });
-  if(state.dateFrom) document.getElementById('f-from').value = state.dateFrom;
-  if(state.dateTo) document.getElementById('f-to').value = state.dateTo;
-  if(state.q) document.getElementById('f-q').value = state.q;
-  ['region','bucket','source','medium','campaign','location','course','assignTo','reason'].forEach(k=>{
-    document.getElementById('f-'+k).addEventListener('change', async e=>{
-      state[k]=e.target.value;
-      if(k==='region'){ await loadData(state.region==='all'?undefined:state.region); }
-      renderAll();
+    const el = document.getElementById('filters');
+    el.innerHTML = `
+        <div class="filters-row">
+              ${selectHtml('f-region','Region','', REGIONS.map(v=>({v,l:v})))}
+                    ${selectHtml('f-bucket','Status bucket','bucket', Object.keys(BUCKET_LABEL).map(v=>({v,l:BUCKET_LABEL[v]})))}
+                          ${selectHtml('f-reason','Lost reason','', uniqReasons().map(v=>({v,l:v})))}
+                                ${selectHtml('f-admissionsConversationType','Admissions conversation type','admissionsConversationType')}
+                                      <div class="filt"><label>Search</label><input type="text" id="f-q" placeholder="name, email, id, campaign..."></div>
+                                            <button class="toggle-more" id="toggle-more">More filters &#9662;</button>
+                                                  <div class="filt" style="margin-left:auto;"><label>&nbsp;</label><button class="ghost" id="f-reset">Reset filters</button></div>
+                                                      </div>
+                                                          <div class="filters-more" id="filters-more">
+                                                                <div class="section-lab">Admissions</div>
+                                                                      ${selectHtml('f-admissionsScore','Admission code test score','admissionsScore')}
+                                                                            ${selectHtml('f-leadSentiment','Lead sentiment','leadSentiment')}
+                                                                                  ${selectHtml('f-dealQuality','Deal quality','dealQuality')}
+                                                                                        ${selectHtml('f-classification','Classification','classification')}
+                                                                                              <div class="section-lab">Attribution</div>
+                                                                                                    ${selectHtml('f-source','UTM Source','source')}
+                                                                                                          ${selectHtml('f-medium','UTM Medium','medium')}
+                                                                                                                ${selectHtml('f-campaign','Campaign','campaign')}
+                                                                                                                      <div class="section-lab">Other</div>
+                                                                                                                            ${selectHtml('f-location','Location','location')}
+                                                                                                                                  ${selectHtml('f-course','Course','course')}
+                                                                                                                                        ${selectHtml('f-assignTo','Owner','assignTo')}
+                                                                                                                                              <div class="filt"><label>From date</label><input type="date" id="f-from"></div>
+                                                                                                                                                    <div class="filt"><label>To date</label><input type="date" id="f-to"></div>
+                                                                                                                                                        </div>
+                                                                                                                                                          `;
+    document.getElementById('toggle-more').addEventListener('click', ()=>{
+          document.getElementById('filters-more').classList.toggle('open');
+          document.getElementById('toggle-more').classList.toggle('open');
     });
-  });
-  document.getElementById('f-from').addEventListener('change', e=>{ state.dateFrom=e.target.value; renderAll(); });
-  document.getElementById('f-to').addEventListener('change', e=>{ state.dateTo=e.target.value; renderAll(); });
-  document.getElementById('f-q').addEventListener('input', e=>{ state.q=e.target.value; renderAll(); });
-  document.getElementById('f-reset').addEventListener('click', async ()=>{
-    Object.keys(state).forEach(k=> state[k] = (k==='q'||k==='dateFrom'||k==='dateTo') ? '' : 'all');
-    document.querySelectorAll('#filters select').forEach(s=>s.value='all');
-    document.getElementById('f-from').value=''; document.getElementById('f-to').value=''; document.getElementById('f-q').value='';
-    await loadData();
-    renderAll();
-  });
+    ['region','bucket','source','medium','campaign','location','course','assignTo','reason','admissionsScore','leadSentiment','admissionsConversationType','classification','dealQuality'].forEach(k=>{
+          const elx = document.getElementById('f-'+k); if(elx && state[k]) elx.value = state[k];
+    });
+    if(state.dateFrom) document.getElementById('f-from').value = state.dateFrom;
+    if(state.dateTo) document.getElementById('f-to').value = state.dateTo;
+    if(state.q) document.getElementById('f-q').value = state.q;
+    ['region','bucket','source','medium','campaign','location','course','assignTo','reason','admissionsScore','leadSentiment','admissionsConversationType','classification','dealQuality'].forEach(k=>{
+          document.getElementById('f-'+k).addEventListener('change', async e=>{
+                  state[k]=e.target.value;
+                  if(k==='region'){ await loadData(state.region==='all'?undefined:state.region); }
+                  renderAll();
+          });
+    });
+    document.getElementById('f-from').addEventListener('change', e=>{ state.dateFrom=e.target.value; renderAll(); });
+    document.getElementById('f-to').addEventListener('change', e=>{ state.dateTo=e.target.value; renderAll(); });
+    document.getElementById('f-q').addEventListener('input', e=>{ state.q=e.target.value; renderAll(); });
+    document.getElementById('f-reset').addEventListener('click', async ()=>{
+          Object.keys(state).forEach(k=> state[k] = (k==='q'||k==='dateFrom'||k==='dateTo') ? '' : 'all');
+          document.querySelectorAll('#filters select').forEach(s=>s.value='all');
+          document.getElementById('f-from').value=''; document.getElementById('f-to').value=''; document.getElementById('f-q').value='';
+          await loadData();
+          renderAll();
+    });
 }
 
 function jumpToIndividual(field, value){
@@ -316,7 +338,7 @@ function drawGroupTable(rows, field){
   });
 }
 
-const IND_COLS = [['id','ID'],['name','Name'],['email','Email'],['date','Date'],['region','Region'],['course','Course'],['source','Source'],['campaign','Campaign'],['location','Location'],['assignTo','Owner'],['dealValue','Value'],['bucket','Bucket'],['reason','Reason'],['admissionsScore','Adm. Score'],['leadSentiment','Sentiment'],['dealQuality','Deal Quality'],['feedback','Feedback']];
+const IND_COLS = [['id','ID'],['name','Name'],['email','Email'],['date','Date'],['region','Region'],['course','Course'],['source','Source'],['campaign','Campaign'],['location','Location'],['assignTo','Owner'],['dealValue','Value'],['bucket','Bucket'],['reason','Reason'],['admissionsConversationType','Adm. Type'],['admissionsScore','Adm. Score'],['leadSentiment','Sentiment'],['classification','Classification'],['dealQuality','Deal Quality'],['feedback','Feedback']];
 
 function renderIndividual(rows){
   const el = document.getElementById('tab-individual');
@@ -353,8 +375,10 @@ function drawIndividualTable(rows){
         <td>${r.dealValue ? '$'+Number(r.dealValue).toLocaleString() : '-'}</td>
         <td><span class="badge ${BUCKET_CLASS[r.bucket]}">${BUCKET_LABEL[r.bucket]}</span></td>
         <td>${r.reason||'-'}</td>
+        <td>${r.admissionsConversationType||'-'}</td>
         <td>${r.admissionsScore||'-'}</td>
         <td>${r.leadSentiment||'-'}</td>
+        <td>${r.classification||'-'}</td>
         <td>${r.dealQuality||'-'}</td>
         <td>${r.feedback||'-'}</td>
       </tr>`).join('')}</tbody>
@@ -488,13 +512,63 @@ function renderAI(rows){
   renderAIHistory();
 }
 
+function renderAds(rows){
+  const el = document.getElementById('tab-ads');
+  el.innerHTML = `
+  <div class="panel">
+  <h2>Ads Performance</h2>
+  <p class="ads-note">Upload Meta or Google Ads exports (CSV or screenshots) to review spend and performance alongside the funnel. This data stays in your browser for this session only and is not merged with the ActiveCampaign funnel above.</p>
+  <div class="upload-zone" id="dropZone">
+  <p>Drag &amp; drop CSV or image files here, or click to browse</p>
+  <input type="file" id="fileInput" accept=".csv,image/*" multiple style="display:none;">
+  </div>
+  <div id="fileList"></div>
+  </div>
+  `;
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  const fileList = document.getElementById('fileList');
+  const files = [];
+  function platformFor(name){
+    if(/google/i.test(name)) return {cls:'google', label:'Google Ads'};
+    if(/meta|facebook|fb/i.test(name)) return {cls:'meta', label:'Meta Ads'};
+    return {cls:'meta', label:'Ads'};
+  }
+  function renderFileList(){
+    fileList.innerHTML = files.map((f,i)=>{
+      const p = platformFor(f.name);
+      return `<div class="file-row"><span class="plat ${p.cls}">${p.label}</span><span class="fname">${f.name}</span><span class="fsize">${(f.size/1024).toFixed(1)} KB</span><button class="ghost remove-file" data-i="${i}">Remove</button></div>`;
+    }).join('') || '<p class="muted">No files uploaded yet.</p>';
+    fileList.querySelectorAll('.remove-file').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        files.splice(Number(btn.dataset.i),1);
+        renderFileList();
+      });
+    });
+  }
+  function addFiles(list){
+    Array.from(list).forEach(f=> files.push(f));
+    renderFileList();
+  }
+  dropZone.addEventListener('click', ()=> fileInput.click());
+  fileInput.addEventListener('change', e=> addFiles(e.target.files));
+  dropZone.addEventListener('dragover', e=>{ e.preventDefault(); dropZone.classList.add('drag'); });
+  dropZone.addEventListener('dragleave', ()=> dropZone.classList.remove('drag'));
+  dropZone.addEventListener('drop', e=>{
+    e.preventDefault();
+    dropZone.classList.remove('drag');
+    addFiles(e.dataTransfer.files);
+  });
+  renderFileList();
+}
+
 
 document.getElementById('tabs').addEventListener('click', e=>{
   const t = e.target.closest('.tab');
   if(!t) return;
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
   t.classList.add('active');
-  ['overview','regions','grouped','individual','ai'].forEach(name=>{
+  ['overview','regions','grouped','individual','ads','ai'].forEach(name=>{
     document.getElementById('tab-'+name).style.display = (name===t.dataset.tab) ? 'block':'none';
   });
   renderAll();
@@ -510,6 +584,7 @@ function renderAll(){
   if(active==='grouped') renderGrouped(rows);
   if(active==='individual') renderIndividual(rows);
   if(active==='ai') renderAI(rows);
+  if(active==='ads') renderAds(rows);
 }
 
 (async function init(){
