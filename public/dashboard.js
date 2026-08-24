@@ -1,6 +1,50 @@
 let ALL = [];
 let META = { generatedAt: null, cacheAgeSeconds: null };
+let authToken = localStorage.getItem('dashboardToken');
 
+// ---- Authentication ----
+function checkAuth(){
+  if(!authToken){
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('login-screen').style.display = 'flex';
+    return false;
+  }
+  return true;
+}
+
+function handleLogin(e){
+  e.preventDefault();
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+  fetch('/api/login', {
+    method:'POST',
+    headers:{'content-type':'application/json'},
+    body: JSON.stringify({ username, password })
+  })
+  .then(r=>{
+    if(!r.ok) throw new Error('Invalid credentials');
+    return r.json();
+  })
+  .then(data=>{
+    authToken = data.token;
+    localStorage.setItem('dashboardToken', authToken);
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    location.reload();
+  })
+  .catch(e=>{
+    document.getElementById('login-error').textContent = e.message;
+    document.getElementById('login-error').style.display = 'block';
+  });
+}
+
+function handleLogout(){
+  localStorage.removeItem('dashboardToken');
+  authToken = null;
+  location.reload();
+}
+
+// ---- Dashboard ----
 const BUCKET_LABEL = { 'Won':'Won', 'Lost - Classified':'Lost (classified)', 'Lost - Unclassified':'Lost (no reason)', 'Active / Other':'Active / Other' };
 const BUCKET_CLASS = { 'Won':'b-won', 'Lost - Classified':'b-lostc', 'Lost - Unclassified':'b-lostu', 'Active / Other':'b-other' };
 const REGIONS = ['USA','Spain','LATAM'];
@@ -368,7 +412,7 @@ function drawIndividualTable(rows){
   table.innerHTML = `
     <thead><tr>${IND_COLS.map(([f,l])=>`<th data-field="${f}">${l}${sortState.field===f?(sortState.dir==='asc'?' ▲':' ▼'):''}</th>`).join('')}</tr></thead>
     <tbody>${capped.map(r=>`
-      <tr>
+      <tr data-deal-id="${r.id}" class="lead-row-clickable">
         <td>${r.id}</td><td>${r.name||'<span class=muted>—</span>'}</td><td>${r.email||'<span class=muted>—</span>'}</td>
         <td>${r.date||'-'}</td><td>${r.region||'-'}</td><td>${r.course||'-'}</td><td>${r.source||'-'}</td>
         <td>${r.campaign||'-'}</td><td>${r.location||'-'}</td><td>${r.assignTo||'<span class=muted>unassigned</span>'}</td>
@@ -396,6 +440,15 @@ function drawIndividualTable(rows){
       else { sortState.field=f; sortState.dir='asc'; }
       drawIndividualTable(rows);
     });
+  });
+  // Add click handlers to rows to open lead modal
+  table.querySelectorAll('.lead-row-clickable').forEach(row=>{
+    row.addEventListener('click', (e)=>{
+      if(e.target.tagName==='TH') return; // don't open modal on header click
+      const dealId = row.dataset.dealId;
+      if(dealId) openLeadModal(dealId);
+    });
+    row.style.cursor = 'pointer';
   });
 }
 
@@ -512,6 +565,245 @@ function renderAI(rows){
   renderAIHistory();
 }
 
+// ---- Lead Coach Modal ----
+
+async function openLeadModal(dealId){
+  const modal = document.createElement('div');
+  modal.className = 'lead-modal';
+  modal.innerHTML = `<div class="lead-modal-content"><div style="padding:20px;text-align:center;"><p>Loading lead details…</p></div></div>`;
+  document.body.appendChild(modal);
+
+  try{
+    const res = await fetch('/api/lead-coach', {
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body: JSON.stringify({ leadId: Number(dealId) }),
+    });
+    if(!res.ok){
+      const err = await res.json().catch(()=>({error:res.statusText}));
+      modal.querySelector('.lead-modal-content').innerHTML = `<div style="padding:20px;color:#ff6b6b;">Error loading lead: ${err.error||res.statusText}</div>`;
+      return;
+    }
+    const data = await res.json();
+    renderLeadModal(modal, data);
+  }catch(e){
+    modal.querySelector('.lead-modal-content').innerHTML = `<div style="padding:20px;color:#ff6b6b;">Error: ${e.message}</div>`;
+  }
+}
+
+function renderLeadModal(modal, data){
+  const { lead, aiCoaching } = data;
+  const engagement = lead.engagement;
+
+  const coachingText = aiCoaching.fullAnalysis;
+  // Parse coaching text for sections
+  const lines = coachingText.split('\n');
+  let analysis = '', nextSteps = '', emailTemplate = '', smsTemplate = '';
+  let currentSection = '';
+  for(let i=0; i<lines.length; i++){
+    const line = lines[i];
+    if(line.startsWith('**Analysis:')) currentSection='analysis';
+    else if(line.startsWith('**Next Steps:')) currentSection='nextSteps';
+    else if(line.startsWith('**EMAIL TEMPLATE:')) currentSection='email';
+    else if(line.startsWith('**SMS TEMPLATE:')) currentSection='sms';
+    else if(currentSection==='analysis') analysis += line + '\n';
+    else if(currentSection==='nextSteps') nextSteps += line + '\n';
+    else if(currentSection==='email') emailTemplate += line + '\n';
+    else if(currentSection==='sms') smsTemplate += line + '\n';
+  }
+
+  analysis = analysis.trim();
+  nextSteps = nextSteps.trim();
+  emailTemplate = emailTemplate.trim();
+  smsTemplate = smsTemplate.trim();
+
+  modal.querySelector('.lead-modal-content').innerHTML = `
+    <header class="lead-modal-header">
+      <h2>${lead.name}</h2>
+      <button class="lead-modal-close">✕</button>
+    </header>
+
+    <div class="lead-modal-body">
+      <div class="section">
+        <h3>📋 Lead Info</h3>
+        <div class="info-grid">
+          <div><strong>Email:</strong> ${lead.email||'—'}</div>
+          <div><strong>Phone:</strong> ${lead.phone||'—'}</div>
+          <div><strong>Course:</strong> ${lead.course||'—'}</div>
+          <div><strong>Region:</strong> ${lead.region||'—'}</div>
+          <div><strong>Deal Value:</strong> $${Number(lead.dealValue).toLocaleString()}</div>
+          <div><strong>Stage:</strong> ${lead.dealStage||'—'}</div>
+          <div><strong>Status:</strong> <span class="badge ${BUCKET_CLASS[lead.dealStatus] || 'b-other'}">${lead.dealStatus}</span></div>
+          <div><strong>Owner:</strong> ${lead.assignedTo||'Unassigned'}</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>📊 Engagement Timeline</h3>
+        ${engagement.trackingAvailable ? `
+          <div class="engagement-stats">
+            <div class="stat"><span class="label">Emails Engaged:</span> <span class="value">${engagement.emailsEngaged}</span></div>
+            <div class="stat"><span class="label">Opens:</span> <span class="value">${engagement.emailsOpened} (${engagement.emailOpenRate}%)</span></div>
+            <div class="stat"><span class="label">Clicks:</span> <span class="value">${engagement.linksClicked}</span></div>
+            <div class="stat"><span class="label">Last Email:</span> <span class="value">${engagement.lastEmailDate||'—'}</span></div>
+          </div>
+          ${engagement.timeline.length > 0 ? `
+            <div class="timeline">
+              ${engagement.timeline.slice(0,10).map(evt=>`
+                <div class="timeline-item">
+                  <span class="date">${evt.date}</span>
+                  <span class="action">${evt.detail}</span>
+                </div>
+              `).join('')}
+            </div>
+          ` : '<p class="muted">No engagement events recorded</p>'}
+        ` : '<p class="muted">Email tracking not available for this lead</p>'}
+      </div>
+
+      <div class="section">
+        <h3>⭐ Scoring</h3>
+        <div class="scores-grid">
+          ${lead.customFields.admissionsScore ? `<div class="score-box"><div class="label">Admissions</div><div class="value">${lead.customFields.admissionsScore}/100</div></div>` : ''}
+          ${lead.customFields.dealQuality ? `<div class="score-box"><div class="label">Deal Quality</div><div class="value">${lead.customFields.dealQuality}/10</div></div>` : ''}
+          ${lead.customFields.leadSentiment ? `<div class="score-box"><div class="label">Sentiment</div><div class="value">${lead.customFields.leadSentiment}</div></div>` : ''}
+          ${lead.customFields.classification ? `<div class="score-box"><div class="label">Classification</div><div class="value">${lead.customFields.classification}</div></div>` : ''}
+        </div>
+        ${lead.customFields.conversationType ? `<p><strong>Conv. Type:</strong> ${lead.customFields.conversationType}</p>` : ''}
+        ${lead.customFields.feedback ? `<p><strong>Feedback:</strong> ${lead.customFields.feedback}</p>` : ''}
+      </div>
+
+      <div class="section coach-section">
+        <h3>🤖 AI Coach</h3>
+        <div class="coach-analysis">
+          <p><strong>Analysis:</strong></p>
+          <p>${analysis || coachingText}</p>
+        </div>
+        ${nextSteps ? `
+          <p><strong>Suggested Next Steps:</strong></p>
+          <div class="next-steps">${nextSteps.split('\n').filter(l=>l.trim()).map(l=>`<div>• ${l.replace(/^[-•*]\s*/, '')}</div>`).join('')}</div>
+        ` : ''}
+
+        <div class="templates">
+          ${emailTemplate ? `
+            <div class="template">
+              <h4>📧 Email Template</h4>
+              <pre>${emailTemplate}</pre>
+              <button class="copy-btn" data-text="${encodeURIComponent(emailTemplate)}">Copy Email</button>
+            </div>
+          ` : ''}
+          ${smsTemplate ? `
+            <div class="template">
+              <h4>📱 SMS Template</h4>
+              <pre>${smsTemplate}</pre>
+              <button class="copy-btn" data-text="${encodeURIComponent(smsTemplate)}">Copy SMS</button>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+
+  modal.querySelector('.lead-modal-close').addEventListener('click', ()=> modal.remove());
+  modal.addEventListener('click', (e)=>{
+    if(e.target===modal) modal.remove();
+  });
+
+  modal.querySelectorAll('.copy-btn').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const text = decodeURIComponent(btn.dataset.text);
+      try{
+        await navigator.clipboard.writeText(text);
+        showToast('Copied to clipboard!');
+        btn.textContent = '✓ Copied!';
+        setTimeout(()=>{ btn.textContent = btn.textContent.replace('Copied!', btn.dataset.original || 'Copy'); }, 2000);
+      }catch(e){
+        showToast('Failed to copy');
+      }
+    });
+  });
+}
+
+// ---- Recommendations Tab ----
+
+async function renderRecommendations(){
+  const el = document.getElementById('tab-recommendations');
+  el.innerHTML = `<div class="panel"><div style="padding:20px;text-align:center;"><p>Loading recommendations…</p></div></div>`;
+
+  try{
+    const res = await fetch('/api/recommendations', { method:'POST' });
+    if(!res.ok){
+      const err = await res.json().catch(()=>({error:res.statusText}));
+      el.innerHTML = `<div class="panel"><h2 style="color:#ff6b6b;">Error loading recommendations: ${err.error||res.statusText}</h2></div>`;
+      return;
+    }
+    const data = await res.json();
+
+    el.innerHTML = `
+      <div class="panel">
+        <h2>🎯 Lead Recommendations</h2>
+        <div class="summary-cards">
+          <div class="card"><div class="val">${data.summary.totalDeals}</div><div class="lbl">Total Deals</div></div>
+          <div class="card"><div class="val">${data.summary.active}</div><div class="lbl">Active</div></div>
+          <div class="card"><div class="val">${data.summary.won}</div><div class="lbl">Won</div></div>
+          <div class="card"><div class="val">${data.summary.lost}</div><div class="lbl">Lost</div></div>
+        </div>
+      </div>
+      ${data.groups.map((group, idx)=>`
+        <div class="panel recommendation-group">
+          <div class="group-header">
+            <h3>${getGroupEmoji(group.name)} ${getGroupLabel(group.name)}</h3>
+            <span class="count-tag">${group.count} leads</span>
+          </div>
+          <div class="group-content">
+            <p class="recommendation-text">${group.recommendation || 'No recommendation generated'}</p>
+            <details class="group-leads">
+              <summary>View ${group.count} leads in this group</summary>
+              <div class="leads-list">
+                ${group.leads.map(l=>`
+                  <div class="lead-item">
+                    <div class="name">${l.name||'—'}</div>
+                    <div class="email">${l.email||'—'}</div>
+                    <div class="meta">
+                      ${l.admissionsScore ? `<span>Score: ${l.admissionsScore}</span>` : ''}
+                      ${l.leadSentiment ? `<span>Sentiment: ${l.leadSentiment}</span>` : ''}
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </details>
+          </div>
+        </div>
+      `).join('')}
+    `;
+  }catch(e){
+    el.innerHTML = `<div class="panel"><h2 style="color:#ff6b6b;">Error: ${e.message}</h2></div>`;
+  }
+}
+
+function getGroupLabel(name){
+  const labels = {
+    needsContact: 'Needs Contact',
+    needsFollowUp: 'Needs Follow-up',
+    atRisk: 'At Risk',
+    readyToClose: 'Ready to Close',
+    wonRecently: 'Won Recently',
+    lostNeedAnalysis: 'Lost (No Reason)',
+  };
+  return labels[name] || name;
+}
+
+function getGroupEmoji(name){
+  const emojis = {
+    needsContact: '📞',
+    needsFollowUp: '📧',
+    atRisk: '⚠️',
+    readyToClose: '🎯',
+    wonRecently: '✅',
+    lostNeedAnalysis: '❌',
+  };
+  return emojis[name] || '📋';
+}
+
 function renderAds(rows){
   const el = document.getElementById('tab-ads');
   el.innerHTML = `
@@ -568,7 +860,7 @@ document.getElementById('tabs').addEventListener('click', e=>{
   if(!t) return;
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
   t.classList.add('active');
-  ['overview','regions','grouped','individual','ads','ai'].forEach(name=>{
+  ['overview','recommendations','regions','grouped','individual','ads','ai'].forEach(name=>{
     document.getElementById('tab-'+name).style.display = (name===t.dataset.tab) ? 'block':'none';
   });
   renderAll();
@@ -580,6 +872,7 @@ function renderAll(){
   renderKpis(rows);
   const active = document.querySelector('.tab.active').dataset.tab;
   if(active==='overview') renderOverview(rows);
+  if(active==='recommendations') renderRecommendations();
   if(active==='regions') renderRegions();
   if(active==='grouped') renderGrouped(rows);
   if(active==='individual') renderIndividual(rows);
@@ -589,10 +882,20 @@ function renderAll(){
 
 (async function init(){
   try{
+    if(!checkAuth()){
+      // Setup login form
+      document.getElementById('login-form').addEventListener('submit', handleLogin);
+      return;
+    }
+
+    // Auth OK - load dashboard
     syncStateFromUrl();
     await loadData(state.region && state.region!=='all' ? state.region : undefined);
     buildFilters();
     renderAll();
+
+    // Setup logout
+    document.getElementById('btn-logout').addEventListener('click', handleLogout);
   }catch(e){
     console.error(e);
   }
