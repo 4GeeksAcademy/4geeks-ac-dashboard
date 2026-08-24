@@ -9,6 +9,9 @@ function checkAuth(){
     document.getElementById('login-screen').style.display = 'flex';
     return false;
   }
+  // Auth passed - show dashboard
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
   return true;
 }
 
