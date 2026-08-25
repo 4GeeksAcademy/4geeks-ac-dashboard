@@ -260,12 +260,13 @@ app.post('/api/lead-coach', async (req, res) => {
         // Helper to get contact custom field value
         const getContactField = (mappedName) => {
             const { CONTACT_FIELD_MAP } = require('./lib/config');
+            if (!Array.isArray(contactFieldValues)) return null;
             for (const [fieldId, name] of Object.entries(CONTACT_FIELD_MAP)) {
-                if (name !== mappedName) continue;
-                const hit = contactFieldValues.find((v) => String(v.field) === String(fieldId));
-                if (hit) return v.value || null;
-            }
-            return null;
+              if (name !== mappedName) continue;
+              const hit = contactFieldValues.find((fieldVal) => String(fieldVal.field) === String(fieldId));
+              if (hit) return hit.value || null;
+        }
+        return null;
         };
 
         // 3. Fetch email engagement
