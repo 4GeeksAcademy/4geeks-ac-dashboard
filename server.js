@@ -90,10 +90,31 @@ app.use(express.json({ limit: '2mb' }));
 const DASHBOARD_USER = process.env.DASHBOARD_USER || 'admin';
 const DASHBOARD_PASS = process.env.DASHBOARD_PASS || 'password';
 
+// Validates the token issued by /api/login (base64 "<user>:<issuedAt>").
+// The previous version compared against process.env.DASHBOARD_TOKEN, which is
+// never set anywhere -- so this middleware could only ever return 401.
+function isValidDashboardToken(token) {
+  if (!token) return false;
+  // Still honour an explicitly configured static token, if one is set.
+  if (process.env.DASHBOARD_TOKEN && token === process.env.DASHBOARD_TOKEN) return true;
+  try {
+    const decoded = Buffer.from(String(token), 'base64').toString('utf8');
+    const sep = decoded.lastIndexOf(':');
+    if (sep < 1) return false;
+    const user = decoded.slice(0, sep);
+    const issuedAt = Number(decoded.slice(sep + 1));
+    if (user !== DASHBOARD_USER) return false;
+    if (!Number.isFinite(issuedAt)) return false;
+    // Tokens are good for 7 days.
+    return Date.now() - issuedAt < 7 * 24 * 60 * 60 * 1000;
+  } catch (e) {
+    return false;
+  }
+}
+
 function requireAuth(req, res, next) {
-  const token = req.headers['x-dashboard-token'];
-  if (!token || token !== process.env.DASHBOARD_TOKEN) {
-    // Check if they're trying to login
+  const token = req.headers['x-dashboard-token'] || req.query.token;
+  if (!isValidDashboardToken(token)) {
     return res.status(401).json({ error: 'Unauthorized', needsAuth: true });
   }
   next();
@@ -120,6 +141,36 @@ app.get('/api/status', (req, res) => {
     dataWindowMonths: DATA_WINDOW_MONTHS,
     lastError,
   });
+});
+
+// Diagnostic: shows exactly what ActiveCampaign returns for a contact's
+// engagement sub-resources. Use this to confirm email tracking end-to-end
+// without deploying new code:
+//   GET /api/diag/engagement/<contactId>   (header: x-dashboard-token)
+app.get('/api/diag/engagement/:contactId', requireAuth, async (req, res) => {
+  if (!client) return res.status(500).json({ error: 'AC_API_URL / AC_API_KEY not configured' });
+  try {
+    const probe = await client.probeContactEngagement(req.params.contactId);
+    const engagement = await client.getContactEmailEngagement(req.params.contactId);
+    res.json({
+      probe,
+      parsed: {
+        sent: engagement.sent,
+        opened: engagement.opened,
+        clicked: engagement.clicked,
+        bounced: engagement.bounced,
+        openRate: engagement.openRate,
+        clickRate: engagement.clickRate,
+        lastEmailDate: engagement.lastEmailDate,
+        unavailable: engagement.unavailable,
+        sources: engagement.sources,
+        eventCount: engagement.events.length,
+        firstEvents: engagement.events.slice(0, 5),
+      },
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get('/api/summary', (req, res) => {
@@ -253,6 +304,7 @@ app.post('/api/lead-coach', async (req, res) => {
 
         // Helper to get deal custom field value
         const getDealField = (fieldId) => {
+            if (!Array.isArray(dealCustomFieldData)) return null;
             const hit = dealCustomFieldData.find((row) => String(row.customFieldId) === String(fieldId));
             return hit ? hit.fieldValue : null;
         };
@@ -262,16 +314,20 @@ app.post('/api/lead-coach', async (req, res) => {
             const { CONTACT_FIELD_MAP } = require('./lib/config');
             if (!Array.isArray(contactFieldValues)) return null;
             for (const [fieldId, name] of Object.entries(CONTACT_FIELD_MAP)) {
-              if (name !== mappedName) continue;
-              const hit = contactFieldValues.find((fieldVal) => String(fieldVal.field) === String(fieldId));
-              if (hit) return hit.value || null;
-        }
-        return null;
+                if (name !== mappedName) continue;
+                const hit = contactFieldValues.find((fieldVal) => String(fieldVal.field) === String(fieldId));
+                if (hit) return hit.value || null;
+            }
+            return null;
         };
 
         // 3. Fetch email engagement
+        // Fetch once and reuse -- buildContactEngagementTimeline used to re-run
+        // the entire engagement fetch, doubling AC round-trips for every lead.
         const emailEngagement = await client.getContactEmailEngagement(contact.id);
-        const engagementTimeline = await client.buildContactEngagementTimeline(contact.id);
+        const engagementTimeline = await client.buildContactEngagementTimeline(contact.id, {
+            engagement: emailEngagement,
+        });
 
         // 4. Fetch config for region mapping
         const { PIPELINE_REGION_MAP, DEAL_FIELD_MAP } = require('./lib/config');
@@ -378,7 +434,7 @@ Subject: [subject line]
         // 7. Parse templates from Claude response
         const parseTemplates = (text) => {
             const emailMatch = text.match(/\*\*EMAIL TEMPLATE:\*\*\n([\s\S]*?)(?=\*\*SMS TEMPLATE:|$)/);
-            const smsMatch = text.match(/\*\*SMS TEMPLATE:\*\*\n([\s\S]*)$/);
+            const smsMatch = text.match(/\*\*SMS TEMPLATE:\*\*\n([\s\S]*?)$/);
 
             return {
                 email: emailMatch ? emailMatch[1].trim() : '',
