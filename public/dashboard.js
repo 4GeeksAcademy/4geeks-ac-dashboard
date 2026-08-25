@@ -9,6 +9,9 @@ function checkAuth(){
     document.getElementById('login-screen').style.display = 'flex';
     return false;
   }
+    // Auth OK - show dashboard, hide login
+    document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('login-screen').style.display = 'none';
   return true;
 }
 
