@@ -9,9 +9,6 @@ function checkAuth(){
     document.getElementById('login-screen').style.display = 'flex';
     return false;
   }
-    // Auth OK - show dashboard, hide login
-    document.getElementById('dashboard').style.display = 'block';
-    document.getElementById('login-screen').style.display = 'none';
   return true;
 }
 
@@ -605,7 +602,10 @@ async function openLeadModal(dealId){
 
 async function renderLeadModal(modal, data){
   const { lead, aiCoaching } = data;
-  const engagement = lead.engagement;
+  // Normalise so a partial payload can never throw while rendering the modal
+  // (engagement.timeline.length used to blow up if timeline was missing).
+  const engagement = lead.engagement || {};
+  if (!Array.isArray(engagement.timeline)) engagement.timeline = [];
 
   // Load existing notes for this lead
   let leadNotesData = { notes: '', tags: [], emailSent: false, actions: [] };
