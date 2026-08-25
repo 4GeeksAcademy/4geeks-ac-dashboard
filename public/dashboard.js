@@ -9,9 +9,6 @@ function checkAuth(){
     document.getElementById('login-screen').style.display = 'flex';
     return false;
   }
-  // Auth passed - show dashboard
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('dashboard').style.display = 'block';
   return true;
 }
 
@@ -473,6 +470,7 @@ function exportCsv(rows){
 }
 
 let aiHistory = [];
+let sessionAdsData = {}; // Store ads data from uploads
 
 function buildAIContext(rows){
   const top = (field, n)=> Object.entries(countBy(rows, field)).sort((a,b)=>b[1]-a[1]).slice(0,n).map(([k,v])=>({value:k, count:v}));
@@ -510,10 +508,18 @@ async function askAI(rows){
   qEl.value = '';
   try{
     const context = buildAIContext(rows);
+    // Pass conversation history (all previous Q&A pairs) for context
+    const conversationHistory = aiHistory.slice(0, -1).filter(h => h.answer); // Exclude current loading entry
+
     const res = await fetch('/api/ask', {
       method:'POST',
       headers:{'content-type':'application/json'},
-      body: JSON.stringify({ question, context }),
+      body: JSON.stringify({
+        question,
+        context,
+        history: conversationHistory,
+        adsData: sessionAdsData
+      }),
     });
     const data = await res.json().catch(()=>({}));
     if(!res.ok) throw new Error(data.error || res.statusText);
@@ -588,15 +594,26 @@ async function openLeadModal(dealId){
       return;
     }
     const data = await res.json();
-    renderLeadModal(modal, data);
+    await renderLeadModal(modal, data);
   }catch(e){
     modal.querySelector('.lead-modal-content').innerHTML = `<div style="padding:20px;color:#ff6b6b;">Error: ${e.message}</div>`;
   }
 }
 
-function renderLeadModal(modal, data){
+async function renderLeadModal(modal, data){
   const { lead, aiCoaching } = data;
   const engagement = lead.engagement;
+
+  // Load existing notes for this lead
+  let leadNotesData = { notes: '', tags: [], emailSent: false, actions: [] };
+  try {
+    const notesRes = await fetch(`/api/lead-notes/${lead.contactId}`);
+    if (notesRes.ok) {
+      leadNotesData = await notesRes.json();
+    }
+  } catch (e) {
+    console.warn('Could not load lead notes:', e.message);
+  }
 
   const coachingText = aiCoaching.fullAnalysis;
   // Parse coaching text for sections
@@ -703,6 +720,18 @@ function renderLeadModal(modal, data){
           ` : ''}
         </div>
       </div>
+
+      <div class="section">
+        <h3>📝 Notes &amp; Actions</h3>
+        <div style="margin-bottom:10px;">
+          <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <input type="checkbox" id="lead-email-sent" ${leadNotesData.emailSent ? 'checked' : ''}>
+            <span>Email sent</span>
+          </label>
+        </div>
+        <textarea id="lead-notes-text" placeholder="Add notes about this lead (admissions rep actions, follow-ups, etc.)" style="width:100%;min-height:80px;padding:8px;border:1px solid #ccc;border-radius:4px;font-family:monospace;font-size:12px;">${leadNotesData.notes}</textarea>
+        <button id="lead-notes-save" style="margin-top:8px;">Save Notes</button>
+      </div>
     </div>
   `;
 
@@ -724,6 +753,37 @@ function renderLeadModal(modal, data){
       }
     });
   });
+
+  // Save lead notes
+  const saveNotesBtn = modal.querySelector('#lead-notes-save');
+  if (saveNotesBtn) {
+    saveNotesBtn.addEventListener('click', async () => {
+      const notes = modal.querySelector('#lead-notes-text')?.value || '';
+      const emailSent = modal.querySelector('#lead-email-sent')?.checked || false;
+
+      try {
+        const res = await fetch('/api/lead-notes', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            leadId: lead.id,
+            contactId: lead.contactId,
+            notes,
+            emailSent,
+          }),
+        });
+
+        if (res.ok) {
+          showToast('Notes saved!');
+          saveNotesBtn.textContent = '✓ Saved';
+          setTimeout(() => { saveNotesBtn.textContent = 'Save Notes'; }, 2000);
+        }
+      } catch (e) {
+        showToast('Failed to save notes');
+        console.error('Error saving notes:', e);
+      }
+    });
+  }
 }
 
 // ---- Recommendations Tab ----
@@ -733,7 +793,13 @@ async function renderRecommendations(){
   el.innerHTML = `<div class="panel"><div style="padding:20px;text-align:center;"><p>Loading recommendations…</p></div></div>`;
 
   try{
-    const res = await fetch('/api/recommendations', { method:'POST' });
+    // Send filtered records to get recommendations based on current filter state
+    const filteredRecords = filtered();
+    const res = await fetch('/api/recommendations', {
+      method:'POST',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({ filteredRecords })
+    });
     if(!res.ok){
       const err = await res.json().catch(()=>({error:res.statusText}));
       el.innerHTML = `<div class="panel"><h2 style="color:#ff6b6b;">Error loading recommendations: ${err.error||res.statusText}</h2></div>`;
@@ -812,7 +878,7 @@ function renderAds(rows){
   el.innerHTML = `
   <div class="panel">
   <h2>Ads Performance</h2>
-  <p class="ads-note">Upload Meta or Google Ads exports (CSV or screenshots) to review spend and performance alongside the funnel. This data stays in your browser for this session only and is not merged with the ActiveCampaign funnel above.</p>
+  <p class="ads-note">Upload Meta or Google Ads exports (CSV or screenshots) to review spend and performance alongside the funnel. Data will be considered in AI Insights questions.</p>
   <div class="upload-zone" id="dropZone">
   <p>Drag &amp; drop CSV or image files here, or click to browse</p>
   <input type="file" id="fileInput" accept=".csv,image/*" multiple style="display:none;">
@@ -824,11 +890,65 @@ function renderAds(rows){
   const fileInput = document.getElementById('fileInput');
   const fileList = document.getElementById('fileList');
   const files = [];
+
   function platformFor(name){
     if(/google/i.test(name)) return {cls:'google', label:'Google Ads'};
     if(/meta|facebook|fb/i.test(name)) return {cls:'meta', label:'Meta Ads'};
     return {cls:'meta', label:'Ads'};
   }
+
+  function parseCSV(csvText) {
+    const lines = csvText.trim().split('\n');
+    if (lines.length < 2) return null;
+    const headers = lines[0].split(',').map(h => h.trim());
+    const data = [];
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(',').map(v => v.trim());
+      const row = {};
+      headers.forEach((h, idx) => {
+        row[h] = values[idx] || '';
+      });
+      data.push(row);
+    }
+    return data;
+  }
+
+  async function processFile(file) {
+    const platform = platformFor(file.name);
+    try {
+      const text = await file.text();
+      let data = null;
+
+      if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
+        data = parseCSV(text);
+      } else {
+        // For images, just store metadata
+        data = { filename: file.name, size: file.size, type: file.type };
+      }
+
+      if (data) {
+        sessionAdsData[file.name] = {
+          platform: platform.label,
+          data: data,
+          uploadedAt: new Date().toISOString(),
+        };
+
+        // Also send to server
+        await fetch('/api/ads-data', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            filename: file.name,
+            platform: platform.label,
+            data: typeof data === 'string' ? data : JSON.stringify(data),
+          }),
+        });
+      }
+    } catch (e) {
+      console.error('Error processing file:', e.message);
+    }
+  }
+
   function renderFileList(){
     fileList.innerHTML = files.map((f,i)=>{
       const p = platformFor(f.name);
@@ -836,15 +956,23 @@ function renderAds(rows){
     }).join('') || '<p class="muted">No files uploaded yet.</p>';
     fileList.querySelectorAll('.remove-file').forEach(btn=>{
       btn.addEventListener('click', ()=>{
+        const file = files[Number(btn.dataset.i)];
+        delete sessionAdsData[file.name];
         files.splice(Number(btn.dataset.i),1);
         renderFileList();
       });
     });
   }
-  function addFiles(list){
-    Array.from(list).forEach(f=> files.push(f));
+
+  async function addFiles(list){
+    for (let f of Array.from(list)) {
+      files.push(f);
+      await processFile(f);
+    }
     renderFileList();
+    showToast(`Loaded ${files.length} ad file(s) - use in AI Insights`);
   }
+
   dropZone.addEventListener('click', ()=> fileInput.click());
   fileInput.addEventListener('change', e=> addFiles(e.target.files));
   dropZone.addEventListener('dragover', e=>{ e.preventDefault(); dropZone.classList.add('drag'); });
