@@ -17,6 +17,11 @@ const CACHE_TTL_MS = CACHE_TTL_SECONDS * 1000;
 // the window that actually matters day-to-day.
 const DATA_WINDOW_MONTHS = Number(process.env.DATA_WINDOW_MONTHS || 6);
 const DATA_WINDOW_MS = DATA_WINDOW_MONTHS * 30 * 24 * 60 * 60 * 1000;
+// Wall-clock cap on a single enrichment pass. Whatever it manages is cached
+// and reused, so the next pass picks up where this one stopped instead of
+// starting over -- the window fills in across a few refreshes rather than
+// blocking one refresh indefinitely.
+const ENRICH_DEADLINE_MS = Number(process.env.ENRICH_DEADLINE_MS || 240000);
 
 let client;
 try {
@@ -37,44 +42,98 @@ let lastError = null;
 let leadNotes = {}; // In-memory storage for lead notes (contactId -> { notes, tags, emailSent, etc })
 let sessionAdsData = {}; // Store uploaded ads data per session
 
+// Per-entity custom field rows, kept BETWEEN refreshes. Without this the
+// 5-minute refresh refetched every deal and contact in the window from
+// scratch -- thousands of requests, every time, so the pull never got ahead
+// of the clock. With it, a refresh only pays for entities it hasn't seen.
+const dealFieldCache = new Map();
+const contactFieldCache = new Map();
+const MAX_FIELD_CACHE = 60000;
+
+function trimFieldCaches() {
+    [dealFieldCache, contactFieldCache].forEach((store) => {
+        if (store.size <= MAX_FIELD_CACHE) return;
+        const excess = store.size - MAX_FIELD_CACHE;
+        let i = 0;
+        for (const key of store.keys()) {
+            if (i++ >= excess) break;
+            store.delete(key);
+        }
+    });
+}
+
+// Progress is exposed on /api/status so a slow first load is legible instead
+// of looking like a hang.
+let refreshProgress = { phase: 'idle', done: 0, total: 0, startedAt: null };
+
+function buildRecords(deals, contactsRaw, dealCustomFieldData, fieldValuesRaw) {
+    const contactsById = new Map(contactsRaw.map((c) => [String(c.id), c]));
+    const contactFieldValuesById = new Map();
+    (fieldValuesRaw || []).forEach((fv) => {
+        const key = String(fv.contact);
+        if (!contactFieldValuesById.has(key)) contactFieldValuesById.set(key, []);
+        contactFieldValuesById.get(key).push(fv);
+    });
+    return buildDataset({ deals, dealCustomFieldData, contactsById, contactFieldValuesById });
+}
+
+// Two phases:
+//   1. deals + contacts only (~100 paginated requests, tens of seconds) and
+//      PUBLISH immediately, so the dashboard renders instead of polling 202
+//      for nine minutes and giving up.
+//   2. custom-field enrichment in the background, republishing when it lands.
+// buildDataset already tolerates missing custom field data, so phase 1 is a
+// valid dataset -- just without the custom-field-derived columns.
 async function refreshCache() {
     if (!client || refreshing) return;
     refreshing = true;
     const startedAt = Date.now();
+    refreshProgress = { phase: 'deals+contacts', done: 0, total: 0, startedAt };
     try {
-          const windowStart = new Date(startedAt - DATA_WINDOW_MS).toISOString().slice(0, 10);
+        const windowStart = new Date(startedAt - DATA_WINDOW_MS).toISOString().slice(0, 10);
 
-      const [deals, contactsRaw] = await Promise.all([
-              client.listDeals({ createdAfter: windowStart }),
-              client.listContacts({ createdAfter: windowStart }),
-            ]);
+        const [deals, contactsRaw] = await Promise.all([
+            client.listDeals({ createdAfter: windowStart }),
+            client.listContacts({ createdAfter: windowStart }),
+        ]);
 
-      const dealIds = deals.map((d) => d.id);
-          const contactIds = contactsRaw.map((c) => c.id);
+        const dealIds = deals.map((d) => d.id);
+        const contactIds = contactsRaw.map((c) => c.id);
 
-      const [dealCustomFieldData, fieldValuesRaw] = await Promise.all([
-              client.listDealCustomFieldDataForDeals(dealIds),
-              client.listContactFieldValuesForContacts(contactIds),
-            ]);
+        // --- Phase 1: publish something usable NOW ---
+        if (!cache.records) {
+            const partial = buildRecords(
+                deals,
+                contactsRaw,
+                dealIds.flatMap((id) => dealFieldCache.get(String(id)) || []),
+                contactIds.flatMap((id) => contactFieldCache.get(String(id)) || [])
+            );
+            cache = { at: Date.now(), records: partial, enriched: false };
+            lastError = null;
+            console.log(`[refresh] phase 1 published ${partial.length} records in ${((Date.now() - startedAt) / 1000).toFixed(1)}s (custom fields still loading)`);
+        }
 
-  const contactsById = new Map(contactsRaw.map((c) => [String(c.id), c]));
-      const contactFieldValuesById = new Map();
-      fieldValuesRaw.forEach((fv) => {
-          const key = String(fv.contact);
-          if (!contactFieldValuesById.has(key)) contactFieldValuesById.set(key, []);
-          contactFieldValuesById.get(key).push(fv);
-      });
+        // --- Phase 2: enrichment ---
+        refreshProgress = { phase: 'custom-fields', done: 0, total: dealIds.length + contactIds.length, startedAt };
+        const onProgress = (done) => { refreshProgress.done += 100; };
 
-  const records = buildDataset({ deals, dealCustomFieldData, contactsById, contactFieldValuesById });
-      cache = { at: Date.now(), records };
-      lastError = null;
-      const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
-      console.log(`[refresh] ok -- ${records.length} records (${deals.length} deals, ${contactsRaw.length} contacts) in ${secs}s`);
+        const [dealCustomFieldData, fieldValuesRaw] = await Promise.all([
+            client.listDealCustomFieldDataForDeals(dealIds, { cache: dealFieldCache, onProgress, deadlineMs: ENRICH_DEADLINE_MS }),
+            client.listContactFieldValuesForContacts(contactIds, { cache: contactFieldCache, onProgress, deadlineMs: ENRICH_DEADLINE_MS }),
+        ]);
+        trimFieldCaches();
+
+        const records = buildRecords(deals, contactsRaw, dealCustomFieldData, fieldValuesRaw);
+        cache = { at: Date.now(), records, enriched: true };
+        lastError = null;
+        const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
+        console.log(`[refresh] ok -- ${records.length} records (${deals.length} deals, ${contactsRaw.length} contacts) in ${secs}s | AC stats ${JSON.stringify(client.stats)}`);
     } catch (e) {
-      lastError = e.message;
-      console.error(`[refresh] failed: ${e.message}`);
+        lastError = e.message;
+        console.error(`[refresh] failed: ${e.message}`);
     } finally {
-      refreshing = false;
+        refreshing = false;
+        refreshProgress = { ...refreshProgress, phase: 'idle' };
     }
 }
 
@@ -137,6 +196,10 @@ app.get('/api/status', (req, res) => {
   res.json({
     ready: !!cache.records,
     refreshing,
+    enriched: !!cache.enriched,
+    progress: refreshProgress,
+    recordCount: cache.records ? cache.records.length : 0,
+    acStats: client ? client.stats : null,
     lastUpdated: cache.at ? new Date(cache.at).toISOString() : null,
     dataWindowMonths: DATA_WINDOW_MONTHS,
     lastError,
