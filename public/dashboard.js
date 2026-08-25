@@ -9,6 +9,13 @@ function checkAuth(){
     document.getElementById('login-screen').style.display = 'flex';
     return false;
   }
+  // BOTH #login-screen and #dashboard start as display:none in index.html.
+  // This branch used to just `return true` without showing anything, so a
+  // visitor holding a token (i.e. anyone who had already logged in, since
+  // handleLogin reloads the page) got a permanently blank white page --
+  // no console error, data fetched fine, nothing ever made visible.
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
   return true;
 }
 
