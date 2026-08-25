@@ -34,6 +34,8 @@ try {
 let cache = { at: 0, records: null };
 let refreshing = false;
 let lastError = null;
+let leadNotes = {}; // In-memory storage for lead notes (contactId -> { notes, tags, emailSent, etc })
+let sessionAdsData = {}; // Store uploaded ads data per session
 
 async function refreshCache() {
     if (!client || refreshing) return;
@@ -163,13 +165,35 @@ app.post('/api/ask', async (req, res) => {
     if (!process.env.ANTHROPIC_API_KEY) {
         return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on the server' });
     }
-    const { question, context } = req.body || {};
+    const { question, context, history = [], adsData = {} } = req.body || {};
     if (!question || typeof question !== 'string') {
         return res.status(400).json({ error: 'question is required' });
     }
     try {
-        const system = 'You are a sharp, concise data analyst helping the 4Geeks Academy admissions/sales team read their ActiveCampaign deal pipeline. You are given a JSON summary of the deals currently shown on their dashboard (already filtered to what they are looking at) -- counts, breakdowns by region/source/campaign/etc, and a small sample of individual deals. Answer the question using ONLY this data. Cite concrete numbers and percentages. If the data cannot answer the question, say so plainly instead of guessing. Keep the answer tight -- a short paragraph or a few bullet points, not a full report.';
-        const userContent = `Question: ${question}\n\nDashboard data (JSON):\n${JSON.stringify(context || {})}`;
+        let systemPrompt = 'You are a sharp, concise data analyst helping the 4Geeks Academy admissions/sales team read their ActiveCampaign deal pipeline. You are given a JSON summary of the deals currently shown on their dashboard (already filtered to what they are looking at) -- counts, breakdowns by region/source/campaign/etc, and a small sample of individual deals. Answer the question using ONLY this data. Cite concrete numbers and percentages. If the data cannot answer the question, say so plainly instead of guessing. Keep the answer tight -- a short paragraph or a few bullet points, not a full report.';
+
+        if (Object.keys(adsData).length > 0) {
+            systemPrompt += '\n\nYou also have access to marketing/ads performance data that was uploaded. Consider this data when relevant to questions about marketing performance, ROI, or campaign effectiveness.';
+        }
+
+        // Build messages with conversation history
+        const messages = [];
+
+        // Add previous conversation turns
+        if (Array.isArray(history) && history.length > 0) {
+            history.forEach(turn => {
+                if (turn.question) messages.push({ role: 'user', content: turn.question });
+                if (turn.answer) messages.push({ role: 'assistant', content: turn.answer });
+            });
+        }
+
+        // Add current question with context
+        let contentStr = `Question: ${question}\n\nDashboard data (JSON):\n${JSON.stringify(context || {})}`;
+        if (Object.keys(adsData).length > 0) {
+            contentStr += `\n\nAds/Marketing data uploaded:\n${JSON.stringify(adsData)}`;
+        }
+        messages.push({ role: 'user', content: contentStr });
+
         const r = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: {
@@ -180,8 +204,8 @@ app.post('/api/ask', async (req, res) => {
             body: JSON.stringify({
                 model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
                 max_tokens: 1024,
-                system,
-                messages: [{ role: 'user', content: userContent }],
+                system: systemPrompt,
+                messages,
             }),
         });
         if (!r.ok) {
@@ -239,7 +263,7 @@ app.post('/api/lead-coach', async (req, res) => {
             for (const [fieldId, name] of Object.entries(CONTACT_FIELD_MAP)) {
                 if (name !== mappedName) continue;
                 const hit = contactFieldValues.find((v) => String(v.field) === String(fieldId));
-                if (hit) return hit.value || null;
+                if (hit) return v.value || null;
             }
             return null;
         };
@@ -353,7 +377,7 @@ Subject: [subject line]
         // 7. Parse templates from Claude response
         const parseTemplates = (text) => {
             const emailMatch = text.match(/\*\*EMAIL TEMPLATE:\*\*\n([\s\S]*?)(?=\*\*SMS TEMPLATE:|$)/);
-            const smsMatch = text.match(/\*\*SMS TEMPLATE:\*\*\n([\s\S]*?)$/);
+            const smsMatch = text.match(/\*\*SMS TEMPLATE:\*\*\n([\s\S]*)$/);
 
             return {
                 email: emailMatch ? emailMatch[1].trim() : '',
@@ -387,12 +411,15 @@ app.post('/api/recommendations', async (req, res) => {
     }
 
     try {
-        // Get current filtered records (already in cache from dashboard)
+        // Get filtered records from request body (dashboard sends filtered data)
+        // If not provided, use full cache
+        const { filteredRecords } = req.body || {};
+
         if (!cache.records) {
             return res.status(202).json({ ready: false, refreshing });
         }
 
-        const records = cache.records;
+        const records = filteredRecords && filteredRecords.length > 0 ? filteredRecords : cache.records;
 
         // Categorize leads by recommended action
         const today = new Date();
@@ -535,6 +562,68 @@ app.post('/api/recommendations', async (req, res) => {
         console.error('[recommendations] error:', e.message);
         res.status(500).json({ error: e.message });
     }
+});
+
+// Lead Notes: Save and retrieve notes/tags for each lead
+app.post('/api/lead-notes', (req, res) => {
+    const { leadId, contactId, notes, tags, emailSent, actions } = req.body || {};
+    if (!contactId) {
+        return res.status(400).json({ error: 'contactId is required' });
+    }
+
+    const key = String(contactId);
+    if (!leadNotes[key]) {
+        leadNotes[key] = { notes: '', tags: [], emailSent: false, actions: [], updatedAt: null };
+    }
+
+    // Update fields if provided
+    if (notes !== undefined) leadNotes[key].notes = notes;
+    if (Array.isArray(tags)) leadNotes[key].tags = tags;
+    if (emailSent !== undefined) leadNotes[key].emailSent = emailSent;
+    if (Array.isArray(actions)) leadNotes[key].actions = actions;
+    leadNotes[key].updatedAt = new Date().toISOString();
+
+    res.json({ success: true, data: leadNotes[key] });
+});
+
+app.get('/api/lead-notes/:contactId', (req, res) => {
+    const { contactId } = req.params;
+    const key = String(contactId);
+    const data = leadNotes[key] || { notes: '', tags: [], emailSent: false, actions: [], updatedAt: null };
+    res.json(data);
+});
+
+// Ads Data: Store uploaded ads file metadata and data
+app.post('/api/ads-data', (req, res) => {
+    const { sessionId = 'default', filename, data, platform } = req.body || {};
+    if (!filename || !data) {
+        return res.status(400).json({ error: 'filename and data are required' });
+    }
+
+    if (!sessionAdsData[sessionId]) {
+        sessionAdsData[sessionId] = [];
+    }
+
+    sessionAdsData[sessionId].push({
+        filename,
+        platform: platform || 'unknown',
+        data,
+        uploadedAt: new Date().toISOString(),
+    });
+
+    res.json({ success: true, count: sessionAdsData[sessionId].length });
+});
+
+app.get('/api/ads-data/:sessionId', (req, res) => {
+    const { sessionId = 'default' } = req.params;
+    const files = sessionAdsData[sessionId] || [];
+    res.json({ files, count: files.length });
+});
+
+app.delete('/api/ads-data/:sessionId', (req, res) => {
+    const { sessionId = 'default' } = req.params;
+    delete sessionAdsData[sessionId];
+    res.json({ success: true });
 });
 
 app.listen(PORT, () => console.log(`4Geeks AC dashboard listening on :${PORT}`));
