@@ -50,6 +50,11 @@ const dealFieldCache = new Map();
 const contactFieldCache = new Map();
 const MAX_FIELD_CACHE = 60000;
 
+// Entity lists from the last pass, reused while enrichment is still catching
+// up so we don't burn ~90s of every cycle re-paginating unchanged data.
+let lastEntities = null;
+const ENTITY_REUSE_MS = 30 * 60 * 1000;
+
 function trimFieldCaches() {
     [dealFieldCache, contactFieldCache].forEach((store) => {
         if (store.size <= MAX_FIELD_CACHE) return;
@@ -92,10 +97,23 @@ async function refreshCache() {
     try {
         const windowStart = new Date(startedAt - DATA_WINDOW_MS).toISOString().slice(0, 10);
 
-        const [deals, contactsRaw] = await Promise.all([
-            client.listDeals({ createdAfter: windowStart }),
-            client.listContacts({ createdAfter: windowStart }),
-        ]);
+        // Re-paginating every deal and contact costs ~350 requests (~90s of a
+        // 300s cycle). While enrichment is still catching up that is capacity
+        // we'd rather spend on custom fields, so reuse the entity lists from
+        // the last pass until they go stale.
+        let deals;
+        let contactsRaw;
+        const enrichmentPending = !!(cache.records && !cache.fullyEnriched);
+        if (enrichmentPending && lastEntities && Date.now() - lastEntities.at < ENTITY_REUSE_MS) {
+            ({ deals, contactsRaw } = lastEntities);
+            console.log(`[refresh] reusing entity lists (${deals.length} deals) -- spending this pass on enrichment`);
+        } else {
+            [deals, contactsRaw] = await Promise.all([
+                client.listDeals({ createdAfter: windowStart }),
+                client.listContacts({ createdAfter: windowStart }),
+            ]);
+            lastEntities = { deals, contactsRaw, at: Date.now() };
+        }
 
         const dealIds = deals.map((d) => d.id);
         const contactIds = contactsRaw.map((c) => c.id);
@@ -123,9 +141,26 @@ async function refreshCache() {
         ]);
         trimFieldCaches();
 
+        // `enriched` only meant "a pass finished", which reads as "all data is
+        // in" when a pass usually stops at its deadline with most entities
+        // still unfetched. Report actual coverage instead.
+        const dealsCovered = dealIds.filter((id) => dealFieldCache.has(String(id))).length;
+        const contactsCovered = contactIds.filter((id) => contactFieldCache.has(String(id))).length;
+        const fullyEnriched = dealsCovered === dealIds.length && contactsCovered === contactIds.length;
+
         const records = buildRecords(deals, contactsRaw, dealCustomFieldData, fieldValuesRaw);
-        cache = { at: Date.now(), records, enriched: true };
+        cache = {
+            at: Date.now(),
+            records,
+            enriched: true,
+            fullyEnriched,
+            coverage: {
+                deals: { done: dealsCovered, total: dealIds.length },
+                contacts: { done: contactsCovered, total: contactIds.length },
+            },
+        };
         lastError = null;
+        console.log(`[refresh] custom field coverage: deals ${dealsCovered}/${dealIds.length}, contacts ${contactsCovered}/${contactIds.length}`);
         const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
         console.log(`[refresh] ok -- ${records.length} records (${deals.length} deals, ${contactsRaw.length} contacts) in ${secs}s | AC stats ${JSON.stringify(client.stats)}`);
     } catch (e) {
@@ -197,6 +232,8 @@ app.get('/api/status', (req, res) => {
     ready: !!cache.records,
     refreshing,
     enriched: !!cache.enriched,
+    fullyEnriched: !!cache.fullyEnriched,
+    coverage: cache.coverage || null,
     progress: refreshProgress,
     recordCount: cache.records ? cache.records.length : 0,
     acStats: client ? client.stats : null,
