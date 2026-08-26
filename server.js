@@ -449,6 +449,37 @@ app.get('/api/diag/engagement-wide/:id', requireAuth, async (req, res) => {
   }
 });
 
+// Determines whether /api/3/logs and /api/3/trackingLogs can be filtered per
+// contact at all -- and verifies the returned rows actually belong to that
+// contact, since an ignored filter returns 200 with the WRONG rows.
+//   GET /api/diag/engagement-filters/<dealOrContactId>?token=<token>
+app.get('/api/diag/engagement-filters/:id', requireAuth, async (req, res) => {
+  if (!client) return res.status(500).json({ error: 'AC_API_URL / AC_API_KEY not configured' });
+  try {
+    let contactId = req.params.id;
+    const asDeal = await client._getSafe(`/api/3/deals/${req.params.id}`);
+    if (asDeal.ok && asDeal.data?.deal?.contact) contactId = asDeal.data.deal.contact;
+    const probe = await client.probeEngagementFilters(contactId);
+    res.json(probe);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// How much of ActiveCampaign's shared rate limit is THIS app using right now?
+// No token required -- it exposes no CRM data, only our own call counts.
+//   GET /api/load
+app.get('/api/load', (req, res) => {
+  if (!client) return res.status(500).json({ error: 'AC_API_URL / AC_API_KEY not configured' });
+  res.json({
+    ...client.getLoadReport(),
+    refreshing,
+    refreshIntervalSeconds: CACHE_TTL_SECONDS,
+    enrichmentDisabled: DISABLE_ENRICHMENT,
+    dataWindowMonths: DATA_WINDOW_MONTHS,
+  });
+});
+
 app.get('/api/summary', (req, res) => {
   if (!client) return res.status(500).json({ error: 'AC_API_URL / AC_API_KEY not configured' });
   if (!cache.records) {
