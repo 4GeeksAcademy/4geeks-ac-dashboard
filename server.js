@@ -428,6 +428,27 @@ app.get('/api/diag/engagement-scan/:id', requireAuth, async (req, res) => {
   }
 });
 
+// Wide scan: probes the contact's sub-resources, the DEAL's sub-resources,
+// and account-level activity endpoints. Use when the AC UI shows engagement
+// but the contact endpoints come back empty.
+//   GET /api/diag/engagement-wide/<dealId>?token=<dashboard token>
+app.get('/api/diag/engagement-wide/:id', requireAuth, async (req, res) => {
+  if (!client) return res.status(500).json({ error: 'AC_API_URL / AC_API_KEY not configured' });
+  try {
+    let contactId = req.params.id;
+    let dealId = null;
+    const asDeal = await client._getSafe(`/api/3/deals/${req.params.id}`);
+    if (asDeal.ok && asDeal.data?.deal?.contact) {
+      dealId = req.params.id;
+      contactId = asDeal.data.deal.contact;
+    }
+    const scan = await client.scanEngagementEverywhere(contactId, dealId);
+    res.json(scan);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/summary', (req, res) => {
   if (!client) return res.status(500).json({ error: 'AC_API_URL / AC_API_KEY not configured' });
   if (!cache.records) {
