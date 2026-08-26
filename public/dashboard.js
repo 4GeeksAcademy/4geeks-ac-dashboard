@@ -672,11 +672,34 @@ async function renderLeadModal(modal, data){
         <h3>📊 Engagement Timeline</h3>
         ${engagement.trackingAvailable ? `
           <div class="engagement-stats">
-            <div class="stat"><span class="label">Emails Engaged:</span> <span class="value">${engagement.emailsEngaged}</span></div>
-            <div class="stat"><span class="label">Opens:</span> <span class="value">${engagement.emailsOpened} (${engagement.emailOpenRate}%)</span></div>
-            <div class="stat"><span class="label">Clicks:</span> <span class="value">${engagement.linksClicked}</span></div>
+            <div class="stat"><span class="label">Emails Sent:</span> <span class="value">${engagement.emailsSent ?? '—'}</span></div>
+            <div class="stat"><span class="label">Likely Opens:</span> <span class="value">${engagement.emailsOpened} (${engagement.emailOpenRate}%)</span></div>
+            <div class="stat"><span class="label">Likely Clicks:</span> <span class="value">${engagement.linksClicked}</span></div>
             <div class="stat"><span class="label">Last Email:</span> <span class="value">${engagement.lastEmailDate||'—'}</span></div>
           </div>
+          ${Array.isArray(engagement.scores) && engagement.scores.length ? `
+            <div class="engagement-stats" style="margin-top:8px">
+              ${engagement.scores.map(s=>{
+                const tone = s.interpretation ? s.interpretation.tone : null;
+                const colour = tone==='great'?'#2ea043':tone==='good'?'#3fb950':tone==='ok'?'#d29922':tone==='weak'?'#bb8009':tone==='bad'?'#f85149':'#8b949e';
+                return `
+                <div class="stat">
+                  <span class="label">${s.name}:</span>
+                  <span class="value" ${s.isEngagementScore?`style="color:${colour};font-weight:600"`:''}>
+                    ${s.value}${s.interpretation?` — ${s.interpretation.label}`:''}
+                  </span>
+                  ${s.interpretation?`<div class="muted" style="font-size:.8em">${s.interpretation.meaning}</div>`:''}
+                </div>`;
+              }).join('')}
+            </div>
+          ` : ''}
+          ${engagement.engagementBasis === 'campaign-aggregate' ? `
+            <p class="muted" style="font-size:0.85em;margin-top:6px">
+              ⚠️ "Likely" figures are inferred from each campaign's overall open/click rates —
+              ActiveCampaign's API does not expose per-recipient opens. Treat as a signal, not as
+              confirmation this person opened.
+            </p>
+          ` : ''}
           ${engagement.timeline.length > 0 ? `
             <div class="timeline">
               ${engagement.timeline.slice(0,10).map(evt=>`
