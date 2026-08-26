@@ -6,7 +6,7 @@ const { buildDataset } = require('./lib/analysis');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const CACHE_TTL_SECONDS = Number(process.env.CACHE_TTL_SECONDS || 300);
+const CACHE_TTL_SECONDS = Number(process.env.CACHE_TTL_SECONDS || 1800);
 const CACHE_TTL_MS = CACHE_TTL_SECONDS * 1000;
 
 // How far back to pull deals/contacts from ActiveCampaign. The account has
@@ -21,7 +21,13 @@ const DATA_WINDOW_MS = DATA_WINDOW_MONTHS * 30 * 24 * 60 * 60 * 1000;
 // and reused, so the next pass picks up where this one stopped instead of
 // starting over -- the window fills in across a few refreshes rather than
 // blocking one refresh indefinitely.
-const ENRICH_DEADLINE_MS = Number(process.env.ENRICH_DEADLINE_MS || 240000);
+const ENRICH_DEADLINE_MS = Number(process.env.ENRICH_DEADLINE_MS || 60000);
+// Emergency brake: set AC_DISABLE_ENRICHMENT=true to stop all per-entity
+// custom field fetching. The dashboard still works (deals, contacts, values,
+// stages); only the CRM custom field columns go blank. Use this if the
+// dashboard is ever competing with production workflows for the account's
+// shared API budget.
+const DISABLE_ENRICHMENT = String(process.env.AC_DISABLE_ENRICHMENT || '').toLowerCase() === 'true';
 
 let client;
 try {
@@ -103,20 +109,83 @@ async function refreshCache() {
         // the last pass until they go stale.
         let deals;
         let contactsRaw;
+        let sideDealFields = null;
+        let sideContactFields = null;
         const enrichmentPending = !!(cache.records && !cache.fullyEnriched);
         if (enrichmentPending && lastEntities && Date.now() - lastEntities.at < ENTITY_REUSE_MS) {
             ({ deals, contactsRaw } = lastEntities);
             console.log(`[refresh] reusing entity lists (${deals.length} deals) -- spending this pass on enrichment`);
         } else {
-            [deals, contactsRaw] = await Promise.all([
-                client.listDeals({ createdAfter: windowStart }),
-                client.listContacts({ createdAfter: windowStart }),
+            // Ask AC to side-load custom fields with the list pages. When it
+            // works this replaces ~34,000 per-entity requests with the ~370
+            // pagination requests we make anyway.
+            const [dealRes, contactRes] = await Promise.all([
+                client.listDealsWithCustomFields({ createdAfter: windowStart }),
+                client.listContactsWithFieldValues({ createdAfter: windowStart }),
             ]);
+            deals = dealRes.deals;
+            contactsRaw = contactRes.contacts;
+            if (dealRes.includeSupported) sideDealFields = dealRes.dealCustomFieldData;
+            if (contactRes.includeSupported) sideContactFields = contactRes.fieldValues;
+            console.log(`[refresh] side-load support: deals=${dealRes.includeSupported} (${dealRes.dealCustomFieldData.length} rows), contacts=${contactRes.includeSupported} (${contactRes.fieldValues.length} rows)`);
             lastEntities = { deals, contactsRaw, at: Date.now() };
         }
 
-        const dealIds = deals.map((d) => d.id);
-        const contactIds = contactsRaw.map((c) => c.id);
+        // Enrich newest-first. The table sorts by date descending, so the
+        // rows anyone actually looks at are the most recent ones -- fetching
+        // in list order meant the visible rows were served LAST and every
+        // custom field on screen showed "-" for hours.
+        const byDateDesc = (a, b) => String(b.cdate || '').localeCompare(String(a.cdate || ''));
+        const dealIds = deals.slice().sort(byDateDesc).map((d) => d.id);
+        // Only contacts that actually have a deal in the window matter -- the
+        // rest were being fetched for nothing. Ordered to match dealIds so the
+        // newest deals' contacts are enriched first too.
+        const contactsWithDeals = new Set(deals.map((d) => String(d.contact)).filter(Boolean));
+        const dealOrder = new Map(dealIds.map((id, i) => [String(id), i]));
+        const contactIds = contactsRaw
+            .filter((c) => contactsWithDeals.has(String(c.id)))
+            .map((c) => c.id);
+        const contactPriority = new Map();
+        deals.forEach((d) => {
+            const key = String(d.contact);
+            const rank = dealOrder.get(String(d.id));
+            if (rank !== undefined && (!contactPriority.has(key) || rank < contactPriority.get(key))) {
+                contactPriority.set(key, rank);
+            }
+        });
+        contactIds.sort((a, b) => (contactPriority.get(String(a)) ?? 1e9) - (contactPriority.get(String(b)) ?? 1e9));
+
+        // If AC side-loaded the custom fields, we already have everything and
+        // there is no per-entity enrichment to do at all.
+        if (sideDealFields && sideContactFields) {
+            sideDealFields.forEach((row) => {
+                const key = String(row.dealId ?? row.deal);
+                if (!dealFieldCache.has(key)) dealFieldCache.set(key, []);
+                dealFieldCache.get(key).push(row);
+            });
+            sideContactFields.forEach((row) => {
+                const key = String(row.contact);
+                if (!contactFieldCache.has(key)) contactFieldCache.set(key, []);
+                contactFieldCache.get(key).push(row);
+            });
+            trimFieldCaches();
+
+            const records = buildRecords(deals, contactsRaw, sideDealFields, sideContactFields);
+            cache = {
+                at: Date.now(),
+                records,
+                enriched: true,
+                fullyEnriched: true,
+                coverage: {
+                    deals: { done: dealIds.length, total: dealIds.length },
+                    contacts: { done: contactIds.length, total: contactIds.length },
+                },
+            };
+            lastError = null;
+            refreshProgress = { phase: 'idle', done: 0, total: 0, startedAt };
+            console.log(`[refresh] ok via side-load -- ${records.length} records in ${((Date.now() - startedAt) / 1000).toFixed(1)}s | AC stats ${JSON.stringify(client.stats)}`);
+            return;
+        }
 
         // --- Phase 1: publish something usable NOW ---
         if (!cache.records) {
@@ -131,14 +200,57 @@ async function refreshCache() {
             console.log(`[refresh] phase 1 published ${partial.length} records in ${((Date.now() - startedAt) / 1000).toFixed(1)}s (custom fields still loading)`);
         }
 
-        // --- Phase 2: enrichment ---
-        refreshProgress = { phase: 'custom-fields', done: 0, total: dealIds.length + contactIds.length, startedAt };
-        const onProgress = (done) => { refreshProgress.done += 100; };
+        if (DISABLE_ENRICHMENT) {
+            console.log('[refresh] enrichment disabled via AC_DISABLE_ENRICHMENT -- serving deals/contacts only');
+            refreshProgress = { phase: 'idle', done: 0, total: 0, startedAt };
+            return;
+        }
 
-        const [dealCustomFieldData, fieldValuesRaw] = await Promise.all([
-            client.listDealCustomFieldDataForDeals(dealIds, { cache: dealFieldCache, onProgress, deadlineMs: ENRICH_DEADLINE_MS }),
-            client.listContactFieldValuesForContacts(contactIds, { cache: contactFieldCache, onProgress, deadlineMs: ENRICH_DEADLINE_MS }),
-        ]);
+        // --- Phase 2: enrichment, cheapest strategy that works ---
+        //
+        // BULK first. This is how the dashboard originally worked, and it is
+        // ~1 request per 100 ROWS instead of 1 per ENTITY. It was abandoned
+        // because the paginator silently capped at 200 pages and truncated the
+        // data; that cap is now 5000 and truncation logs loudly, so the cheap
+        // path is viable again. Per-entity fetching survives only as a
+        // last resort for ids the bulk pull genuinely didn't cover.
+        refreshProgress = { phase: 'custom-fields', done: 0, total: dealIds.length + contactIds.length, startedAt };
+        const onProgress = () => { refreshProgress.done += 100; };
+
+        let dealCustomFieldData = [];
+        let fieldValuesRaw = [];
+        const dealIdSet = new Set(dealIds.map(String));
+        const contactIdSet = new Set(contactIds.map(String));
+
+        try {
+            const [allDealFields, allContactFields] = await Promise.all([
+                client.listAllDealCustomFieldData(),
+                client.listAllContactFieldValues(),
+            ]);
+            dealCustomFieldData = allDealFields.filter((r) => dealIdSet.has(String(r.dealId ?? r.deal)));
+            fieldValuesRaw = allContactFields.filter((r) => contactIdSet.has(String(r.contact)));
+
+            dealCustomFieldData.forEach((row) => {
+                const key = String(row.dealId ?? row.deal);
+                if (!dealFieldCache.has(key)) dealFieldCache.set(key, []);
+                dealFieldCache.get(key).push(row);
+            });
+            fieldValuesRaw.forEach((row) => {
+                const key = String(row.contact);
+                if (!contactFieldCache.has(key)) contactFieldCache.set(key, []);
+                contactFieldCache.get(key).push(row);
+            });
+
+            console.log(`[refresh] bulk custom fields: ${dealCustomFieldData.length} deal rows, ${fieldValuesRaw.length} contact rows | AC requests so far ${client.stats.requests}`);
+        } catch (e) {
+            console.warn(`[refresh] bulk custom field pull failed (${e.message}) -- falling back to per-entity`);
+            const [d, f] = await Promise.all([
+                client.listDealCustomFieldDataForDeals(dealIds, { cache: dealFieldCache, onProgress, deadlineMs: ENRICH_DEADLINE_MS }),
+                client.listContactFieldValuesForContacts(contactIds, { cache: contactFieldCache, onProgress, deadlineMs: ENRICH_DEADLINE_MS }),
+            ]);
+            dealCustomFieldData = d;
+            fieldValuesRaw = f;
+        }
         trimFieldCaches();
 
         // `enriched` only meant "a pass finished", which reads as "all data is
@@ -250,9 +362,26 @@ app.get('/api/status', (req, res) => {
 app.get('/api/diag/engagement/:contactId', requireAuth, async (req, res) => {
   if (!client) return res.status(500).json({ error: 'AC_API_URL / AC_API_KEY not configured' });
   try {
-    const probe = await client.probeContactEngagement(req.params.contactId);
-    const engagement = await client.getContactEmailEngagement(req.params.contactId);
+    // The dashboard table shows DEAL ids, so accept either: try the id as a
+    // contact, and if that fails resolve it as a deal and use its contact.
+    let contactId = req.params.contactId;
+    let resolvedFrom = 'contact';
+    const asContact = await client._getSafe(`/api/3/contacts/${contactId}`);
+    if (!asContact.ok) {
+      const asDeal = await client._getSafe(`/api/3/deals/${contactId}`);
+      if (asDeal.ok && asDeal.data?.deal?.contact) {
+        contactId = asDeal.data.deal.contact;
+        resolvedFrom = 'deal';
+      } else {
+        return res.status(404).json({ error: `${req.params.contactId} is neither a contact nor a deal id` });
+      }
+    }
+
+    const probe = await client.probeContactEngagement(contactId);
+    const engagement = await client.getContactEmailEngagement(contactId);
     res.json({
+      resolvedFrom,
+      contactId,
       probe,
       parsed: {
         sent: engagement.sent,
@@ -268,6 +397,32 @@ app.get('/api/diag/engagement/:contactId', requireAuth, async (req, res) => {
         firstEvents: engagement.events.slice(0, 5),
       },
     });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Exhaustive scan: asks AC what sub-resources this contact actually has and
+// probes each one, reporting which carry open/click data and under what field
+// names. Accepts a deal id or a contact id.
+//   GET /api/diag/engagement-scan/<id>?token=<dashboard token>
+app.get('/api/diag/engagement-scan/:id', requireAuth, async (req, res) => {
+  if (!client) return res.status(500).json({ error: 'AC_API_URL / AC_API_KEY not configured' });
+  try {
+    let contactId = req.params.id;
+    let resolvedFrom = 'contact';
+    const asContact = await client._getSafe(`/api/3/contacts/${contactId}`);
+    if (!asContact.ok) {
+      const asDeal = await client._getSafe(`/api/3/deals/${contactId}`);
+      if (asDeal.ok && asDeal.data?.deal?.contact) {
+        contactId = asDeal.data.deal.contact;
+        resolvedFrom = 'deal';
+      } else {
+        return res.status(404).json({ error: `${req.params.id} is neither a contact nor a deal id` });
+      }
+    }
+    const scan = await client.scanContactEngagementSources(contactId);
+    res.json({ resolvedFrom, ...scan });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
