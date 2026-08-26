@@ -480,6 +480,35 @@ app.get('/api/load', (req, res) => {
   });
 });
 
+// Lists the account's score definitions and this lead's values, so we can
+// confirm the exact name/id of the engagement score before wiring it in.
+//   GET /api/diag/scores/<dealId>?token=<token>
+app.get('/api/diag/scores/:id', requireAuth, async (req, res) => {
+  if (!client) return res.status(500).json({ error: 'AC_API_URL / AC_API_KEY not configured' });
+  try {
+    let contactId = req.params.id;
+    let dealId = null;
+    const asDeal = await client._getSafe(`/api/3/deals/${req.params.id}`);
+    if (asDeal.ok && asDeal.data?.deal?.contact) {
+      dealId = req.params.id;
+      contactId = asDeal.data.deal.contact;
+    }
+    const [allScores, named] = await Promise.all([
+      client.listScores(),
+      client.getNamedScores(contactId, dealId),
+    ]);
+    res.json({
+      dealId,
+      contactId,
+      // Every score defined on the account -- find the engagement one here.
+      scoreDefinitions: allScores.map((s) => ({ id: s.id, name: s.name, status: s.status })),
+      leadScores: named,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/summary', (req, res) => {
   if (!client) return res.status(500).json({ error: 'AC_API_URL / AC_API_KEY not configured' });
   if (!cache.records) {
@@ -635,6 +664,8 @@ app.post('/api/lead-coach', async (req, res) => {
         const engagementTimeline = await client.buildContactEngagementTimeline(contact.id, {
             engagement: emailEngagement,
         });
+        // AC scores driven by open/click rules -- real per-person engagement.
+        const leadScores = await client.getNamedScores(contact.id, leadId).catch(() => []);
 
         // 4. Fetch config for region mapping
         const { PIPELINE_REGION_MAP, DEAL_FIELD_MAP } = require('./lib/config');
@@ -665,6 +696,16 @@ app.post('/api/lead-coach', async (req, res) => {
                 clickRate: Number(emailEngagement.clickRate),
                 lastEmailDate: emailEngagement.lastEmailDate ? emailEngagement.lastEmailDate.slice(0, 10) : null,
                 trackingAvailable: !emailEngagement.unavailable,
+                emailsSent: emailEngagement.sent,
+                // 'campaign-aggregate' means opens/clicks are inferred from
+                // each campaign's overall rates, not from this person's own
+                // tracked actions -- AC does not expose per-recipient opens
+                // through its API. The UI must not present these as facts
+                // about this individual.
+                engagementBasis: emailEngagement.engagementBasis || 'per-contact',
+                // AC scores built from open/click rules are TRUE per-person
+                // engagement, unlike the campaign-aggregate inference above.
+                scores: leadScores,
                 timeline: engagementTimeline,
             },
 
@@ -695,6 +736,16 @@ Your job is to:
    - A brief SMS they could send same-day (under 60 characters)
 
 Use their name, course interest, engagement patterns, and signals from custom fields (sentiment, quality score, classification) to make templates feel personal and timely. If they've opened emails about financing but haven't replied, mention financing in your email. If their admission score is high, emphasize their qualification.
+
+READING THE ENGAGEMENT SCORE ("Score: Quality + Engagement"). This score is built entirely from email opens and clicks, so it is real behaviour, not a guess:
+- Below 0: they marked email as spam or similar. Do NOT push more email. Suggest a different channel or backing off entirely.
+- 0: no engagement at all. Nothing has landed. Assume they have not read anything you sent -- do not reference "as you saw in my last email".
+- 6: light engagement, some opens.
+- 8: opening consistently -- warm.
+- 14 or above: they have CLICKED a link. This is the strongest signal available. Treat as high intent and push for the meeting.
+Match your urgency to this number. Never claim a lead engaged with something when the score says 0.
+
+If engagement.engagementBasis is "campaign-aggregate", the opens/clicks shown are INFERRED from campaign averages, not that person's own actions -- treat them as weak evidence and rely on the engagement score instead.
 
 FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
 
