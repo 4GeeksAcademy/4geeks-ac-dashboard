@@ -158,16 +158,26 @@ async function refreshCache() {
         // If AC side-loaded the custom fields, we already have everything and
         // there is no per-entity enrichment to do at all.
         if (sideDealFields && sideContactFields) {
+            // Side-load pulls the FULL window's custom fields every refresh
+            // cycle (not just new rows), so this must REPLACE each key's
+            // rows, not append to them. Appending here was the memory leak:
+            // every ~30 minutes the same ~117k deal / ~102k contact rows got
+            // pushed onto whatever was already cached, growing unbounded
+            // until the process hit its heap limit and crashed with an OOM.
+            const freshDealRows = new Map();
             sideDealFields.forEach((row) => {
                 const key = String(row.dealId ?? row.deal);
-                if (!dealFieldCache.has(key)) dealFieldCache.set(key, []);
-                dealFieldCache.get(key).push(row);
+                if (!freshDealRows.has(key)) freshDealRows.set(key, []);
+                freshDealRows.get(key).push(row);
             });
+            const freshContactRows = new Map();
             sideContactFields.forEach((row) => {
                 const key = String(row.contact);
-                if (!contactFieldCache.has(key)) contactFieldCache.set(key, []);
-                contactFieldCache.get(key).push(row);
+                if (!freshContactRows.has(key)) freshContactRows.set(key, []);
+                freshContactRows.get(key).push(row);
             });
+            freshDealRows.forEach((rows, key) => dealFieldCache.set(key, rows));
+            freshContactRows.forEach((rows, key) => contactFieldCache.set(key, rows));
             trimFieldCaches();
 
             const records = buildRecords(deals, contactsRaw, sideDealFields, sideContactFields);
@@ -230,16 +240,24 @@ async function refreshCache() {
             dealCustomFieldData = allDealFields.filter((r) => dealIdSet.has(String(r.dealId ?? r.deal)));
             fieldValuesRaw = allContactFields.filter((r) => contactIdSet.has(String(r.contact)));
 
+            // Same replace-not-append fix as the side-load path above: this
+            // bulk pull also covers the full window every cycle, so pushing
+            // onto an existing cached array duplicates data forever instead
+            // of refreshing it.
+            const freshBulkDealRows = new Map();
             dealCustomFieldData.forEach((row) => {
                 const key = String(row.dealId ?? row.deal);
-                if (!dealFieldCache.has(key)) dealFieldCache.set(key, []);
-                dealFieldCache.get(key).push(row);
+                if (!freshBulkDealRows.has(key)) freshBulkDealRows.set(key, []);
+                freshBulkDealRows.get(key).push(row);
             });
+            const freshBulkContactRows = new Map();
             fieldValuesRaw.forEach((row) => {
                 const key = String(row.contact);
-                if (!contactFieldCache.has(key)) contactFieldCache.set(key, []);
-                contactFieldCache.get(key).push(row);
+                if (!freshBulkContactRows.has(key)) freshBulkContactRows.set(key, []);
+                freshBulkContactRows.get(key).push(row);
             });
+            freshBulkDealRows.forEach((rows, key) => dealFieldCache.set(key, rows));
+            freshBulkContactRows.forEach((rows, key) => contactFieldCache.set(key, rows));
 
             console.log(`[refresh] bulk custom fields: ${dealCustomFieldData.length} deal rows, ${fieldValuesRaw.length} contact rows | AC requests so far ${client.stats.requests}`);
         } catch (e) {
