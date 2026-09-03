@@ -88,8 +88,9 @@ async function loadData(region){
     }
     if(!res.ok){
       const err = await res.json().catch(()=>({error:res.statusText}));
-      document.getElementById('freshness').innerHTML = `<span style="color:#ff6b6b">Failed to load: ${err.error||res.statusText}</span>`;
-      document.querySelector('.wrap').insertAdjacentHTML('beforeend', `<div class="error">Could not reach ActiveCampaign. Check AC_API_URL / AC_API_KEY env vars, or open <a href="/api/schema" style="color:#ff9d6b">/api/schema</a> to debug.</div>`);
+      // Surface the failure in the freshness line only. The big red box (and a
+      // link to /api/schema) was alarming in local dev where AC simply isn't
+      // configured; the init() catch shows a friendly explanation instead.
       throw new Error(err.error||res.statusText);
     }
     data = await res.json();
@@ -906,115 +907,423 @@ function getGroupEmoji(name){
   return emojis[name] || '📋';
 }
 
-function renderAds(rows){
+// ---- Ads Performance (live from 4Geeks Center) ----
+let adsChart;
+let adsChartLeads;
+let adsRegion = null; // ads-tab local region: 'US' | 'ES' | 'LATAM'
+let adsStart = null;  // ads-tab date range (its OWN, independent of lead filters)
+let adsEnd = null;
+const CENTER_REGION_LABEL = { US:'USA', ES:'España', LATAM:'LATAM', CL:'Chile' };
+const REGION_TO_CENTER_F = { USA:'US', Spain:'ES', LATAM:'LATAM', all:'US' };
+
+function adsMoney(n, cur){
+  if(n==null || isNaN(n)) return '—';
+  const sym = cur==='EUR' ? '€' : '$';
+  return sym + Number(n).toLocaleString(undefined, { maximumFractionDigits: Math.abs(n) < 100 ? 1 : 0 });
+}
+function adsNum(n){ return (n==null||isNaN(n)) ? '—' : Number(n).toLocaleString(); }
+function adsRoas(n){ return (n==null||isNaN(n)) ? '—' : Number(n).toFixed(2)+'×'; }
+function adsPct(n){ return (n==null||isNaN(n)) ? '—' : Number(n).toFixed(2)+'%'; }
+function qsBadge(q){ if(q==null||isNaN(q)) return '—'; const n=Number(q); const cls = n>=8?'b-won':n>=5?'b-lostu':'b-lostc'; return `<span class="badge ${cls}">${n.toFixed(1)}/10</span>`; }
+function landingExp(e){ const m={ABOVE_AVERAGE:'Buena',AVERAGE:'Media',BELOW_AVERAGE:'Pobre'}; const l=m[String(e||'').toUpperCase()]; if(!l) return e?`<span class="badge b-other">${e}</span>`:'—'; const cls=l==='Buena'?'b-won':l==='Media'?'b-lostu':'b-lostc'; return `<span class="badge ${cls}">${l}</span>`; }
+// Rangos rápidos para el filtro de fechas del tab de Ads (fecha LOCAL, no UTC).
+function adsIsoDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function adsPresetRanges(){
+  const today = new Date();
+  const monday = new Date(today); monday.setDate(today.getDate() - ((today.getDay()+6)%7)); // lunes de esta semana
+  const lastMon = new Date(monday); lastMon.setDate(monday.getDate()-7);
+  const lastSun = new Date(monday); lastSun.setDate(monday.getDate()-1);
+  const mStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const pmStart = new Date(today.getFullYear(), today.getMonth()-1, 1);
+  const pmEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+  return [
+    {label:'Esta semana', start:adsIsoDate(monday), end:adsIsoDate(today)},
+    {label:'Semana pasada', start:adsIsoDate(lastMon), end:adsIsoDate(lastSun)},
+    {label:'Este mes', start:adsIsoDate(mStart), end:adsIsoDate(today)},
+    {label:'Mes pasado', start:adsIsoDate(pmStart), end:adsIsoDate(pmEnd)},
+    {label:'90 días', start:adsIsoDate(new Date(today.getTime()-90*86400000)), end:adsIsoDate(today)},
+  ];
+}
+// Si el rango actual es un mes natural completo → devuelve "YYYY-MM" para el <input month>.
+function adsMonthValue(){
+  if(!adsStart||!adsEnd) return '';
+  const s=adsStart.split('-'), e=adsEnd.split('-');
+  if(s.length<3||s[2]!=='01'||s[0]!==e[0]||s[1]!==e[1]) return '';
+  const last=new Date(Number(s[0]), Number(s[1]), 0).getDate();
+  return Number(e[2])===last ? `${s[0]}-${s[1]}` : '';
+}
+// Cabeceras ordenables (clic) en TODAS las tablas de Ads. Idempotente (marca los
+// th ya cableados). Ordena números (limpia €/$/%/×/comas) o texto; deja fija la
+// fila TOTAL abajo; alterna asc/desc y pinta la flecha del sentido.
+function makeAdsTablesSortable(root){
+  if(!root) return;
+  root.querySelectorAll('.ads-tablewrap table').forEach(tbl=>{
+    const ths = [...tbl.querySelectorAll('thead th')];
+    ths.forEach((th, idx)=>{
+      if(th.dataset.sortable) return;
+      th.dataset.sortable = '1';
+      th.style.cursor = 'pointer';
+      th.title = 'Ordenar por esta columna';
+      th.addEventListener('click', ()=>{
+        const tbody = tbl.querySelector('tbody'); if(!tbody) return;
+        const all = [...tbody.querySelectorAll('tr')];
+        const total = all.find(r => /^\s*total/i.test((r.cells[0] && r.cells[0].textContent) || ''));
+        const rows = all.filter(r => r !== total);
+        const dir = th.dataset.dir === 'asc' ? 'desc' : 'asc';
+        ths.forEach(h=>{ h.dataset.dir=''; const old=h.querySelector('.sort-ind'); if(old) old.remove(); });
+        th.dataset.dir = dir;
+        const parse = (s)=>{ s=(s||'').trim(); const cut=s.split('→')[0]; const t=cut.replace(/[€$%×,\s]/g,''); const n=parseFloat(t); return (t!=='' && !isNaN(n)) ? n : cut.toLowerCase(); };
+        rows.sort((a,b)=>{ const av=parse(a.cells[idx] && a.cells[idx].textContent), bv=parse(b.cells[idx] && b.cells[idx].textContent); if(av<bv) return dir==='asc'?-1:1; if(av>bv) return dir==='asc'?1:-1; return 0; });
+        rows.forEach(r=> tbody.appendChild(r));
+        if(total) tbody.appendChild(total);
+        const ind=document.createElement('span'); ind.className='sort-ind'; ind.textContent = dir==='asc'?' ▲':' ▼'; th.appendChild(ind);
+      });
+    });
+  });
+}
+
+// Rich per-campaign table ("Detalle por campaña" like the Center origin).
+let adsCampAll = [];
+let adsCampCur = 'USD';
+function adsStatusBadge(st){
+  const s = String(st||'').toUpperCase();
+  if(s.includes('ENABLE')||s.includes('ACTIV')) return '<span class="badge b-won">Activa</span>';
+  if(s.includes('PAUSE')) return '<span class="badge b-lostu">Pausada</span>';
+  if(s.includes('REMOVE')||s.includes('END')) return '<span class="badge b-lostc">Finalizada</span>';
+  return `<span class="badge b-other">${st||'—'}</span>`;
+}
+function renderCampTable(channel){
+  const el = document.getElementById('ads-camp-table'); if(!el) return;
+  const cur = adsCampCur;
+  let rows = adsCampAll.slice();
+  if(channel && channel!=='Todas') rows = rows.filter(c=> String(c.channel||'').toLowerCase().includes(channel.toLowerCase()));
+  rows.sort((a,b)=> (Number(b.spend)||0)-(Number(a.spend)||0));
+  if(!rows.length){ el.innerHTML = '<p class="muted" style="padding:16px;">Sin campañas con gasto en este canal para el periodo seleccionado.</p>'; return; }
+  const t = rows.reduce((a,c)=>({spend:a.spend+(+c.spend||0),impr:a.impr+(+c.impressions||0),clicks:a.clicks+(+c.clicks||0),leads:a.leads+(+c.leads||0),won:a.won+(+c.won||0),rev:a.rev+(+c.revenue||0)}),{spend:0,impr:0,clicks:0,leads:0,won:0,rev:0});
+  const tctr=t.impr?t.clicks/t.impr*100:null, tcpc=t.clicks?t.spend/t.clicks:null, tcpl=t.leads?t.spend/t.leads:null, tcpa=t.won?t.spend/t.won:null, troas=t.spend?t.rev/t.spend:null;
+  el.innerHTML = `<table>
+    <thead><tr><th>Campaña</th><th>Alta</th><th>Estado</th><th>Gasto</th><th>Impr.</th><th>Clicks</th><th>CTR</th><th>CPC</th><th>Leads</th><th>CPL</th><th>Ventas</th><th>CPA</th><th>Ingresos</th><th>ROAS</th></tr></thead>
+    <tbody>${rows.map(c=>`<tr>
+      <td title="${(c.campaign||'').replace(/"/g,'&quot;')}" style="max-width:230px;overflow:hidden;text-overflow:ellipsis;">${c.campaign||'—'}</td>
+      <td>${c.start_date||'—'}</td>
+      <td>${adsStatusBadge(c.status)}</td>
+      <td>${adsMoney(c.spend,cur)}</td>
+      <td>${adsNum(c.impressions)}</td>
+      <td>${adsNum(c.clicks)}</td>
+      <td>${adsPct(c.ctr)}</td>
+      <td>${adsMoney(c.cpc,cur)}</td>
+      <td>${adsNum(c.leads)}</td>
+      <td>${adsMoney(c.cpl,cur)}</td>
+      <td>${adsNum(c.won)}</td>
+      <td>${adsMoney(c.cpa,cur)}</td>
+      <td>${adsMoney(c.revenue,cur)}</td>
+      <td>${adsRoas(c.roas)}</td>
+    </tr>`).join('')}
+      <tr style="font-weight:700;border-top:2px solid var(--border);"><td>TOTAL</td><td></td><td></td><td>${adsMoney(t.spend,cur)}</td><td>${adsNum(t.impr)}</td><td>${adsNum(t.clicks)}</td><td>${adsPct(tctr)}</td><td>${adsMoney(tcpc,cur)}</td><td>${adsNum(t.leads)}</td><td>${adsMoney(tcpl,cur)}</td><td>${adsNum(t.won)}</td><td>${adsMoney(tcpa,cur)}</td><td>${adsMoney(t.rev,cur)}</td><td>${adsRoas(troas)}</td></tr>
+    </tbody></table>`;
+  makeAdsTablesSortable(document.getElementById('ads-body'));
+}
+
+async function renderAds(){
   const el = document.getElementById('tab-ads');
+  if(!adsRegion) adsRegion = REGION_TO_CENTER_F[state.region] || 'US';
   el.innerHTML = `
-  <div class="panel">
-  <h2>Ads Performance</h2>
-  <p class="ads-note">Upload Meta or Google Ads exports (CSV or screenshots) to review spend and performance alongside the funnel. Data will be considered in AI Insights questions.</p>
-  <div class="upload-zone" id="dropZone">
-  <p>Drag &amp; drop CSV or image files here, or click to browse</p>
-  <input type="file" id="fileInput" accept=".csv,image/*" multiple style="display:none;">
-  </div>
-  <div id="fileList"></div>
-  </div>
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
+        <h2 style="margin:0">Ads Performance <span class="count-tag">en vivo · 4Geeks Center</span></h2>
+        <div style="display:flex;gap:6px;">
+          ${['US','ES','LATAM'].map(rg=>`<button class="ghost ads-rg ${rg===adsRegion?'active':''}" data-rg="${rg}">${CENTER_REGION_LABEL[rg]}</button>`).join('')}
+        </div>
+      </div>
+      <div class="ads-daterow">
+        <div class="filt"><label>Mes</label><input type="month" id="ads-month" value="${adsMonthValue()}"></div>
+        <div class="filt"><label>Desde</label><input type="date" id="ads-from" value="${adsStart||''}"></div>
+        <div class="filt"><label>Hasta</label><input type="date" id="ads-to" value="${adsEnd||''}"></div>
+        ${adsPresetRanges().map(p=>`<button class="ghost ads-preset ${(adsStart===p.start&&adsEnd===p.end)?'active':''}" data-start="${p.start}" data-end="${p.end}">${p.label}</button>`).join('')}
+      </div>
+      <div id="ads-freshness" class="muted" style="font-size:11.5px;margin:8px 0 0;">Cargando…</div>
+    </div>
+    <div id="ads-body"></div>
   `;
+  // Cambiar de país CONSERVA el filtro de fechas (adsStart/adsEnd son de módulo);
+  // renderAds vuelve a pintar con ese rango y recalcula el preset resaltado.
+  el.querySelectorAll('.ads-rg').forEach(b=> b.addEventListener('click', ()=>{ adsRegion=b.dataset.rg; renderAds(); }));
+  const applyDates = ()=>{
+    adsStart = document.getElementById('ads-from').value || null;
+    adsEnd = document.getElementById('ads-to').value || null;
+    renderAds();
+  };
+  document.getElementById('ads-from').addEventListener('change', applyDates);
+  document.getElementById('ads-to').addEventListener('change', applyDates);
+  el.querySelectorAll('.ads-preset').forEach(b=> b.addEventListener('click', ()=>{
+    adsStart = b.dataset.start; adsEnd = b.dataset.end; renderAds();
+  }));
+  const monthEl = document.getElementById('ads-month');
+  if(monthEl) monthEl.addEventListener('change', ()=>{
+    const v = monthEl.value; if(!v) return;                 // "YYYY-MM"
+    const [y,m] = v.split('-').map(Number);
+    const mm = String(m).padStart(2,'0');
+    const last = new Date(y, m, 0).getDate();               // último día del mes
+    adsStart = `${y}-${mm}-01`;
+    adsEnd = `${y}-${mm}-${String(last).padStart(2,'0')}`;
+    renderAds();
+  });
+  await loadAds();
+}
+
+async function loadAds(){
+  const body = document.getElementById('ads-body');
+  const fresh = document.getElementById('ads-freshness');
+  const params = new URLSearchParams({ region: adsRegion });
+  if(adsStart) params.set('start_date', adsStart);
+  if(adsEnd) params.set('end_date', adsEnd);
+  let data;
+  try{
+    const res = await fetch('/api/ads-performance?'+params.toString());
+    data = await res.json().catch(()=>({}));
+    if(!res.ok){
+      fresh.textContent='';
+      body.innerHTML = `<div class="panel" style="text-align:center;padding:34px;">
+        <p style="font-size:15px;font-weight:600;">${data.needsKey ? '🔌 Falta conectar 4Geeks Center' : '⚠️ No se pudieron cargar los anuncios'}</p>
+        <p class="muted">${data.error||res.statusText}</p></div>` + adsUploadSectionHtml();
+      wireAdsUpload();
+      return;
+    }
+  }catch(e){
+    fresh.textContent='';
+    body.innerHTML = `<div class="panel" style="text-align:center;padding:34px;"><p>⚠️ Error de red</p><p class="muted">${e.message}</p></div>`;
+    return;
+  }
+
+  const cur = data.currency || 'USD';
+  const c = data._cache || {};
+  // Reflect the effective period in the date inputs (first load = 90d default).
+  if(data.period){
+    if(!adsStart && data.period.start_date){ adsStart = data.period.start_date; const f=document.getElementById('ads-from'); if(f && !f.value) f.value = adsStart; }
+    if(!adsEnd && data.period.end_date){ adsEnd = data.period.end_date; const t=document.getElementById('ads-to'); if(t && !t.value) t.value = adsEnd; }
+  }
+  const dot = c.demo ? '<span style="color:var(--amber)">● DATOS DE EJEMPLO</span>'
+            : c.stale ? '<span style="color:var(--amber)">● caché (Center no respondió)</span>'
+            : '<span style="color:#22A06B">● En vivo</span>';
+  const per = data.period && (data.period.start_date||data.period.end_date)
+    ? ` · Periodo ${data.period.start_date||'…'} → ${data.period.end_date||'…'}` : '';
+  fresh.innerHTML = `${dot} — Región <b>${CENTER_REGION_LABEL[data.region]||data.region}</b> · Moneda ${cur}${per}` + (data.generatedAt ? ` · ${new Date(data.generatedAt).toLocaleString()}` : '');
+
+  const s = data.summary||{};
+  // Marketing highlights de campañas y fuentes (mismos datos en vivo).
+  const cps = (data.campaignsPerf && data.campaignsPerf.campaigns) || [];
+  const chs = data.channels || [];
+  const leadsPago = chs.filter(c=>(c.spend||0)>0).reduce((a,c)=>a+(c.leads||0),0);
+  const leadsOrg  = chs.filter(c=>!((c.spend||0)>0)).reduce((a,c)=>a+(c.leads||0),0);
+  const activeCamp = cps.filter(c=>/enable|activ/i.test(String(c.status||''))).length;
+  // Ventas / Ingresos / CPA se muestran en atribución de PAGO (won_paid), para
+  // que cuadren con la tabla de campañas y con el origen ("paid won"). CPA se
+  // recalcula de las cifras mostradas, como en Center.
+  const cpaPaid = s.wonPaid ? s.spend/s.wonPaid : null;
+  // ROAS coherente = ingresos (de pago) ÷ gasto. summary.roas mezcla ingresos
+  // TOTALES con gasto, así que lo recalculamos de las cifras mostradas.
+  const roasPaid = s.spend ? (s.revenue||0)/s.spend : null;
+  const topFuente = chs.slice().sort((a,b)=>(b.leads||0)-(a.leads||0))[0];
+  const topCamp = cps.slice().sort((a,b)=>((b.won||0)-(a.won||0))||((b.revenue||0)-(a.revenue||0)))[0];
+  const topCampName = topCamp ? (topCamp.campaign||'—') : '—';
+  const esc = (x)=>String(x||'').replace(/"/g,'&quot;');
+  const kpis = `<div class="kpis" style="margin-top:16px;">
+    <div class="kpi"><div class="val">${adsMoney(s.spend,cur)}</div><div class="lbl">Gasto</div></div>
+    <div class="kpi"><div class="val">${adsNum(s.impressions)}</div><div class="lbl">Impresiones</div></div>
+    <div class="kpi"><div class="val">${adsNum(s.clicks)}</div><div class="lbl">Clicks</div></div>
+    <div class="kpi"><div class="val">${adsNum(s.leads)}</div><div class="lbl">Leads</div></div>
+    <div class="kpi"><div class="val">${adsNum(leadsPago)}</div><div class="lbl">Leads de pago</div></div>
+    <div class="kpi"><div class="val">${adsNum(leadsOrg)}</div><div class="lbl">Leads orgánicos</div></div>
+    <div class="kpi won"><div class="val">${adsNum(s.wonPaid)}</div><div class="lbl">Ventas (pago)</div></div>
+    <div class="kpi"><div class="val">${adsMoney(s.cpl,cur)}</div><div class="lbl">CPL</div></div>
+    <div class="kpi other"><div class="val">${adsMoney(cpaPaid,cur)}</div><div class="lbl">CPA</div></div>
+    <div class="kpi"><div class="val">${adsRoas(roasPaid)}</div><div class="lbl">ROAS</div></div>
+    <div class="kpi"><div class="val">${adsMoney(s.revenue,cur)}</div><div class="lbl">Ingresos (pago)</div></div>
+    <div class="kpi"><div class="val">${adsNum(activeCamp)}</div><div class="lbl">Campañas activas</div></div>
+    <div class="kpi"><div class="val" style="font-size:18px;line-height:1.25;">${topFuente?topFuente.name:'—'}</div><div class="lbl">Fuente top (leads)</div></div>
+    <div class="kpi"><div class="val" style="font-size:12.5px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(topCampName)}">${topCampName}</div><div class="lbl">Campaña top (ventas)</div></div>
+  </div>`;
+
+  const daily = data.daily||[];
+
+  // ── Inversión & ROI (gasto + CPL por día + eficiencia) ──
+  const investmentSection = daily.length ? `<div class="panel"><h2>Inversión &amp; ROI — Gasto y CPL por día</h2>
+    <canvas id="chart-ads" height="80"></canvas>
+    <p class="muted" style="font-size:.85em;margin:10px 0 0;">Eficiencia: <b>${adsMoney(s.spend,cur)}</b> gasto · CPL ${adsMoney(s.cpl,cur)} · CPA ${adsMoney(cpaPaid,cur)} · ROAS ${adsRoas(roasPaid)} · CTR ${adsPct(s.ctr)} · ${adsNum(s.conversions)} conversiones · ${adsNum(s.wonPaid)} ventas de pago</p>
+  </div>` : '';
+
+  // ── Rendimiento por canal — SOLO canales de pago (spend>0), como el origen.
+  // Las fuentes orgánicas / no atribuidas a gasto (SEO, IA, referral, y los leads
+  // etiquetados "Google Ads"/"Meta Ads" sin gasto casado) NO se mezclan aquí: van
+  // en «Conversión por campaña». Así cada cosa es claramente de pago u orgánica.
+  const channels = data.channels||[];
+  const paidChannels = channels.filter(c=>(c.spend||0)>0);
+  const channelsTable = paidChannels.length ? `<div class="panel"><h2>Rendimiento por canal <span class="count-tag">de pago</span></h2><div class="ads-tablewrap"><table>
+    <thead><tr><th>Canal</th><th>Gasto</th><th>Impr.</th><th>Clicks</th><th>CTR</th><th>CPC</th><th>Leads</th><th>Ventas</th><th>% Conv</th><th>CPL</th><th>CPA</th><th>Ingresos</th><th>ROAS</th></tr></thead>
+    <tbody>${paidChannels.map(ch=>{ const ctr=ch.impressions?ch.clicks/ch.impressions*100:null; const cpc=ch.clicks?ch.spend/ch.clicks:null; const conv=(ch.conv!=null?ch.conv:(ch.leads?ch.won/ch.leads*100:null)); return `<tr><td>${ch.name}</td><td>${adsMoney(ch.spend,cur)}</td><td>${adsNum(ch.impressions)}</td><td>${adsNum(ch.clicks)}</td><td>${adsPct(ctr)}</td><td>${adsMoney(cpc,cur)}</td><td>${adsNum(ch.leads)}</td><td>${adsNum(ch.won)}</td><td>${adsPct(conv)}</td><td>${adsMoney(ch.cpl,cur)}</td><td>${adsMoney(ch.cpa,cur)}</td><td>${adsMoney(ch.revenue,cur)}</td><td>${adsRoas(ch.roas)}</td></tr>`; }).join('')}</tbody>
+  </table></div><p class="muted" style="font-size:.8em;margin:8px 0 0;">Solo canales con gasto. Las fuentes orgánicas (SEO, IA, referral…) están abajo en «Conversión por campaña».</p></div>` : '';
+
+  // ── Campañas — ROI detallado ──
+  const cpsAll = (data.campaignsPerf && data.campaignsPerf.campaigns) || [];
+  const roiTable = cpsAll.length ? `<div class="panel"><h2>Campañas — ROI detallado</h2><div class="ads-tablewrap"><table>
+    <thead><tr><th>Campaña</th><th>Canal</th><th>Ventas</th><th>Ingresos</th><th>Gasto</th><th>CPA</th><th>ROAS</th></tr></thead>
+    <tbody>${cpsAll.slice().sort((a,b)=>((+b.revenue||0)-(+a.revenue||0))||((+b.spend||0)-(+a.spend||0))).map(c=>`<tr><td title="${esc(c.campaign)}" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;">${c.campaign||'—'}</td><td>${c.channel||'—'}</td><td>${adsNum(c.won)}</td><td>${adsMoney(c.revenue,cur)}</td><td>${adsMoney(c.spend,cur)}</td><td>${adsMoney(c.cpa,cur)}</td><td>${adsRoas(c.roas)}</td></tr>`).join('')}</tbody>
+  </table></div></div>` : '';
+
+  // ── Conversión por campaña (leads → ventas, por canal) ──
+  const convCamps = (data.campaigns||[]).filter(c=>(c.leads||0)>0).sort((a,b)=>(+b.leads||0)-(+a.leads||0));
+  const conversionSection = convCamps.length ? `<div class="panel"><h2>Conversión por campaña <span class="count-tag">${convCamps.length} con leads</span></h2><div class="ads-tablewrap"><table>
+    <thead><tr><th>Canal</th><th>Campaña</th><th>Leads → Ventas</th><th>Ingresos</th></tr></thead>
+    <tbody>${convCamps.map(c=>`<tr><td>${c.channel||'—'}</td><td title="${esc(c.name)}" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;">${c.name}</td><td>${adsNum(c.leads)} → ${adsNum(c.won)}</td><td>${adsMoney(c.revenue,cur)}</td></tr>`).join('')}</tbody>
+  </table></div></div>` : '';
+
+  // ── Informe diario — Leads por día ──
+  const leadsDailySection = daily.length ? `<div class="panel"><h2>Informe diario — Leads por día</h2><canvas id="chart-ads-leads" height="70"></canvas></div>` : '';
+
+  // ── Calidad de landings (Google) ──
+  const landings = (data.landings && data.landings.campaigns) || [];
+  const landingsSection = landings.length ? `<div class="panel"><h2>Calidad de landings (Google)</h2><div class="ads-tablewrap"><table>
+    <thead><tr><th>Campaña</th><th>Landing</th><th>Calidad (QS)</th><th>Experiencia</th><th>Keywords</th></tr></thead>
+    <tbody>${landings.map(l=>`<tr><td title="${esc(l.campaign)}" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;">${l.campaign||'—'}</td><td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;">${String(l.landing||'').replace(/^https?:\/\//,'')||'—'}</td><td>${qsBadge(l.quality_score)}</td><td>${landingExp(l.landing_exp)}</td><td>${adsNum(l.keywords)}</td></tr>`).join('')}</tbody>
+  </table></div></div>` : '';
+
+  // ── Generación de leads vs objetivo (por programa) ──
+  const captacion = (data.leadProgress && data.leadProgress.captacion) || [];
+  const monthLabel = (data.leadProgress && data.leadProgress.month_label) || '';
+  const targetSection = captacion.length ? `<div class="panel"><h2>Generación de leads vs objetivo${monthLabel?` <span class="count-tag">${monthLabel}</span>`:''}</h2><div class="ads-tablewrap"><table>
+    <thead><tr><th>Programa</th><th>Leads</th><th>Objetivo</th><th>Ventas</th></tr></thead>
+    <tbody>${captacion.map(c=>`<tr><td>${c.course||'—'}</td><td>${adsNum(c.acumulado)}</td><td>${(c.objetivo?adsNum(c.objetivo):'<span class="muted">sin objetivo</span>')}</td><td>${adsNum(c.vendidos)}</td></tr>`).join('')}</tbody>
+  </table></div></div>` : '';
+
+  // ── Funnels de email (automatizaciones) ──
+  const funnels = ((data.emailFunnels && data.emailFunnels.automations) || []).filter(f=>f.aplica_al_pais!==false);
+  const funnelsSection = funnels.length ? `<div class="panel"><h2>Funnels de email (automatizaciones) <span class="count-tag">${funnels.length}</span></h2><div class="ads-tablewrap"><table>
+    <thead><tr><th>Funnel</th><th>Sede</th><th>Contactos</th><th>Completados</th><th>Con venta</th><th>Ingresos atrib.</th></tr></thead>
+    <tbody>${funnels.map(f=>`<tr><td title="${esc(f.name)}" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;">${f.name||'—'}</td><td>${f.scope||'—'}</td><td>${adsNum(f.contactos)}</td><td>${adsNum(f.completados)}</td><td>${adsNum(f.con_venta)}</td><td>${adsMoney(f.revenue_atribuido,cur)}</td></tr>`).join('')}</tbody>
+  </table></div></div>` : '';
+
+  // ── Email marketing (el panel original muestra N/D) ──
+  const emailSection = `<div class="panel"><h2>Email marketing</h2><p class="muted" style="margin:0;">N/D — 4Geeks Center no expone campañas de email por país (igual que el panel original).</p></div>`;
+
+  const missing = [];
+  if(!landings.length) missing.push('Calidad de landings');
+  if(!captacion.length) missing.push('Leads vs objetivo');
+  if(!funnels.length) missing.push('Funnels de email');
+  const gapsSection = missing.length ? `<div class="panel" style="background:var(--bg-gray);"><p class="muted" style="margin:0;font-size:.88em;">Pendiente en 4Geeks Center: ${missing.join(' · ')}.</p></div>` : '';
+
+  // "Detalle por campaña" — la tabla rica igual que el origen.
+  adsCampAll = cpsAll;
+  adsCampCur = cur;
+  // Platform tabs in a fixed order; a platform shows if it appears in the
+  // campaigns OR in the channel breakdown, so TikTok is a tab for regions that
+  // run it (e.g. España) even when its campaign rows are sparse.
+  const PLATFORM_ORDER = ['Google','Meta','TikTok'];
+  const presentNames = [...adsCampAll.map(c=>c.channel), ...(data.channels||[]).map(c=>c.name)].map(x=>String(x||'').toLowerCase());
+  const platformTabs = PLATFORM_ORDER.filter(p => presentNames.some(n => n.includes(p.toLowerCase())));
+  const campTabs = ['Todas', ...platformTabs];
+  const campaignPanel = adsCampAll.length ? `<div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+      <h2 style="margin:0">Detalle por campaña <span class="count-tag">${adsCampAll.length} campañas con gasto</span></h2>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        ${campTabs.map(t=>`<button class="ghost ads-ct ${t==='Todas'?'active':''}" data-ch="${t}">${t}</button>`).join('')}
+      </div>
+    </div>
+    <div class="ads-tablewrap" style="margin-top:12px;" id="ads-camp-table"></div>
+  </div>` : '';
+
+  const notaOrigen = (data.definitions && data.definitions.nota) ? data.definitions.nota : 'mismos números que los paneles de Marketing de 4Geeks Center';
+  const defs = `<p class="muted" style="font-size:.82em;margin:4px 0 14px;">CPL = gasto ÷ leads · CPA = gasto ÷ ventas de pago · ROAS = ingresos ÷ gasto. <b>Ventas e Ingresos</b> son de campañas de <b>pago</b> (won_paid, por valor de matrícula en won_date) — el total del negocio (incl. orgánico) es mayor. ${notaOrigen}.</p>`;
+
+  body.innerHTML = kpis + investmentSection + channelsTable + roiTable + campaignPanel + landingsSection + conversionSection + leadsDailySection + targetSection + emailSection + funnelsSection + gapsSection + defs + adsUploadSectionHtml();
+
+  if(adsCampAll.length){
+    renderCampTable('Todas');
+    document.querySelectorAll('.ads-ct').forEach(b=> b.addEventListener('click', ()=>{
+      document.querySelectorAll('.ads-ct').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      renderCampTable(b.dataset.ch);
+    }));
+  }
+
+  if(daily.length){
+    // Gasto (barras) + CPL por día (línea), como en el origen.
+    if(adsChart) adsChart.destroy();
+    const cplDaily = daily.map(d => (d.leads ? d.spend/d.leads : null));
+    adsChart = new Chart(document.getElementById('chart-ads'), {
+      data:{ labels: daily.map(d=>d.date), datasets:[
+        { type:'bar', label:'Gasto', data: daily.map(d=>d.spend), backgroundColor:'rgba(35,129,255,.35)', borderColor:'#2381FF', yAxisID:'y' },
+        { type:'line', label:'CPL', data: cplDaily, borderColor:'#E5484D', backgroundColor:'rgba(229,72,77,.10)', yAxisID:'y1', tension:.3, spanGaps:true },
+      ]},
+      options:{ responsive:true, interaction:{mode:'index',intersect:false}, plugins:{legend:{labels:{color:'#5C6470'}}},
+        scales:{
+          x:{ticks:{color:'#8A93A0'},grid:{color:'#E6E9EF'}},
+          y:{position:'left',ticks:{color:'#8A93A0'},grid:{color:'#E6E9EF'},title:{display:true,text:'Gasto',color:'#8A93A0'}},
+          y1:{position:'right',ticks:{color:'#8A93A0'},grid:{drawOnChartArea:false},title:{display:true,text:'CPL',color:'#8A93A0'}},
+        } }
+    });
+    // Leads por día.
+    if(adsChartLeads) adsChartLeads.destroy();
+    adsChartLeads = new Chart(document.getElementById('chart-ads-leads'), {
+      type:'bar',
+      data:{ labels: daily.map(d=>d.date), datasets:[
+        { label:'Leads', data: daily.map(d=>d.leads), backgroundColor:'rgba(34,160,107,.5)', borderColor:'#22A06B' },
+      ]},
+      options:{ responsive:true, plugins:{legend:{labels:{color:'#5C6470'}}},
+        scales:{ x:{ticks:{color:'#8A93A0'},grid:{color:'#E6E9EF'}}, y:{ticks:{color:'#8A93A0'},grid:{color:'#E6E9EF'}} } }
+    });
+  }
+  wireAdsUpload();
+  makeAdsTablesSortable(body);
+}
+
+function adsUploadSectionHtml(){
+  return `<div class="panel"><details><summary style="cursor:pointer;font-weight:600;color:var(--body);">➕ Subir exports manuales (opcional — alimentan AI Insights)</summary>
+    <p class="ads-note">Sube exports de Meta o Google Ads (CSV o imágenes) para tenerlos junto al embudo. Se consideran en las preguntas de AI Insights.</p>
+    <div class="upload-zone" id="dropZone"><p class="t1">Arrastra CSV o imágenes aquí, o pulsa para elegir</p><input type="file" id="fileInput" accept=".csv,image/*" multiple style="display:none;"></div>
+    <div id="fileList"></div>
+  </details></div>`;
+}
+
+function wireAdsUpload(){
   const dropZone = document.getElementById('dropZone');
+  if(!dropZone) return;
   const fileInput = document.getElementById('fileInput');
   const fileList = document.getElementById('fileList');
   const files = [];
-
   function platformFor(name){
     if(/google/i.test(name)) return {cls:'google', label:'Google Ads'};
     if(/meta|facebook|fb/i.test(name)) return {cls:'meta', label:'Meta Ads'};
     return {cls:'meta', label:'Ads'};
   }
-
-  function parseCSV(csvText) {
+  function parseCSV(csvText){
     const lines = csvText.trim().split('\n');
-    if (lines.length < 2) return null;
-    const headers = lines[0].split(',').map(h => h.trim());
-    const data = [];
-    for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map(v => v.trim());
-      const row = {};
-      headers.forEach((h, idx) => {
-        row[h] = values[idx] || '';
-      });
-      data.push(row);
-    }
+    if(lines.length<2) return null;
+    const headers = lines[0].split(',').map(h=>h.trim());
+    const data=[];
+    for(let i=1;i<lines.length;i++){ const values=lines[i].split(',').map(v=>v.trim()); const row={}; headers.forEach((h,idx)=>{row[h]=values[idx]||'';}); data.push(row); }
     return data;
   }
-
-  async function processFile(file) {
+  async function processFile(file){
     const platform = platformFor(file.name);
-    try {
+    try{
       const text = await file.text();
-      let data = null;
-
-      if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
-        data = parseCSV(text);
-      } else {
-        // For images, just store metadata
-        data = { filename: file.name, size: file.size, type: file.type };
+      let data = (file.type==='text/csv'||file.name.endsWith('.csv')) ? parseCSV(text) : { filename:file.name, size:file.size, type:file.type };
+      if(data){
+        sessionAdsData[file.name] = { platform:platform.label, data, uploadedAt:new Date().toISOString() };
+        await fetch('/api/ads-data', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({ filename:file.name, platform:platform.label, data: typeof data==='string'?data:JSON.stringify(data) }) });
       }
-
-      if (data) {
-        sessionAdsData[file.name] = {
-          platform: platform.label,
-          data: data,
-          uploadedAt: new Date().toISOString(),
-        };
-
-        // Also send to server
-        await fetch('/api/ads-data', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            filename: file.name,
-            platform: platform.label,
-            data: typeof data === 'string' ? data : JSON.stringify(data),
-          }),
-        });
-      }
-    } catch (e) {
-      console.error('Error processing file:', e.message);
-    }
+    }catch(e){ console.error('Error processing file:', e.message); }
   }
-
   function renderFileList(){
-    fileList.innerHTML = files.map((f,i)=>{
-      const p = platformFor(f.name);
-      return `<div class="file-row"><span class="plat ${p.cls}">${p.label}</span><span class="fname">${f.name}</span><span class="fsize">${(f.size/1024).toFixed(1)} KB</span><button class="ghost remove-file" data-i="${i}">Remove</button></div>`;
-    }).join('') || '<p class="muted">No files uploaded yet.</p>';
-    fileList.querySelectorAll('.remove-file').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        const file = files[Number(btn.dataset.i)];
-        delete sessionAdsData[file.name];
-        files.splice(Number(btn.dataset.i),1);
-        renderFileList();
-      });
-    });
+    fileList.innerHTML = files.map((f,i)=>{ const p=platformFor(f.name); return `<div class="file-row"><span class="plat ${p.cls}">${p.label[0]}</span><span class="name">${f.name}</span><span class="muted">${(f.size/1024).toFixed(1)} KB</span><button class="ghost remove-file" data-i="${i}">Quitar</button></div>`; }).join('') || '<p class="muted" style="margin-top:8px;">Sin ficheros subidos.</p>';
+    fileList.querySelectorAll('.remove-file').forEach(btn=>{ btn.addEventListener('click', ()=>{ const file=files[Number(btn.dataset.i)]; delete sessionAdsData[file.name]; files.splice(Number(btn.dataset.i),1); renderFileList(); }); });
   }
-
-  async function addFiles(list){
-    for (let f of Array.from(list)) {
-      files.push(f);
-      await processFile(f);
-    }
-    renderFileList();
-    showToast(`Loaded ${files.length} ad file(s) - use in AI Insights`);
-  }
-
+  async function addFiles(list){ for(let f of Array.from(list)){ files.push(f); await processFile(f); } renderFileList(); showToast(`Cargados ${files.length} fichero(s) de ads — úsalos en AI Insights`); }
   dropZone.addEventListener('click', ()=> fileInput.click());
   fileInput.addEventListener('change', e=> addFiles(e.target.files));
   dropZone.addEventListener('dragover', e=>{ e.preventDefault(); dropZone.classList.add('drag'); });
   dropZone.addEventListener('dragleave', ()=> dropZone.classList.remove('drag'));
-  dropZone.addEventListener('drop', e=>{
-    e.preventDefault();
-    dropZone.classList.remove('drag');
-    addFiles(e.dataTransfer.files);
-  });
+  dropZone.addEventListener('drop', e=>{ e.preventDefault(); dropZone.classList.remove('drag'); addFiles(e.dataTransfer.files); });
   renderFileList();
 }
 
@@ -1033,15 +1342,23 @@ document.getElementById('tabs').addEventListener('click', e=>{
 function renderAll(){
   syncStateToUrl();
   const rows = filtered();
-  renderKpis(rows);
   const active = document.querySelector('.tab.active').dataset.tab;
+  // The KPI bar and filters describe LEADS (ActiveCampaign). They're noise on
+  // the Ads Performance tab (which has its own region switch and pulls from
+  // Center), and on mobile they pushed the tab bar off-screen. Hide them there.
+  const leadChrome = active !== 'ads';
+  const kpisEl = document.getElementById('kpis');
+  const filtersEl = document.getElementById('filters');
+  if(kpisEl) kpisEl.style.display = leadChrome ? '' : 'none';
+  if(filtersEl) filtersEl.style.display = leadChrome ? '' : 'none';
+  if(leadChrome) renderKpis(rows);
   if(active==='overview') renderOverview(rows);
   if(active==='recommendations') renderRecommendations();
   if(active==='regions') renderRegions();
   if(active==='grouped') renderGrouped(rows);
   if(active==='individual') renderIndividual(rows);
   if(active==='ai') renderAI(rows);
-  if(active==='ads') renderAds(rows);
+  if(active==='ads') renderAds();
 }
 
 (async function init(){
@@ -1054,12 +1371,24 @@ function renderAll(){
 
     // Auth OK - load dashboard
     syncStateFromUrl();
-    await loadData(state.region && state.region!=='all' ? state.region : undefined);
+    document.getElementById('btn-logout').addEventListener('click', handleLogout);
+
+    // Render the shell + active tab IMMEDIATELY. Ads Performance pulls live
+    // from 4Geeks Center and must never wait on (or be blocked by) the
+    // ActiveCampaign load -- that load polls for a couple of minutes on a cold
+    // cache, which previously left the Ads tab blank the whole time.
     buildFilters();
     renderAll();
 
-    // Setup logout
-    document.getElementById('btn-logout').addEventListener('click', handleLogout);
+    // Load ActiveCampaign lead data in the BACKGROUND; refresh the lead views
+    // and filters once it's ready (or show a friendly note if AC is down).
+    loadData(state.region && state.region!=='all' ? state.region : undefined)
+      .then(()=>{ buildFilters(); renderAll(); })
+      .catch(e=>{
+        console.warn('ActiveCampaign no disponible:', e.message);
+        const f = document.getElementById('freshness');
+        if(f) f.innerHTML = '<span class="muted">ActiveCampaign no disponible aquí — las pestañas de leads están vacías. <b>Ads Performance</b> tira en vivo de 4Geeks Center.</span>';
+      });
   }catch(e){
     console.error(e);
   }
