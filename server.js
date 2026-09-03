@@ -31,7 +31,11 @@ const DISABLE_ENRICHMENT = String(process.env.AC_DISABLE_ENRICHMENT || '').toLow
 
 let client;
 try {
-    client = new ActiveCampaignClient({ apiUrl: process.env.AC_API_URL, apiKey: process.env.AC_API_KEY });
+    // The AC client appends `/api/3/...` to the base URL, so AC_API_URL must be
+    // just the account origin. Some stores keep it WITH `/api/3` on the end,
+    // which would produce `/api/3/api/3/deals` (404); strip it defensively.
+    const acUrl = (process.env.AC_API_URL || '').replace(/\/+$/, '').replace(/\/api\/3$/, '');
+    client = new ActiveCampaignClient({ apiUrl: acUrl, apiKey: process.env.AC_API_KEY });
 } catch (e) {
     console.warn(`[startup] ${e.message} -- /api routes will return 500 until env vars are set.`);
 }
@@ -1057,6 +1061,223 @@ app.delete('/api/ads-data/:sessionId', (req, res) => {
     const { sessionId = 'default' } = req.params;
     delete sessionAdsData[sessionId];
     res.json({ success: true });
+});
+
+// ---------------------------------------------------------------------------
+// Live Ads Performance — consumed from 4Geeks Center (single source of truth)
+// ---------------------------------------------------------------------------
+// Instead of mounting Google/Meta/TikTok credentials and re-deriving spend/
+// CPL/CPA/ROAS here (a second, drifting version of the truth), this proxies
+// Center's public endpoint, which reuses the SAME functions that power
+// Center's Marketing panels -> byte-for-byte parity. Server-to-server, the key
+// stays server-side, never reaches the browser.
+//   Center: GET /api/public/ads-performance?region=ES|US|LATAM|CL&start_date&end_date
+//   Auth:   X-Api-Key header (Center setting `ads_api_key`)
+const CENTER_ADS_URL = process.env.CENTER_ADS_URL || 'https://4geekscenter.duckdns.org/api/public/ads-performance';
+const CENTER_ADS_API_KEY = process.env.CENTER_ADS_API_KEY || '';
+const CENTER_ADS_TTL_MS = Number(process.env.CENTER_ADS_TTL_SECONDS || 600) * 1000;
+// Demo payload is served ONLY when explicitly enabled (local preview), so a
+// forgotten key in production never shows fake numbers -- it 503s loudly.
+const ADS_DEMO = String(process.env.ADS_DEMO || '').toLowerCase() === '1' || String(process.env.ADS_DEMO || '').toLowerCase() === 'true';
+
+// Our dashboard labels regions USA/Spain/LATAM; Center expects US/ES/LATAM/CL.
+const REGION_TO_CENTER = { USA: 'US', Spain: 'ES', LATAM: 'LATAM', US: 'US', ES: 'ES', CL: 'CL', all: 'US' };
+const CURRENCY_FOR = { ES: 'EUR', CL: 'CLP' };
+
+const _adsCache = new Map();     // key -> { at, data }
+const _adsLastGood = new Map();  // key -> normalized data (survives Center outages)
+
+function _pickNum(obj, keys) {
+  for (const k of keys) {
+    const v = obj ? obj[k] : undefined;
+    if (v === undefined || v === null || v === '') continue;
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+function _pickStr(obj, keys) {
+  for (const k of keys) {
+    const v = obj ? obj[k] : undefined;
+    if (v !== undefined && v !== null && v !== '') return String(v);
+  }
+  return null;
+}
+
+// Map Center's payload (field names not pinned) onto one internal shape the
+// frontend renders. If Center's real keys differ, adjust ONLY here.
+function normalizeCenterAds(data, region) {
+  const currency = data.currency || CURRENCY_FOR[region] || 'USD';
+  const s = data.summary || {};
+  // Real Center keys (verified 2026-09): total_cost, leads_total/deals, won,
+  // cpl, cpa, roas, revenue. `conversions` is a different, inflated metric --
+  // do NOT use it for "leads".
+  const summary = {
+    spend: _pickNum(s, ['total_cost', 'paid_cost', 'spend', 'gasto', 'cost']),
+    leads: _pickNum(s, ['leads_total', 'deals', 'leads']),
+    won: _pickNum(s, ['won', 'won_paid']),
+    cpl: _pickNum(s, ['cpl', 'cost_per_lead']),
+    cpa: _pickNum(s, ['cpa', 'cost_per_acquisition']),
+    roas: _pickNum(s, ['roas']),
+    revenue: _pickNum(s, ['revenue', 'ingresos']),
+    revenueTotal: _pickNum(s, ['revenue_total']),
+    impressions: _pickNum(s, ['impressions']),
+    clicks: _pickNum(s, ['clicks']),
+    ctr: _pickNum(s, ['avg_ctr', 'ctr']),
+    cpc: _pickNum(s, ['avg_cpc', 'cpc']),
+    conversions: _pickNum(s, ['conversions']),
+    wonPaid: _pickNum(s, ['won_paid']),
+    activeCampaigns: _pickNum(s, ['active_campaigns']),
+  };
+  const channels = (Array.isArray(data.channels) ? data.channels : []).map((c) => ({
+    name: _pickStr(c, ['channel', 'name', 'canal', 'platform']) || '—',
+    spend: _pickNum(c, ['spend', 'gasto', 'cost']),
+    impressions: _pickNum(c, ['impressions']),
+    clicks: _pickNum(c, ['clicks']),
+    leads: _pickNum(c, ['deals', 'leads', 'conversions']),
+    won: _pickNum(c, ['won']),
+    revenue: _pickNum(c, ['revenue', 'ingresos']),
+    cpl: _pickNum(c, ['cpl']),
+    cpa: _pickNum(c, ['cpa']),
+    roas: _pickNum(c, ['roas']),
+    conv: _pickNum(c, ['conversion']),
+  })).filter((c) => (c.spend || 0) > 0 || (c.leads || 0) > 0 || (c.revenue || 0) > 0);
+  const campaigns = (Array.isArray(data.campaigns) ? data.campaigns : []).map((c) => ({
+    name: _pickStr(c, ['campaign', 'name', 'nombre']) || '—',
+    channel: _pickStr(c, ['channel', 'canal', 'platform']),
+    spend: _pickNum(c, ['spend', 'gasto', 'cost']),
+    leads: _pickNum(c, ['leads', 'deals']),
+    won: _pickNum(c, ['won']),
+    revenue: _pickNum(c, ['revenue', 'ingresos']),
+    cpl: _pickNum(c, ['cpl']),
+    cpa: _pickNum(c, ['cpa']),
+    roas: _pickNum(c, ['roas']),
+  }));
+  const daily = (Array.isArray(data.daily) ? data.daily : []).map((d) => ({
+    date: _pickStr(d, ['day', 'date', 'fecha']),
+    spend: _pickNum(d, ['spend', 'gasto', 'cost']),
+    leads: _pickNum(d, ['deals', 'leads', 'conversions']),
+  }));
+  // Rich per-campaign table (matches Center's "Detalle por campaña" panel).
+  // Its fields are already clean (campaign, channel, status, start_date, spend,
+  // impressions, clicks, ctr, cpc, leads, cpl, won, cpa, revenue, roas) so we
+  // pass them through as-is.
+  const cp = data.campaigns_performance;
+  const campaignsPerf = cp && typeof cp === 'object'
+    ? { campaigns: Array.isArray(cp.campaigns) ? cp.campaigns : [], totals: cp.totals || null }
+    : { campaigns: [], totals: null };
+  return {
+    region,
+    currency,
+    summary,
+    channels,
+    campaigns,
+    campaignsPerf,
+    daily,
+    landings: data.landings || null,
+    leadProgress: data.lead_progress || null,
+    emailFunnels: data.email_funnels || null,
+    definitions: data.definitions || null,
+    period: data.period || null,
+    generatedAt: data.generatedAt || data.generated_at || null,
+  };
+}
+
+// Sample (already in the internal shape) so the layout is visible in local
+// preview before the key is wired. Never served in production unless ADS_DEMO.
+function demoAdsPayload(region) {
+  const currency = CURRENCY_FOR[region] || 'USD';
+  const days = 14;
+  const daily = Array.from({ length: days }, (_, i) => {
+    const spend = 700 + ((i * 137) % 400);
+    const leads = 14 + ((i * 7) % 18);
+    return { date: `2026-08-${String(18 + i).padStart(2, '0')}`, spend, leads };
+  });
+  return {
+    region,
+    currency,
+    summary: { spend: 12450, leads: 318, cpl: 39.2, cpa: 210, roas: 3.4, revenue: 42300 },
+    channels: [
+      { name: 'Google Ads', spend: 7200, leads: 190, cpl: 37.9, cpa: 205, roas: 3.6 },
+      { name: 'Meta Ads', spend: 4100, leads: 98, cpl: 41.8, cpa: 220, roas: 3.1 },
+      { name: 'TikTok Ads', spend: 1150, leads: 30, cpl: 38.3, cpa: 240, roas: 2.6 },
+    ],
+    campaigns: [
+      { name: 'FS Web Dev — Search Brand', channel: 'Google Ads', spend: 2600, leads: 82, cpl: 31.7, cpa: 180, roas: 4.1 },
+      { name: 'Bootcamp — Lookalike ES', channel: 'Meta Ads', spend: 1900, leads: 44, cpl: 43.2, cpa: 225, roas: 3.0 },
+      { name: 'Data Science — Retarget', channel: 'Google Ads', spend: 1400, leads: 38, cpl: 36.8, cpa: 198, roas: 3.7 },
+      { name: 'AI — Awareness', channel: 'TikTok Ads', spend: 1150, leads: 30, cpl: 38.3, cpa: 240, roas: 2.6 },
+    ],
+    daily,
+    definitions: { note: 'DATOS DE EJEMPLO — conecta la clave de 4Geeks Center para ver datos reales.' },
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+app.get('/api/ads-performance', async (req, res) => {
+  const region = REGION_TO_CENTER[req.query.region] || String(req.query.region || 'US');
+  let startDate = req.query.start_date || '';
+  let endDate = req.query.end_date || '';
+  // Center returns ALL history (since 2020) when no dates are given -- not what
+  // a marketing view wants. Default to the last 90 days; the dashboard's
+  // From/To filters override it.
+  if (!startDate && !endDate) {
+    const now = new Date();
+    endDate = now.toISOString().slice(0, 10);
+    startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  }
+  const cacheKey = `${region}|${startDate}|${endDate}`;
+
+  // No key configured: show the layout with sample data locally, or 503 in prod.
+  if (!CENTER_ADS_API_KEY) {
+    if (ADS_DEMO) {
+      return res.json({ ...demoAdsPayload(region), _cache: { demo: true, stale: false, ageSeconds: 0 } });
+    }
+    return res.status(503).json({
+      error: 'CENTER_ADS_API_KEY no configurada. Añádela como variable de entorno (en Railway) para traer los datos en vivo de 4Geeks Center.',
+      needsKey: true,
+    });
+  }
+
+  const cached = _adsCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < CENTER_ADS_TTL_MS) {
+    return res.json({ ...cached.data, _cache: { demo: false, stale: false, ageSeconds: Math.round((Date.now() - cached.at) / 1000) } });
+  }
+
+  const url = new URL(CENTER_ADS_URL);
+  url.searchParams.set('region', region);
+  if (startDate) url.searchParams.set('start_date', startDate);
+  if (endDate) url.searchParams.set('end_date', endDate);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20000);
+  try {
+    const r = await fetch(url.toString(), {
+      headers: { 'X-Api-Key': CENTER_ADS_API_KEY, Accept: 'application/json' },
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!r.ok) {
+      const body = await r.text().catch(() => '');
+      const stale = _adsLastGood.get(cacheKey);
+      if (stale) return res.json({ ...stale, _cache: { demo: false, stale: true, error: `Center ${r.status}` } });
+      return res.status(r.status === 401 ? 502 : r.status).json({
+        error: r.status === 401
+          ? 'La CENTER_ADS_API_KEY es inválida para 4Geeks Center (401).'
+          : `4Geeks Center devolvió ${r.status}: ${body.slice(0, 200)}`,
+      });
+    }
+    const raw = await r.json();
+    const data = normalizeCenterAds(raw, region);
+    _adsCache.set(cacheKey, { at: Date.now(), data });
+    _adsLastGood.set(cacheKey, data);
+    res.json({ ...data, _cache: { demo: false, stale: false, ageSeconds: 0 } });
+  } catch (e) {
+    clearTimeout(timer);
+    const stale = _adsLastGood.get(cacheKey);
+    if (stale) return res.json({ ...stale, _cache: { demo: false, stale: true, error: e.message } });
+    res.status(504).json({ error: `No se pudo contactar con 4Geeks Center: ${e.message}` });
+  }
 });
 
 app.listen(PORT, () => console.log(`4Geeks AC dashboard listening on :${PORT}`));

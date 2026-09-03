@@ -100,6 +100,21 @@ tr:hover td{background:var(--blue-tint);}
 .file-row .rm{color:var(--muted);cursor:pointer;font-size:16px;line-height:1;}
 .file-row .rm:hover{color:var(--red);}
 .ads-note{font-size:12px;color:var(--muted);margin:14px 0 10px;padding-top:14px;border-top:1px dashed var(--border);}
+.ads-rg{padding:6px 12px;font-size:12px;}
+.ads-rg.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+.ads-rg.active:hover{background:var(--blue-hover);color:#fff;}
+.ads-ct{padding:5px 11px;font-size:12px;}
+.ads-ct.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+.ads-ct.active:hover{background:var(--blue-hover);color:#fff;}
+.ads-daterow{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;}
+.ads-daterow .filt input[type=date]{min-width:150px;}
+.ads-daterow .ads-preset{padding:8px 12px;font-size:12px;}
+.ads-preset.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+.ads-preset.active:hover{background:var(--blue-hover);color:#fff;}
+/* Horizontal-only scroll for the wide Ads tables — no fixed height, so the
+   page keeps scrolling vertically on mobile instead of trapping the touch. */
+.ads-tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:var(--radius-sm);}
+.ads-tablewrap table{min-width:640px;}
 
 /* Login Screen */
 .login-screen{position:fixed;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg, #2381FF 0%, #1B6FE0 100%);display:flex;align-items:center;justify-content:center;z-index:2000;}
