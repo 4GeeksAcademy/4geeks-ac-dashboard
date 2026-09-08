@@ -924,6 +924,9 @@ function adsMoney(n, cur){
 function adsNum(n){ return (n==null||isNaN(n)) ? '—' : Number(n).toLocaleString(); }
 function adsRoas(n){ return (n==null||isNaN(n)) ? '—' : Number(n).toFixed(2)+'×'; }
 function adsPct(n){ return (n==null||isNaN(n)) ? '—' : Number(n).toFixed(2)+'%'; }
+// Impression Share (cuota de impresiones): decimal 0-1 de Center; null = N/D
+// (no Search/Shopping). Convención del origen: <10% se muestra como "<10%".
+function adsIS(v){ if(v==null||isNaN(v)) return '—'; const n=Number(v); if(n<=0) return '—'; if(n<0.10) return '<10%'; return Math.round(n*100)+'%'; }
 function qsBadge(q){ if(q==null||isNaN(q)) return '—'; const n=Number(q); const cls = n>=8?'b-won':n>=5?'b-lostu':'b-lostc'; return `<span class="badge ${cls}">${n.toFixed(1)}/10</span>`; }
 function landingExp(e){ const m={ABOVE_AVERAGE:'Buena',AVERAGE:'Media',BELOW_AVERAGE:'Pobre'}; const l=m[String(e||'').toUpperCase()]; if(!l) return e?`<span class="badge b-other">${e}</span>`:'—'; const cls=l==='Buena'?'b-won':l==='Media'?'b-lostu':'b-lostc'; return `<span class="badge ${cls}">${l}</span>`; }
 // Rangos rápidos para el filtro de fechas del tab de Ads (fecha LOCAL, no UTC).
@@ -1001,14 +1004,19 @@ function renderCampTable(channel){
   if(!rows.length){ el.innerHTML = '<p class="muted" style="padding:16px;">Sin campañas con gasto en este canal para el periodo seleccionado.</p>'; return; }
   const t = rows.reduce((a,c)=>({spend:a.spend+(+c.spend||0),impr:a.impr+(+c.impressions||0),clicks:a.clicks+(+c.clicks||0),leads:a.leads+(+c.leads||0),won:a.won+(+c.won||0),rev:a.rev+(+c.revenue||0)}),{spend:0,impr:0,clicks:0,leads:0,won:0,rev:0});
   const tctr=t.impr?t.clicks/t.impr*100:null, tcpc=t.clicks?t.spend/t.clicks:null, tcpl=t.leads?t.spend/t.leads:null, tcpa=t.won?t.spend/t.won:null, troas=t.spend?t.rev/t.spend:null;
+  // IS del TOTAL: media PONDERADA por impresiones elegibles (no se suma), como el origen.
+  const tIsDen=rows.reduce((a,c)=> a+((c.impression_share!=null && +c.elig_impr>0)?+c.elig_impr:0),0);
+  const tIsNum=rows.reduce((a,c)=> a+((c.impression_share!=null && +c.elig_impr>0)?(+c.impression_share)*(+c.elig_impr):0),0);
+  const tIs=tIsDen>0?tIsNum/tIsDen:null;
   el.innerHTML = `<table>
-    <thead><tr><th>Campaña</th><th>Alta</th><th>Estado</th><th>Gasto</th><th>Impr.</th><th>Clicks</th><th>CTR</th><th>CPC</th><th>Leads</th><th>CPL</th><th>Ventas</th><th>CPA</th><th>Ingresos</th><th>ROAS</th></tr></thead>
+    <thead><tr><th>Campaña</th><th>Alta</th><th>Estado</th><th>Gasto</th><th>Impr.</th><th title="Impression Share — cuota de impresiones (solo Search/Shopping)">IS</th><th>Clicks</th><th>CTR</th><th>CPC</th><th>Leads</th><th>CPL</th><th>Ventas</th><th>CPA</th><th>Ingresos</th><th>ROAS</th></tr></thead>
     <tbody>${rows.map(c=>`<tr>
       <td title="${(c.campaign||'').replace(/"/g,'&quot;')}" style="max-width:230px;overflow:hidden;text-overflow:ellipsis;">${c.campaign||'—'}</td>
       <td>${c.start_date||'—'}</td>
       <td>${adsStatusBadge(c.status)}</td>
       <td>${adsMoney(c.spend,cur)}</td>
       <td>${adsNum(c.impressions)}</td>
+      <td>${adsIS(c.impression_share)}</td>
       <td>${adsNum(c.clicks)}</td>
       <td>${adsPct(c.ctr)}</td>
       <td>${adsMoney(c.cpc,cur)}</td>
@@ -1019,7 +1027,7 @@ function renderCampTable(channel){
       <td>${adsMoney(c.revenue,cur)}</td>
       <td>${adsRoas(c.roas)}</td>
     </tr>`).join('')}
-      <tr style="font-weight:700;border-top:2px solid var(--border);"><td>TOTAL</td><td></td><td></td><td>${adsMoney(t.spend,cur)}</td><td>${adsNum(t.impr)}</td><td>${adsNum(t.clicks)}</td><td>${adsPct(tctr)}</td><td>${adsMoney(tcpc,cur)}</td><td>${adsNum(t.leads)}</td><td>${adsMoney(tcpl,cur)}</td><td>${adsNum(t.won)}</td><td>${adsMoney(tcpa,cur)}</td><td>${adsMoney(t.rev,cur)}</td><td>${adsRoas(troas)}</td></tr>
+      <tr style="font-weight:700;border-top:2px solid var(--border);"><td>TOTAL</td><td></td><td></td><td>${adsMoney(t.spend,cur)}</td><td>${adsNum(t.impr)}</td><td>${adsIS(tIs)}</td><td>${adsNum(t.clicks)}</td><td>${adsPct(tctr)}</td><td>${adsMoney(tcpc,cur)}</td><td>${adsNum(t.leads)}</td><td>${adsMoney(tcpl,cur)}</td><td>${adsNum(t.won)}</td><td>${adsMoney(tcpa,cur)}</td><td>${adsMoney(t.rev,cur)}</td><td>${adsRoas(troas)}</td></tr>
     </tbody></table>`;
   makeAdsTablesSortable(document.getElementById('ads-body'));
 }
