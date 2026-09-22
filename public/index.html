@@ -32,24 +32,24 @@
   <p class="subtitle">USA · Spain · LATAM — pulled directly from ActiveCampaign deals + contacts.</p>
   <div class="freshness" id="freshness">Loading…</div>
 
-  <div class="kpis" id="kpis"></div>
-  <div class="filters" id="filters"></div>
-
   <div class="tabs" id="tabs">
-    <div class="tab active" data-tab="overview">Overview (Combined)</div>
+    <div class="tab" data-tab="overview">Overview (Combined)</div>
     <div class="tab" data-tab="recommendations">🎯 Recommendations</div>
     <div class="tab" data-tab="regions">Compare Regions</div>
     <div class="tab" data-tab="grouped">Grouped / Pivot</div>
     <div class="tab" data-tab="individual">Individual Leads</div>
-    <div class="tab" data-tab="ads">Ads Performance</div>
+    <div class="tab active" data-tab="ads">📊 Ads Performance</div>
     <div class="tab" data-tab="ai">AI Insights</div>
   </div>
 
-  <div id="tab-overview"></div>
+  <div class="kpis" id="kpis"></div>
+  <div class="filters" id="filters"></div>
+
+  <div id="tab-ads"></div>
+  <div id="tab-overview" style="display:none"></div>
   <div id="tab-recommendations" style="display:none"></div>
   <div id="tab-regions" style="display:none"></div>
   <div id="tab-grouped" style="display:none"></div>
-  <div id="tab-ads" style="display:none"></div>
   <div id="tab-individual" style="display:none"></div>
   <div id="tab-ai" style="display:none"></div>
 
