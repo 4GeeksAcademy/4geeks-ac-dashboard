@@ -1169,6 +1169,7 @@ function normalizeCenterAds(data, region) {
   return {
     region,
     currency,
+    salesMode: data.sales_mode || null,
     summary,
     channels,
     campaigns,
@@ -1226,7 +1227,9 @@ app.get('/api/ads-performance', async (req, res) => {
     endDate = now.toISOString().slice(0, 10);
     startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   }
-  const cacheKey = `${region}|${startDate}|${endDate}`;
+  // Atribución de venta (pasa a Center tal cual): 'same' = Gen+cierre, 'close' = Cierre.
+  const salesMode = String(req.query.sales_mode || '') === 'same' ? 'same' : 'close';
+  const cacheKey = `${region}|${startDate}|${endDate}|${salesMode}`;
 
   // No key configured: show the layout with sample data locally, or 503 in prod.
   if (!CENTER_ADS_API_KEY) {
@@ -1248,6 +1251,7 @@ app.get('/api/ads-performance', async (req, res) => {
   url.searchParams.set('region', region);
   if (startDate) url.searchParams.set('start_date', startDate);
   if (endDate) url.searchParams.set('end_date', endDate);
+  url.searchParams.set('sales_mode', salesMode);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 20000);

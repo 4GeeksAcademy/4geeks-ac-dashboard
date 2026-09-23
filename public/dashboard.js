@@ -915,6 +915,7 @@ let adsStart = null;  // ads-tab date range (its OWN, independent of lead filter
 let adsEnd = null;
 let adsLang = 'es';   // ads-tab UI language: 'es' | 'en' (SOLO afecta a marketing)
 let adsCur = null;    // ads-tab display currency: null=nativa | 'EUR' | 'USD'
+let adsSales = 'same'; // atribución de venta: 'same'=Gen+cierre (default, como el origen) | 'close'=Cierre
 const REGION_TO_CENTER_F = { USA:'US', Spain:'ES', LATAM:'LATAM', all:'US' };
 const ADS_NATIVE_CUR = { US:'USD', ES:'EUR', LATAM:'USD', CL:'CLP' };
 // Tipo de cambio para el conversor EUR/USD del panel (aprox., editable). La fuente
@@ -932,6 +933,8 @@ const ADS_TR = {
     p_thisWeek:'Esta semana', p_lastWeek:'Semana pasada', p_thisMonth:'Este mes', p_lastMonth:'Mes pasado', p_90:'90 días',
     liveDot:'En vivo', sampleDot:'DATOS DE EJEMPLO', cacheDot:'caché (Center no respondió)',
     region:'Región', currency:'Moneda', period:'Periodo', converted:'convertido',
+    attrib:'Atribución', sm_close:'Cierre', sm_same:'Gen+cierre',
+    smHint:'Cierre = ventas por fecha de cierre (won_date). Gen+cierre = ventas contadas en el periodo de generación del lead. Mismo criterio que el panel de 4Geeks Center.',
     errNeedKey:'🔌 Falta conectar 4Geeks Center', errLoad:'⚠️ No se pudieron cargar los anuncios', errNet:'⚠️ Error de red',
     spend:'Gasto', impressions:'Impresiones', clicks:'Clicks', leads:'Leads', paidLeads:'Leads de pago', orgLeads:'Leads orgánicos',
     salesPaid:'Ventas (pago)', cpl:'CPL', cpa:'CPA', roas:'ROAS', revenuePaid:'Ingresos (pago)', activeCampaigns:'Campañas activas',
@@ -963,6 +966,8 @@ const ADS_TR = {
     p_thisWeek:'This week', p_lastWeek:'Last week', p_thisMonth:'This month', p_lastMonth:'Last month', p_90:'90 days',
     liveDot:'Live', sampleDot:'SAMPLE DATA', cacheDot:'cache (Center did not respond)',
     region:'Region', currency:'Currency', period:'Period', converted:'converted',
+    attrib:'Attribution', sm_close:'Close', sm_same:'Gen+Close',
+    smHint:'Close = sales by close date (won_date). Gen+Close = sales counted in the lead-generation period. Same criterion as the 4Geeks Center panel.',
     errNeedKey:'🔌 Connect 4Geeks Center', errLoad:'⚠️ Could not load ads', errNet:'⚠️ Network error',
     spend:'Spend', impressions:'Impressions', clicks:'Clicks', leads:'Leads', paidLeads:'Paid leads', orgLeads:'Organic leads',
     salesPaid:'Sales (paid)', cpl:'CPL', cpa:'CPA', roas:'ROAS', revenuePaid:'Revenue (paid)', activeCampaigns:'Active campaigns',
@@ -1131,6 +1136,7 @@ async function renderAds(){
         <h2 style="margin:0">Ads Performance <span class="count-tag">${tr().live}</span></h2>
         <div class="ads-toolbar">
           <div class="ads-seg">${['US','ES','LATAM'].map(rg=>`<button class="ghost ads-rg ${rg===adsRegion?'active':''}" data-rg="${rg}">${adsRegionLabel(rg)}</button>`).join('')}</div>
+          <div class="ads-seg" title="${tr().smHint}">${[['close','sm_close'],['same','sm_same']].map(([sm,k])=>`<button class="ghost ads-sales ${adsSales===sm?'active':''}" data-sm="${sm}">${tr()[k]}</button>`).join('')}</div>
           <div class="ads-seg">${['EUR','USD'].map(cc=>`<button class="ghost ads-cur ${dispCur===cc?'active':''}" data-cur="${cc}">${cc}</button>`).join('')}</div>
           <div class="ads-seg">${['es','en'].map(lg=>`<button class="ghost ads-lang ${adsLang===lg?'active':''}" data-lang="${lg}">${lg.toUpperCase()}</button>`).join('')}</div>
         </div>
@@ -1150,6 +1156,8 @@ async function renderAds(){
   el.querySelectorAll('.ads-rg').forEach(b=> b.addEventListener('click', ()=>{ adsRegion=b.dataset.rg; renderAds(); }));
   el.querySelectorAll('.ads-cur').forEach(b=> b.addEventListener('click', ()=>{ adsCur=b.dataset.cur; renderAds(); }));
   el.querySelectorAll('.ads-lang').forEach(b=> b.addEventListener('click', ()=>{ adsLang=b.dataset.lang; renderAds(); }));
+  // Atribución de venta: re-consulta a Center (cambian las cifras), a diferencia de moneda/idioma.
+  el.querySelectorAll('.ads-sales').forEach(b=> b.addEventListener('click', ()=>{ adsSales=b.dataset.sm; renderAds(); }));
   const applyDates = ()=>{
     adsStart = document.getElementById('ads-from').value || null;
     adsEnd = document.getElementById('ads-to').value || null;
@@ -1179,6 +1187,7 @@ async function loadAds(){
   const params = new URLSearchParams({ region: adsRegion });
   if(adsStart) params.set('start_date', adsStart);
   if(adsEnd) params.set('end_date', adsEnd);
+  params.set('sales_mode', adsSales);
   let data;
   try{
     const res = await fetch('/api/ads-performance?'+params.toString());
@@ -1212,7 +1221,10 @@ async function loadAds(){
     ? ` · ${T.period} ${data.period.start_date||'…'} → ${data.period.end_date||'…'}` : '';
   const dispCurF = adsCur || cur;
   const convTag = (dispCurF!==cur && (dispCurF==='EUR'||dispCurF==='USD') && (cur==='EUR'||cur==='USD')) ? ` <span title="${T.convHint}" style="cursor:help;text-decoration:underline dotted">(${T.converted})</span>` : '';
-  fresh.innerHTML = `${dot} — ${T.region} <b>${adsRegionLabel(data.region)||data.region}</b> · ${T.currency} ${dispCurF}${convTag}${per}` + (data.generatedAt ? ` · ${new Date(data.generatedAt).toLocaleString()}` : '');
+  // Atribución realmente aplicada por Center (eco del endpoint); si falta, la pedida.
+  const smApplied = data.salesMode || adsSales;
+  const smTag = ` · ${T.attrib} <b title="${T.smHint}" style="cursor:help">${smApplied==='same'?T.sm_same:T.sm_close}</b>`;
+  fresh.innerHTML = `${dot} — ${T.region} <b>${adsRegionLabel(data.region)||data.region}</b> · ${T.currency} ${dispCurF}${convTag}${smTag}${per}` + (data.generatedAt ? ` · ${new Date(data.generatedAt).toLocaleString()}` : '');
 
   const s = data.summary||{};
   // Marketing highlights de campañas y fuentes (mismos datos en vivo).
