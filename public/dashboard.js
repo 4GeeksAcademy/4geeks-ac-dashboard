@@ -131,8 +131,18 @@ const BUCKETS = ['Won', 'Active / Other', 'Lost - Classified', 'Lost - Unclassif
 const BUCKET_CLASS = { 'Won': 'b-won', 'Lost - Classified': 'b-lostc', 'Lost - Unclassified': 'b-lostu', 'Active / Other': 'b-other' };
 const BUCKET_VAR = { 'Won': '--s-won', 'Active / Other': '--s-active', 'Lost - Classified': '--s-lostc', 'Lost - Unclassified': '--s-lostu' };
 const REGIONS = ['USA', 'Spain', 'LATAM'];
-const SCORE_BANDS = ['High engagement', 'Moderate engagement', 'Light engagement', 'Minimal engagement', 'No engagement', 'Negative signal'];
-const SCORE_BANDS_ES = { 'High engagement': 'Engagement alto', 'Moderate engagement': 'Engagement moderado', 'Light engagement': 'Engagement ligero', 'Minimal engagement': 'Engagement mínimo', 'No engagement': 'Sin engagement', 'Negative signal': 'Señal negativa' };
+// "Admission Code Test Score" (AC contact field 31) is the lead score the
+// admissions team uses. It is a category, ordered best -> worst here.
+const SCORE_ORDER = ['Very Good', 'Good', 'Average', 'Regular', 'No Feedback', 'Bad', 'Very Bad', 'Invalid Traffic', 'Fake Contact Details', 'Duplicate'];
+const SCORE_ES = { 'Very Good': 'Muy bueno', Good: 'Bueno', Average: 'Medio', Regular: 'Regular', 'No Feedback': 'Sin feedback', Bad: 'Malo', 'Very Bad': 'Muy malo', 'Invalid Traffic': 'Tráfico inválido', 'Fake Contact Details': 'Datos falsos', Duplicate: 'Duplicado' };
+const GOOD_SCORES = ['Very Good', 'Good'];
+const JUNK_SCORES = ['Invalid Traffic', 'Fake Contact Details', 'Duplicate'];
+const scoreLabel = (v) => (LANG === 'es' ? SCORE_ES[v] || v : v);
+function scoreBadge(v) {
+  if (!v) return '<span class="muted">—</span>';
+  const cls = GOOD_SCORES.includes(v) ? 'b-won' : JUNK_SCORES.includes(v) ? 'b-lostc' : /bad/i.test(v) ? 'b-lostu' : 'b-neutral';
+  return `<span class="badge plain ${cls}">${esc(scoreLabel(v))}</span>`;
+}
 const regionLabel = (r) => (r === 'Spain' && LANG === 'es' ? 'España' : r);
 const isWon = (r) => r.bucket === 'Won';
 const isLost = (r) => r.bucket === 'Lost - Classified' || r.bucket === 'Lost - Unclassified';
@@ -144,8 +154,7 @@ const isActive = (r) => r.bucket === 'Active / Other';
 const FILTERS = [
   { key: 'bucket', icon: 'status', primary: true, order: BUCKETS, label: (v) => t('b_' + v) },
   { key: 'assignTo', icon: 'user', primary: true },
-  { key: 'scoreBand', icon: 'gauge', primary: true, order: SCORE_BANDS, label: (v) => (LANG === 'es' ? SCORE_BANDS_ES[v] || v : v) },
-  { key: 'admissionsScore', icon: 'star', primary: true },
+  { key: 'admissionsScore', icon: 'star', primary: true, order: SCORE_ORDER, label: scoreLabel },
   { key: 'reason', icon: 'xcircle', primary: true, vals: (r) => r.reasons || [] },
   { key: 'leadSentiment', group: 'grpAdmissions' },
   { key: 'classification', group: 'grpAdmissions' },
@@ -162,7 +171,7 @@ const fVals = (f, r) => (f.vals ? f.vals(r) : (r[f.key] != null && r[f.key] !== 
 const fLabel = (f, v) => (f.label ? f.label(v) : v);
 
 const VIEWS = ['overview', 'recommendations', 'regions', 'grouped', 'individual', 'ads', 'ai'];
-const state = { view: 'overview', region: 'all', q: '', dateFrom: '', dateTo: '', preset: '', gran: 'auto', page: 1, sort: { field: 'date', dir: 'desc' }, groupBy: 'assignTo', aiScope: 'both', adsRegion: 'US' };
+const state = { view: 'overview', region: 'all', q: '', dateFrom: '', dateTo: '', preset: '', gran: 'auto', page: 1, sort: { field: 'date', dir: 'desc' }, groupBy: 'assignTo', aiScope: 'both', adsRegion: 'US', recUsePeriod: '0' };
 FILTERS.forEach((f) => { state[f.key] = []; });
 
 function presetRange(p) {
@@ -515,14 +524,15 @@ function kpiCards(rows) {
 }
 
 // ───────────────────────── overview ─────────────────────────
-function barList(groups, { field, max = 8, emptyText } = {}) {
-  const top = groups.filter((g) => g.key !== '(none)').sort((a, b) => b.total - a.total).slice(0, max);
+function barList(groups, { field, max = 8, emptyText, order } = {}) {
+  const rank = (k) => { const i = order ? order.indexOf(k) : -1; return i < 0 ? 999 : i; };
+  const top = groups.filter((g) => g.key !== '(none)').sort((a, b) => (order ? rank(a.key) - rank(b.key) : 0) || b.total - a.total).slice(0, max);
   if (!top.length) return `<div class="empty">${esc(emptyText || t('noData'))}</div>`;
   const peak = top[0].total || 1;
   return `<div class="blist">${top.map((g) => {
     const wr = g.winRate;
     return `<div class="brow" data-field="${field}" data-value="${esc(g.key)}" title="${esc(g.key)}">
-      <div class="lab">${esc(field === 'scoreBand' ? fLabel(FILTER_BY_KEY.scoreBand, g.key) : g.key)}</div>
+      <div class="lab">${esc(FILTER_BY_KEY[field] ? fLabel(FILTER_BY_KEY[field], g.key) : g.key)}</div>
       <div class="track"><i style="width:${(g.won / peak * 100).toFixed(1)}%;background:var(--s-won)"></i><i style="width:${((g.total - g.won) / peak * 100).toFixed(1)}%;background:var(--s-active);opacity:.55"></i></div>
       <div class="num"><b>${fmtInt(g.total)}</b> · ${wr == null ? '—' : wr.toFixed(1) + '%'} ${esc(t('winShort'))}</div></div>`;
   }).join('')}</div>`;
@@ -577,7 +587,7 @@ function renderOverview(rows) {
     </div>
     <div class="grid2">
       <div class="panel"><div class="panel-head"><h2>${esc(t('locationsTitle'))}</h2></div>${barList(groupStats(rows, (r) => (r.location ? [r.location] : [])), { field: 'location' })}</div>
-      <div class="panel"><div class="panel-head"><h2>${esc(t('f_scoreBand'))}</h2></div>${barList(groupStats(rows, (r) => (r.scoreBand ? [r.scoreBand] : [])), { field: 'scoreBand' })}</div>
+      <div class="panel"><div class="panel-head"><div><h2>${esc(t('f_admissionsScore'))}</h2><div class="panel-sub">${esc(t('scoreSub'))}</div></div></div>${barList(groupStats(rows, (r) => (r.admissionsScore ? [r.admissionsScore] : [])), { field: 'admissionsScore', max: 12, order: SCORE_ORDER })}</div>
     </div>`;
 
   $$('#gran-seg button').forEach((b) => b.addEventListener('click', () => { state.gran = b.dataset.g; renderAll(); }));
@@ -644,7 +654,7 @@ function renderRegions() {
 // ───────────────────────── pivot ─────────────────────────
 const GROUP_DIMS = [
   ['assignTo', 'f_assignTo'], ['region', 'dimRegion'], ['source', 'f_source'], ['medium', 'f_medium'], ['campaign', 'f_campaign'], ['location', 'f_location'], ['course', 'f_course'], ['stage', 'f_stage'],
-  ['day', 'dimDay'], ['week', 'dimWeek'], ['month', 'dimMonth'], ['reason', 'f_reason'], ['bucket', 'f_bucket'], ['scoreBand', 'f_scoreBand'], ['admissionsScore', 'f_admissionsScore'], ['leadSentiment', 'f_leadSentiment'], ['classification', 'f_classification'], ['admissionsConversationType', 'f_admissionsConversationType'],
+  ['day', 'dimDay'], ['week', 'dimWeek'], ['month', 'dimMonth'], ['reason', 'f_reason'], ['bucket', 'f_bucket'], ['admissionsScore', 'f_admissionsScore'], ['leadSentiment', 'f_leadSentiment'], ['classification', 'f_classification'], ['admissionsConversationType', 'f_admissionsConversationType'],
 ];
 let groupSort = { field: 'total', dir: 'desc' };
 function renderGrouped(rows) {
@@ -663,7 +673,7 @@ function drawGroupTable(rows) {
   const groups = groupStats(rows, keyFn);
   const sortVal = (g) => (groupSort.field === 'key' ? String(g.key) : g[groupSort.field] ?? -1);
   groups.sort((a, b) => { const av = sortVal(a); const bv = sortVal(b); return (av < bv ? -1 : av > bv ? 1 : 0) * (groupSort.dir === 'asc' ? 1 : -1); });
-  const lbl = (k) => (f === 'bucket' ? t('b_' + k) : f === 'scoreBand' ? fLabel(FILTER_BY_KEY.scoreBand, k) : k);
+  const lbl = (k) => (f === 'bucket' ? t('b_' + k) : f === 'admissionsScore' ? scoreLabel(k) : k);
   const cols = [['key', GROUP_DIMS.find((d) => d[0] === f)[1], false], ['total', 'colTotal', true], ['won', 'colWon', true], ['winRate', 'colWinRate', true], ['lostc', 'colLostReason', true], ['lostu', 'colNoReason', true], ['lossRate', 'colLossRate', true], ['active', 'colActive', true]];
   $('#grp-table').innerHTML = `<table><thead><tr>${cols.map(([k, l, n]) => `<th class="${n ? 'num' : ''}" data-sort="${k}">${esc(t(l))}${groupSort.field === k ? (groupSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr></thead>
     <tbody>${groups.map((g) => `<tr class="clickrow" data-k="${esc(g.key)}"><td class="truncate" title="${esc(lbl(g.key))}">${esc(lbl(g.key))}</td><td class="num">${fmtInt(g.total)}</td><td class="num">${fmtInt(g.won)}</td><td class="num"><span class="minibar"><i style="width:${Math.min(100, (g.winRate || 0) * 4)}%"></i></span>${g.winRate == null ? '—' : g.winRate.toFixed(1) + '%'}</td><td class="num">${fmtInt(g.lostc)}</td><td class="num">${fmtInt(g.lostu)}</td><td class="num">${g.lossRate == null ? '—' : g.lossRate.toFixed(1) + '%'}</td><td class="num">${fmtInt(g.active)}</td></tr>`).join('')}</tbody></table>`;
@@ -682,7 +692,7 @@ function drawGroupTable(rows) {
 // ───────────────────────── leads table ─────────────────────────
 const PAGE_SIZE = 50;
 const LEAD_COLS = [
-  ['name', 'c_name'], ['date', 'c_date'], ['region', 'c_region'], ['course', 'c_course'], ['source', 'c_source'], ['campaign', 'c_campaign'], ['assignTo', 'c_owner'], ['stage', 'c_stage'], ['bucket', 'c_status'], ['reason', 'c_reason'], ['admissionsScore', 'c_score'], ['scoreBand', 'c_engagement'], ['dealValue', 'c_value'],
+  ['name', 'c_name'], ['date', 'c_date'], ['region', 'c_region'], ['course', 'c_course'], ['source', 'c_source'], ['campaign', 'c_campaign'], ['assignTo', 'c_owner'], ['stage', 'c_stage'], ['bucket', 'c_status'], ['reason', 'c_reason'], ['admissionsScore', 'c_score'], ['dealValue', 'c_value'],
 ];
 function statusBadge(bucket) { return `<span class="badge ${BUCKET_CLASS[bucket] || 'b-neutral'}">${esc(t('b_' + bucket))}</span>`; }
 function renderIndividual(rows) {
@@ -704,7 +714,7 @@ function renderIndividual(rows) {
       <td>${fmtDate(r.date)}</td><td>${esc(r.region || '—')}</td><td class="truncate">${esc(r.course || '—')}</td><td>${esc(r.source || '—')}</td><td class="truncate" title="${esc(r.campaign || '')}">${esc(r.campaign || '—')}</td>
       <td>${r.assignTo ? esc(r.assignTo) : `<span class="muted">${esc(t('unassigned'))}</span>`}</td><td class="truncate">${esc(r.stage || '—')}</td>
       <td>${statusBadge(r.bucket)}</td><td class="truncate" title="${esc(r.reasons && r.reasons.length ? r.reasons.join(', ') : '')}">${r.reasons && r.reasons.length ? esc(r.reasons.join(', ')) : '<span class="muted">—</span>'}</td>
-      <td>${esc(r.admissionsScore || '—')}</td><td>${r.scoreBand ? `<span class="badge plain b-neutral">${esc(fLabel(FILTER_BY_KEY.scoreBand, r.scoreBand))}</span>` : '<span class="muted">—</span>'}</td>
+      <td>${scoreBadge(r.admissionsScore)}</td>
       <td class="num">${r.dealValue ? fmtMoney(r.dealValue) : '—'}</td></tr>`).join('')}</tbody></table></div>
     <div class="pager"><span>${esc(t('page', { p: state.page, t: pages }))}</span><div style="display:flex;gap:8px"><button class="btn ghost sm" id="pg-prev" ${state.page <= 1 ? 'disabled' : ''}>${esc(t('prev'))}</button><button class="btn ghost sm" id="pg-next" ${state.page >= pages ? 'disabled' : ''}>${esc(t('next'))}</button></div></div>`
     : `<div class="empty">${icon('inbox')}<div>${esc(t('noData'))}</div></div>`}
@@ -716,7 +726,7 @@ function renderIndividual(rows) {
   const pn = $('#pg-next'); if (pn) pn.addEventListener('click', () => { state.page++; renderIndividual(rows); el.scrollIntoView(); });
 }
 function exportCsv(rows) {
-  const cols = ['id', 'name', 'email', 'phone', 'date', 'region', 'course', 'source', 'medium', 'campaign', 'location', 'assignTo', 'stage', 'dealValue', 'bucket', 'reason', 'admissionsConversationType', 'admissionsScore', 'leadSentiment', 'classification', 'dealQuality', 'scoreBand', 'feedback'];
+  const cols = ['id', 'name', 'email', 'phone', 'date', 'region', 'course', 'source', 'medium', 'campaign', 'location', 'assignTo', 'stage', 'dealValue', 'bucket', 'reason', 'admissionsConversationType', 'admissionsScore', 'leadSentiment', 'classification', 'dealQuality', 'feedback'];
   const lines = [cols.join(',')];
   rows.forEach((r) => lines.push(cols.map((c) => { let v = r[c] == null ? '' : String(r[c]).replace(/"/g, '""'); if (/[",\n]/.test(v)) v = `"${v}"`; return v; }).join(',')));
   const a = document.createElement('a');
@@ -766,7 +776,7 @@ async function openLead(id) {
   const acLink = META.acAppUrl ? `${META.acAppUrl}/app/deals/${encodeURIComponent(r.id)}` : null;
   d.innerHTML = `
     <div class="dr-head"><div class="dr-titles"><div class="lead-hero"><span class="avatar">${esc(initials(r.name))}</span><div style="min-width:0"><h2>${esc(r.name || '—')}</h2>
-      <div class="lead-meta">${statusBadge(r.bucket)}${r.region ? `<span class="badge plain b-neutral">${esc(regionLabel(r.region))}</span>` : ''}${r.scoreBand ? `<span class="badge plain b-neutral">${icon('gauge')}${esc(fLabel(FILTER_BY_KEY.scoreBand, r.scoreBand))}</span>` : ''}<span class="badge plain b-neutral">#${esc(r.id)}</span></div></div></div></div>
+      <div class="lead-meta">${statusBadge(r.bucket)}${r.region ? `<span class="badge plain b-neutral">${esc(regionLabel(r.region))}</span>` : ''}${r.admissionsScore ? scoreBadge(r.admissionsScore) : ''}<span class="badge plain b-neutral">#${esc(r.id)}</span></div></div></div></div>
       <button class="icon-btn" data-close aria-label="${esc(t('close'))}">${icon('x')}</button></div>
     <div class="dr-body">
       <div class="contact-actions">
@@ -781,7 +791,7 @@ async function openLead(id) {
       <div class="lsec"><h3>${icon('target')}${esc(t('leadAttribution'))}</h3><dl class="kv">
         ${kvRow(t('f_source'), esc(r.source))}${kvRow(t('f_medium'), esc(r.medium))}${kvRow(t('f_campaign'), esc(r.campaign), true)}${kvRow(t('f_location'), esc(r.location))}</dl></div>
       <div class="lsec"><h3>${icon('star')}${esc(t('leadQualification'))}</h3><dl class="kv">
-        ${kvRow(t('f_admissionsScore'), esc(r.admissionsScore))}${kvRow(t('f_scoreBand'), r.dealQuality != null ? `${esc(r.dealQuality)} · ${esc(fLabel(FILTER_BY_KEY.scoreBand, r.scoreBand || ''))}` : null)}
+        ${kvRow(t('f_admissionsScore'), r.admissionsScore ? scoreBadge(r.admissionsScore) : null)}${kvRow(t('dealQuality'), r.dealQuality != null ? esc(r.dealQuality) : null)}
         ${kvRow(t('f_leadSentiment'), esc(r.leadSentiment))}${kvRow(t('f_classification'), esc(r.classification))}${kvRow(t('f_admissionsConversationType'), esc(r.admissionsConversationType), true)}</dl></div>
       <div class="lsec"><h3>${icon('flag')}${esc(t('leadOutcome'))}</h3><dl class="kv">
         ${kvRow(t('reasons'), r.reasons && r.reasons.length ? r.reasons.map((x) => `<span class="badge plain b-lostc" style="margin:0 4px 4px 0">${esc(x)}</span>`).join('') : null, true)}
@@ -850,29 +860,105 @@ async function runCoach(r) {
 }
 
 // ───────────────────────── recommendations ─────────────────────────
-const recCache = new Map();
-const REC_META = { needsContact: ['phone', '--s-active'], needsFollowUp: ['mail', '--s-2'], atRisk: ['alert', '--s-lostu'], readyToClose: ['target', '--s-won'], wonRecently: ['trophy', '--s-won'], lostNeedAnalysis: ['xcircle', '--s-lostc'] };
-async function renderRecommendations(rows) {
-  const el = $('#tab-recommendations');
-  const key = JSON.stringify([LANG, rows.length, rows.slice(0, 50).map((r) => r.id)]);
-  let data = recCache.get(key);
-  if (!data) {
-    el.innerHTML = `<div class="panel state-card"><span class="dots"><span></span><span></span><span></span></span><p class="muted">${esc(t('recLoading'))}</p></div>`;
-    try {
-      const res = await api('/api/recommendations', { method: 'POST', body: { ids: rows.map((r) => r.id), lang: LANG } });
-      data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || res.statusText);
-      recCache.set(key, data);
-    } catch (e) { if (state.view === 'recommendations') el.innerHTML = `<div class="panel state-card"><p style="color:var(--bad-ink)">${esc(t('recError', { e: e.message }))}</p></div>`; return; }
-    if (state.view !== 'recommendations') return;
+// Rule-based action lists computed in the browser from fields we really have
+// (status, age, Admission Code Test Score, offer sent, rep, lost reasons).
+// Instant, never empty because of a cold server cache, and every open deal
+// lands in exactly one list. AI advice per list is optional (one click).
+const DAY_MS = 86400000;
+const ageDays = (iso) => (iso ? Math.floor((Date.now() - new Date(String(iso).slice(0, 10) + 'T12:00:00')) / DAY_MS) : null);
+const RE_ENGAGE_REASONS = /timing|not now|later|price|precio|financ|money|dinero|schedule|horario|busy|tiempo|no response|no contesta|sin respuesta/i;
+const REC_GROUPS = [
+  { key: 'readyToClose', icon: 'target', col: '--s-won', kind: 'open' },
+  { key: 'unassigned', icon: 'user', col: '--s-2', kind: 'open' },
+  { key: 'newToContact', icon: 'phone', col: '--s-active', kind: 'open' },
+  { key: 'qualifiedNoOffer', icon: 'star', col: '--s-won', kind: 'open' },
+  { key: 'goingCold', icon: 'alert', col: '--s-lostu', kind: 'open' },
+  { key: 'needsQualification', icon: 'inbox', col: '--s-active', kind: 'open' },
+  { key: 'cleanUp', icon: 'xcircle', col: '--s-lostc', kind: 'open' },
+  { key: 'reEngage', icon: 'refresh', col: '--s-2', kind: 'lost' },
+  { key: 'lostNoReason', icon: 'flag', col: '--s-lostu', kind: 'lost' },
+  { key: 'wonRecently', icon: 'trophy', col: '--s-won', kind: 'won' },
+];
+function classifyRec(r) {
+  const age = ageDays(r.date);
+  const score = r.admissionsScore || '';
+  if (isActive(r)) {
+    if (JUNK_SCORES.includes(score) || /^bad$|very bad/i.test(score)) return 'cleanUp';
+    if (r.offerSentDate) return 'readyToClose';
+    if (!r.assignTo) return 'unassigned';
+    if (age != null && age <= 7) return 'newToContact';
+    if (GOOD_SCORES.includes(score)) return 'qualifiedNoOffer';
+    if (age != null && age > 21) return 'goingCold';
+    return 'needsQualification';
   }
-  el.innerHTML = `${kpiCards(rows)}<div class="rec-grid">${(data.groups || []).map((g) => {
-    const [ic, col] = REC_META[g.name] || ['target', '--blue'];
-    return `<div class="rec-card"><div class="rc-head"><span class="rc-ico" style="background:color-mix(in srgb, var(${col}) 16%, transparent);color:var(${col})">${icon(ic)}</span><h3>${esc(t('g_' + g.name))}</h3><span class="rc-n">${fmtInt(g.count)}</span></div>
-      <div class="md" style="font-size:13px;color:var(--body)">${g.recommendation ? mdToHtml(g.recommendation) : `<p class="muted">${esc(t('noRecommendation'))}</p>`}</div>
-      <details><summary>${esc(t('viewLeads', { n: Math.min(g.count, (g.leads || []).length) }))}</summary><div class="rec-leads">${(g.leads || []).map((l) => `<div class="rec-lead" data-id="${esc(l.id)}"><span class="avatar">${esc(initials(l.name))}</span><div style="flex:1;min-width:0"><div style="font-weight:600">${esc(l.name || '—')}</div><div class="muted" style="font-size:11.5px">${esc([l.assignTo, l.course].filter(Boolean).join(' · '))}</div></div>${statusBadge(l.bucket)}</div>`).join('')}</div></details></div>`;
-  }).join('')}</div>`;
+  if (isWon(r)) return ageDays(r.wonDate || r.date) <= 14 ? 'wonRecently' : null;
+  if (r.bucket === 'Lost - Unclassified') return ageDays(r.lostDate || r.date) <= 60 ? 'lostNoReason' : null;
+  if (r.bucket === 'Lost - Classified') {
+    const recent = ageDays(r.lostDate || r.date) <= 90;
+    const promising = !JUNK_SCORES.includes(score) && !/bad/i.test(score);
+    return recent && promising && (r.reasons || []).some((x) => RE_ENGAGE_REASONS.test(x)) ? 'reEngage' : null;
+  }
+  return null;
+}
+// Most urgent first inside each list.
+function recSort(key) {
+  if (key === 'readyToClose') return (a, b) => String(a.offerSentDate).localeCompare(String(b.offerSentDate));
+  if (key === 'newToContact' || key === 'unassigned') return (a, b) => String(b.date).localeCompare(String(a.date));
+  if (key === 'goingCold') return (a, b) => String(b.date).localeCompare(String(a.date));
+  const rank = (r) => { const i = SCORE_ORDER.indexOf(r.admissionsScore); return i < 0 ? 50 : i; };
+  return (a, b) => rank(a) - rank(b) || String(b.date).localeCompare(String(a.date));
+}
+const recAdvice = new Map();
+const recOpen = new Set();
+function renderRecommendations() {
+  const el = $('#tab-recommendations');
+  // Pipeline actions look at the whole open pipeline: the period filter
+  // would hide exactly the older deals that are going cold.
+  const usePeriod = state.recUsePeriod === '1';
+  const rows = ALL.filter((r) => match(r, { skipDate: !usePeriod }));
+  const groups = Object.fromEntries(REC_GROUPS.map((g) => [g.key, []]));
+  rows.forEach((r) => { const k = classifyRec(r); if (k) groups[k].push(r); });
+  const openCount = rows.filter(isActive).length;
+  el.innerHTML = `
+    <div class="panel"><div class="panel-head" style="margin:0"><div><h2>${esc(t('recTitle'))}</h2><div class="panel-sub">${esc(t('recSub', { n: fmtInt(openCount) }))}</div></div>
+      <div class="seg" id="rec-period"><button data-p="0" class="${usePeriod ? '' : 'active'}">${esc(t('recWholePipeline'))}</button><button data-p="1" class="${usePeriod ? 'active' : ''}">${esc(t('recOnlyPeriod', { p: dateLabel() }))}</button></div></div></div>
+    <div class="rec-grid">${REC_GROUPS.map((g) => {
+      const list = groups[g.key].sort(recSort(g.key));
+      const reps = {}; list.forEach((r) => { const k = r.assignTo || t('unassigned'); reps[k] = (reps[k] || 0) + 1; });
+      const topReps = Object.entries(reps).sort((a, b) => b[1] - a[1]).slice(0, 4);
+      const adv = recAdvice.get(g.key + LANG);
+      return `<div class="rec-card ${list.length ? '' : 'empty-card'}" data-g="${g.key}">
+        <div class="rc-head"><span class="rc-ico" style="background:color-mix(in srgb, var(${g.col}) 16%, transparent);color:var(${g.col})">${icon(g.icon)}</span><h3>${esc(t('g_' + g.key))}</h3><span class="rc-n">${fmtInt(list.length)}</span></div>
+        <p class="rc-why">${esc(t('why_' + g.key))}</p>
+        <p class="rc-do"><b>${esc(t('recAction'))}:</b> ${esc(t('do_' + g.key))}</p>
+        ${topReps.length ? `<div class="rc-reps">${topReps.map(([k, v]) => `<span class="count-tag">${esc(k)} · ${v}</span>`).join('')}</div>` : ''}
+        ${adv ? `<div class="rc-ai md">${adv.loading ? `<span class="dots"><span></span><span></span><span></span></span> ${esc(t('thinking'))}` : adv.error ? `<span style="color:var(--bad-ink)">${esc(adv.error)}</span>` : mdToHtml(adv.text)}</div>` : ''}
+        ${list.length ? `<div class="rc-foot">
+          <button class="btn ghost sm" data-toggle="${g.key}">${esc(t(recOpen.has(g.key) ? 'hideLeads' : 'viewLeads', { n: fmtInt(list.length) }))}</button>
+          <button class="btn soft sm" data-ai="${g.key}" ${adv && adv.loading ? 'disabled' : ''}>${icon('sparkle')}${esc(t('recAskAI'))}</button></div>
+          ${recOpen.has(g.key) ? `<div class="rec-leads">${list.slice(0, 100).map((l) => `<div class="rec-lead" data-id="${esc(l.id)}"><span class="avatar">${esc(initials(l.name))}</span><div style="flex:1;min-width:0"><div style="font-weight:600">${esc(l.name || '—')}</div><div class="muted" style="font-size:11.5px">${esc([l.assignTo || t('unassigned'), l.course, fmtDate(l.date)].filter(Boolean).join(' · '))}</div></div>${scoreBadge(l.admissionsScore)}</div>`).join('')}${list.length > 100 ? `<div class="muted" style="font-size:12px;padding:6px 8px">+${fmtInt(list.length - 100)}</div>` : ''}</div>` : ''}` : `<p class="muted" style="font-size:12.5px;margin-top:auto">${esc(t('recNone'))}</p>`}
+      </div>`;
+    }).join('')}</div>`;
+  $$('#rec-period button', el).forEach((b) => b.addEventListener('click', () => { state.recUsePeriod = b.dataset.p; renderRecommendations(); }));
+  $$('[data-toggle]', el).forEach((b) => b.addEventListener('click', () => { const k = b.dataset.toggle; if (recOpen.has(k)) recOpen.delete(k); else recOpen.add(k); renderRecommendations(); }));
   $$('.rec-lead', el).forEach((x) => x.addEventListener('click', () => openLead(x.dataset.id)));
+  $$('[data-ai]', el).forEach((b) => b.addEventListener('click', () => askRecAI(b.dataset.ai, groups[b.dataset.ai])));
+}
+async function askRecAI(key, list) {
+  const id = key + LANG;
+  recAdvice.set(id, { loading: true });
+  renderRecommendations();
+  try {
+    const ctx = buildLeadContext(list);
+    ctx.actionList = { name: t('g_' + key), rule: t('why_' + key), defaultAction: t('do_' + key) };
+    ctx.sampleDeals = list.slice(0, 30).map((r) => ({ created: r.date, ageDays: ageDays(r.date), rep: r.assignTo, course: r.course, source: r.source, campaign: r.campaign, stage: r.stage, admissionCodeTestScore: r.admissionsScore, offerSent: r.offerSentDate, reasons: r.reasons, feedback: r.feedback }));
+    const question = t('recAIQuestion', { g: t('g_' + key), n: list.length });
+    const res = await api('/api/ask', { method: 'POST', body: { question, scope: 'leads', lang: LANG, context: ctx } });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    recAdvice.set(id, { text: data.answer });
+  } catch (e) { recAdvice.set(id, { error: e.message }); }
+  if (state.view === 'recommendations') renderRecommendations();
 }
 
 // ───────────────────────── ads (4Geeks Center) ─────────────────────────
@@ -1043,11 +1129,10 @@ function buildLeadContext(rows) {
     byCampaign: top((r) => (r.campaign ? [r.campaign] : []), 20),
     byCourse: top((r) => (r.course ? [r.course] : []), 10),
     byLocation: top((r) => (r.location ? [r.location] : []), 10),
-    byLeadScore: top((r) => (r.admissionsScore ? [r.admissionsScore] : []), 10),
-    byEngagementBand: top((r) => (r.scoreBand ? [r.scoreBand] : []), 6),
+    byAdmissionCodeTestScore: top((r) => (r.admissionsScore ? [r.admissionsScore] : []), 12),
     lostReasons: Object.entries(rc).sort((a, b) => b[1] - a[1]).slice(0, 15).map(([reason, count]) => ({ reason, count })),
     timeSeries: { granularity: g, periods: periodKeys(rows, g).slice(-60).map((k) => { const rs = rows.filter((r) => periodKey(r, g) === k); const x = stats(rs); return { period: k, deals: x.total, won: x.won, lost: x.lost }; }) },
-    sampleDeals: rows.slice(0, 20).map((r) => ({ date: r.date, region: r.region, course: r.course, source: r.source, campaign: r.campaign, rep: r.assignTo, status: r.bucket, reasons: r.reasons, leadScore: r.admissionsScore, engagement: r.scoreBand, feedback: r.feedback })),
+    sampleDeals: rows.slice(0, 20).map((r) => ({ date: r.date, region: r.region, course: r.course, source: r.source, campaign: r.campaign, rep: r.assignTo, status: r.bucket, reasons: r.reasons, admissionCodeTestScore: r.admissionsScore, feedback: r.feedback })),
   };
 }
 function compactAds(d) {
@@ -1131,7 +1216,7 @@ function renderAll(o = {}) {
   }
   const rows = filtered();
   if (state.view === 'overview') renderOverview(rows);
-  else if (state.view === 'recommendations') renderRecommendations(rows);
+  else if (state.view === 'recommendations') renderRecommendations();
   else if (state.view === 'regions') renderRegions();
   else if (state.view === 'grouped') renderGrouped(rows);
   else if (state.view === 'individual') renderIndividual(rows);
@@ -1163,7 +1248,7 @@ function renderAll(o = {}) {
   $('#btn-refresh').addEventListener('click', async () => {
     const b = $('#btn-refresh'); b.disabled = true;
     await api('/api/refresh', { method: 'POST' }).catch(() => {});
-    adsCache.clear(); recCache.clear();
+    adsCache.clear(); recAdvice.clear();
     try { await loadData(); } catch (e) { META.error = e.message; }
     b.disabled = false; renderAll();
   });
