@@ -29,6 +29,13 @@ const ENRICH_DEADLINE_MS = Number(process.env.ENRICH_DEADLINE_MS || 60000);
 // shared API budget.
 const DISABLE_ENRICHMENT = String(process.env.AC_DISABLE_ENRICHMENT || '').toLowerCase() === 'true';
 
+// https://<account>.api-us1.com -> https://<account>.activehosted.com, used
+// for "Open in ActiveCampaign" links on each lead.
+const AC_APP_URL = (() => {
+    const m = String(process.env.AC_API_URL || '').match(/^https?:\/\/([^./]+)\.api-us\d*\.com/i);
+    return process.env.AC_APP_URL || (m ? `https://${m[1]}.activehosted.com` : null);
+})();
+
 let client;
 try {
     // The AC client appends `/api/3/...` to the base URL, so AC_API_URL must be
@@ -49,6 +56,7 @@ try {
 let cache = { at: 0, records: null };
 let refreshing = false;
 let lastError = null;
+let dealFieldSample = null;
 let leadNotes = {}; // In-memory storage for lead notes (contactId -> { notes, tags, emailSent, etc })
 let sessionAdsData = {}; // Store uploaded ads data per session
 
@@ -81,6 +89,25 @@ function trimFieldCaches() {
 // of looking like a hang.
 let refreshProgress = { phase: 'idle', done: 0, total: 0, startedAt: null };
 
+// Owner (user) and stage names. AC deals only carry numeric ids, which made
+// the Owner filter unusable ("4", "73", ...). Both lists are tiny and change
+// rarely, so refresh them at most hourly.
+let lookups = { at: 0, usersById: new Map(), stagesById: new Map() };
+async function refreshLookups() {
+    if (!client || Date.now() - lookups.at < 60 * 60 * 1000) return;
+    try {
+        const [users, stages] = await Promise.all([client.listUsers(), client.listDealStages()]);
+        lookups = {
+            at: Date.now(),
+            usersById: new Map(users.map((u) => [String(u.id), u])),
+            stagesById: new Map(stages.map((st) => [String(st.id), st])),
+        };
+        console.log(`[lookups] ${users.length} users, ${stages.length} stages`);
+    } catch (e) {
+        console.warn(`[lookups] failed: ${e.message} -- owners/stages will show as ids`);
+    }
+}
+
 function buildRecords(deals, contactsRaw, dealCustomFieldData, fieldValuesRaw) {
     const contactsById = new Map(contactsRaw.map((c) => [String(c.id), c]));
     const contactFieldValuesById = new Map();
@@ -89,7 +116,10 @@ function buildRecords(deals, contactsRaw, dealCustomFieldData, fieldValuesRaw) {
         if (!contactFieldValuesById.has(key)) contactFieldValuesById.set(key, []);
         contactFieldValuesById.get(key).push(fv);
     });
-    return buildDataset({ deals, dealCustomFieldData, contactsById, contactFieldValuesById });
+    return buildDataset({
+        deals, dealCustomFieldData, contactsById, contactFieldValuesById,
+        usersById: lookups.usersById, stagesById: lookups.stagesById,
+    });
 }
 
 // Two phases:
@@ -106,6 +136,7 @@ async function refreshCache() {
     refreshProgress = { phase: 'deals+contacts', done: 0, total: 0, startedAt };
     try {
         const windowStart = new Date(startedAt - DATA_WINDOW_MS).toISOString().slice(0, 10);
+        await refreshLookups();
 
         // Re-paginating every deal and contact costs ~350 requests (~90s of a
         // 300s cycle). While enrichment is still catching up that is capacity
@@ -130,6 +161,7 @@ async function refreshCache() {
             deals = dealRes.deals;
             contactsRaw = contactRes.contacts;
             if (dealRes.includeSupported) sideDealFields = dealRes.dealCustomFieldData;
+            dealFieldSample = (dealRes.dealCustomFieldData || []).slice(0, 3).map((r) => Object.keys(r));
             if (contactRes.includeSupported) sideContactFields = contactRes.fieldValues;
             console.log(`[refresh] side-load support: deals=${dealRes.includeSupported} (${dealRes.dealCustomFieldData.length} rows), contacts=${contactRes.includeSupported} (${contactRes.fieldValues.length} rows)`);
             lastEntities = { deals, contactsRaw, at: Date.now() };
@@ -531,7 +563,7 @@ app.get('/api/diag/scores/:id', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/api/summary', (req, res) => {
+app.get('/api/summary', requireAuth, (req, res) => {
   if (!client) return res.status(500).json({ error: 'AC_API_URL / AC_API_KEY not configured' });
   if (!cache.records) {
     return res.status(202).json({ ready: false, refreshing, lastError });
@@ -543,15 +575,16 @@ app.get('/api/summary', (req, res) => {
     generatedAt: new Date(cache.at).toISOString(),
     cacheAgeSeconds: Math.round((Date.now() - cache.at) / 1000),
     dataWindowMonths: DATA_WINDOW_MONTHS,
+    acAppUrl: AC_APP_URL,
   });
 });
 
-app.post('/api/refresh', (req, res) => {
+app.post('/api/refresh', requireAuth, (req, res) => {
   refreshCache();
   res.json({ started: true, refreshing: true });
 });
 
-app.get('/api/schema', async (req, res) => {
+app.get('/api/schema', requireAuth, async (req, res) => {
   if (!client) return res.status(500).json({ error: 'AC_API_URL / AC_API_KEY not configured' });
   try {
     const [pipelines, stages, dealFields, contactFields] = await Promise.all([
@@ -566,213 +599,213 @@ app.get('/api/schema', async (req, res) => {
   }
 });
 
-// Free-text "ask AI" panel on the dashboard. The client sends the question
-// plus an already-aggregated JSON summary of whatever is currently filtered
-// on screen (not the raw record list -- keeps token usage sane even when
-// thousands of deals are in view). Requires ANTHROPIC_API_KEY to be set.
-app.post('/api/ask', async (req, res) => {
+// ---------------------------------------------------------------------------
+// Anthropic helper
+// ---------------------------------------------------------------------------
+async function callClaude({ system, messages, maxTokens = 1500 }) {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+            'content-type': 'application/json',
+            'x-api-key': process.env.ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+            model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
+            max_tokens: maxTokens,
+            system,
+            messages,
+        }),
+    });
+    if (!r.ok) {
+        const errText = await r.text();
+        const err = new Error(`Anthropic API error (${r.status}): ${errText.slice(0, 300)}`);
+        err.status = 502;
+        throw err;
+    }
+    const data = await r.json();
+    return (data.content || []).map((b) => b.text || '').join('\n').trim();
+}
+
+// Free-text "ask AI" panel. The client sends the question plus aggregated
+// summaries of whatever is on screen: the filtered LEAD data (ActiveCampaign)
+// and/or the ADS performance for the same region + period (4Geeks Center).
+// `scope` says which of the two the person wants the answer grounded in.
+app.post('/api/ask', requireAuth, async (req, res) => {
     if (!process.env.ANTHROPIC_API_KEY) {
         return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on the server' });
     }
-    const { question, context, history = [], adsData = {} } = req.body || {};
+    const { question, context, history = [], adsData = {}, adsContext = null, scope = 'leads', lang = 'en' } = req.body || {};
     if (!question || typeof question !== 'string') {
         return res.status(400).json({ error: 'question is required' });
     }
     try {
-        let systemPrompt = 'You are a sharp, concise data analyst helping the 4Geeks Academy admissions/sales team read their ActiveCampaign deal pipeline. You are given a JSON summary of the deals currently shown on their dashboard (already filtered to what they are looking at) -- counts, breakdowns by region/source/campaign/etc, and a small sample of individual deals. Answer the question using ONLY this data. Cite concrete numbers and percentages. If the data cannot answer the question, say so plainly instead of guessing. Keep the answer tight -- a short paragraph or a few bullet points, not a full report.';
-
+        const useLeads = scope !== 'ads';
+        const useAds = scope !== 'leads' && !!adsContext;
+        let systemPrompt = 'You are a sharp, concise data analyst helping the 4Geeks Academy marketing, admissions and sales team. ';
+        if (useLeads && useAds) {
+            systemPrompt += 'You are given TWO datasets for the same region and period: (1) LEADS -- the ActiveCampaign deal pipeline currently filtered on the dashboard (counts, win/loss, breakdowns by source/campaign/owner/day, sample deals); (2) ADS -- paid media performance from 4Geeks Center (spend, impressions, clicks, CTR, CPC, leads, CPL, paid sales, CPA, revenue, ROAS by channel, campaign and day). Connect them when useful: e.g. which campaigns bring volume vs. quality, where spend is wasted, how ad-reported leads compare with pipeline outcomes. Note the two sources attribute differently (ads counts paid-attributed leads/sales; the pipeline counts all deals created), so flag mismatches instead of forcing them to agree. ';
+        } else if (useAds) {
+            systemPrompt += 'You are given ADS performance data from 4Geeks Center for the selected region and period (spend, impressions, clicks, CTR, CPC, leads, CPL, paid sales, CPA, revenue, ROAS by channel, campaign and day). ';
+        } else {
+            systemPrompt += 'You are given a JSON summary of the ActiveCampaign deals currently shown on the dashboard (already filtered) -- counts, win/loss, breakdowns by region/source/campaign/owner/day, and a sample of individual deals. ';
+        }
+        systemPrompt += 'Answer using ONLY the data provided. Cite concrete numbers and percentages. If the data cannot answer the question, say so plainly instead of guessing. Keep it tight: a short paragraph or a few bullet points, using simple markdown (bold, bullets). ';
+        systemPrompt += lang === 'es' ? 'Answer in Spanish.' : 'Answer in English unless the question is written in another language.';
         if (Object.keys(adsData).length > 0) {
-            systemPrompt += '\n\nYou also have access to marketing/ads performance data that was uploaded. Consider this data when relevant to questions about marketing performance, ROI, or campaign effectiveness.';
+            systemPrompt += '\n\nThe user also uploaded manual ads exports; use them when relevant.';
         }
 
-        // Build messages with conversation history
         const messages = [];
-
-        // Add previous conversation turns
-        if (Array.isArray(history) && history.length > 0) {
-            history.forEach(turn => {
-                if (turn.question) messages.push({ role: 'user', content: turn.question });
-                if (turn.answer) messages.push({ role: 'assistant', content: turn.answer });
+        if (Array.isArray(history)) {
+            history.slice(-6).forEach((turn) => {
+                if (turn.question && turn.answer) {
+                    messages.push({ role: 'user', content: turn.question });
+                    messages.push({ role: 'assistant', content: turn.answer });
+                }
             });
         }
-
-        // Add current question with context
-        let contentStr = `Question: ${question}\n\nDashboard data (JSON):\n${JSON.stringify(context || {})}`;
-        if (Object.keys(adsData).length > 0) {
-            contentStr += `\n\nAds/Marketing data uploaded:\n${JSON.stringify(adsData)}`;
-        }
+        let contentStr = `Question: ${question}`;
+        if (useLeads) contentStr += `\n\nLEADS data (JSON):\n${JSON.stringify(context || {})}`;
+        if (useAds) contentStr += `\n\nADS performance data (JSON):\n${JSON.stringify(adsContext)}`;
+        if (Object.keys(adsData).length > 0) contentStr += `\n\nManual ads uploads:\n${JSON.stringify(adsData).slice(0, 40000)}`;
         messages.push({ role: 'user', content: contentStr });
 
-        const r = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-                'content-type': 'application/json',
-                'x-api-key': process.env.ANTHROPIC_API_KEY,
-                'anthropic-version': '2023-06-01',
-            },
-            body: JSON.stringify({
-                model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
-                max_tokens: 1024,
-                system: systemPrompt,
-                messages,
-            }),
-        });
-        if (!r.ok) {
-            const errText = await r.text();
-            return res.status(502).json({ error: `Anthropic API error (${r.status}): ${errText.slice(0, 300)}` });
-        }
-        const data = await r.json();
-        const answer = (data.content || []).map((b) => b.text || '').join('\n').trim();
+        const answer = await callClaude({ system: systemPrompt, messages, maxTokens: 1500 });
         res.json({ answer });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        res.status(e.status || 500).json({ error: e.message });
     }
 });
 
-// Lead Coach: AI-powered coaching for a specific lead
-// Provides insights about engagement, scoring, and personalized email/SMS templates
-app.post('/api/lead-coach', async (req, res) => {
-    if (!client) {
-        return res.status(500).json({ error: 'AC_API_URL / AC_API_KEY not configured' });
-    }
-    if (!process.env.ANTHROPIC_API_KEY) {
-        return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on the server' });
-    }
+// ---------------------------------------------------------------------------
+// Lead detail. Two cheap steps instead of one slow one:
+//   1. The drawer renders INSTANTLY from the cached record the browser
+//      already has (no request at all).
+//   2. GET /api/lead/:id/engagement fetches only what the cache lacks (email
+//      engagement + AC scores), in parallel, on the interactive lane, and is
+//      cached for 10 minutes.
+//   3. AI coaching is a separate call the rep triggers, so it never blocks
+//      the rest of the drawer.
+// ---------------------------------------------------------------------------
+const leadEngagementCache = new Map(); // dealId -> { at, data }
+const LEAD_ENGAGEMENT_TTL_MS = 10 * 60 * 1000;
 
-    const { leadId, question } = req.body || {};
-    if (!leadId) {
-        return res.status(400).json({ error: 'leadId is required' });
+function findRecord(dealId) {
+    return (cache.records || []).find((r) => String(r.id) === String(dealId)) || null;
+}
+
+async function getLeadEngagement(dealId) {
+    const hit = leadEngagementCache.get(String(dealId));
+    if (hit && Date.now() - hit.at < LEAD_ENGAGEMENT_TTL_MS) return hit.data;
+    return client.interactive(async () => {
+        let rec = findRecord(dealId);
+        let contactId = rec ? rec.contactId : null;
+        if (!contactId) {
+            const deal = await client.getDeal(dealId);
+            contactId = deal ? deal.contact : null;
+        }
+        if (!contactId) throw Object.assign(new Error('Deal not found'), { status: 404 });
+        const [email, scores] = await Promise.all([
+            client.getContactEmailEngagement(contactId).catch(() => ({ unavailable: true, events: [] })),
+            client.getNamedScores(contactId, dealId).catch(() => []),
+        ]);
+        const data = {
+            dealId: String(dealId),
+            contactId: String(contactId),
+            emailsSent: email.sent ?? null,
+            emailsOpened: email.opened ?? 0,
+            emailOpenRate: Number(email.openRate || 0),
+            linksClicked: email.clicked ?? 0,
+            clickRate: Number(email.clickRate || 0),
+            lastEmailDate: email.lastEmailDate ? String(email.lastEmailDate).slice(0, 10) : null,
+            trackingAvailable: !email.unavailable,
+            engagementBasis: email.engagementBasis || 'per-contact',
+            scores,
+            timeline: (email.events || []).slice(0, 30),
+        };
+        leadEngagementCache.set(String(dealId), { at: Date.now(), data });
+        if (leadEngagementCache.size > 2000) leadEngagementCache.delete(leadEngagementCache.keys().next().value);
+        return data;
+    });
+}
+
+app.get('/api/lead/:id', requireAuth, (req, res) => {
+    const rec = findRecord(req.params.id);
+    if (!rec) return res.status(404).json({ error: 'Lead not in the current data window' });
+    res.json({ lead: rec });
+});
+
+app.get('/api/lead/:id/engagement', requireAuth, async (req, res) => {
+    if (!client) return res.status(500).json({ error: 'AC_API_URL / AC_API_KEY not configured' });
+    const t0 = Date.now();
+    try {
+        const data = await getLeadEngagement(req.params.id);
+        res.json({ ...data, tookMs: Date.now() - t0 });
+    } catch (e) {
+        res.status(e.status || 500).json({ error: e.message });
     }
+});
+
+// Lead Coach: AI coaching for one lead. Uses the cached record + cached
+// engagement (fetched in parallel if missing) instead of re-pulling the deal,
+// contact and custom fields one by one.
+app.post('/api/lead-coach', requireAuth, async (req, res) => {
+    if (!client) return res.status(500).json({ error: 'AC_API_URL / AC_API_KEY not configured' });
+    if (!process.env.ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on the server' });
+    const { leadId, question, lang = 'en' } = req.body || {};
+    if (!leadId) return res.status(400).json({ error: 'leadId is required' });
 
     try {
-        // 1. Fetch deal and contact
-        const deal = await client.getDeal(leadId);
-        if (!deal) {
-            return res.status(404).json({ error: 'Deal not found' });
-        }
+        const rec = findRecord(leadId);
+        if (!rec) return res.status(404).json({ error: 'Lead not in the current data window' });
+        const engagement = await getLeadEngagement(leadId).catch(() => null);
 
-        const contact = await client.getContact(deal.contact);
-        if (!contact) {
-            return res.status(404).json({ error: 'Contact not found' });
-        }
-
-        // 2. Fetch custom field data
-        const dealCustomFieldData = await client.listDealCustomFieldDataForDeal(leadId);
-        const contactFieldValues = await client.listContactFieldValues(contact.id);
-
-        // Helper to get deal custom field value
-        const getDealField = (fieldId) => {
-            if (!Array.isArray(dealCustomFieldData)) return null;
-            const hit = dealCustomFieldData.find((row) => String(row.customFieldId) === String(fieldId));
-            return hit ? hit.fieldValue : null;
-        };
-
-        // Helper to get contact custom field value
-        const getContactField = (mappedName) => {
-            const { CONTACT_FIELD_MAP } = require('./lib/config');
-            if (!Array.isArray(contactFieldValues)) return null;
-            for (const [fieldId, name] of Object.entries(CONTACT_FIELD_MAP)) {
-                if (name !== mappedName) continue;
-                const hit = contactFieldValues.find((fieldVal) => String(fieldVal.field) === String(fieldId));
-                if (hit) return hit.value || null;
-            }
-            return null;
-        };
-
-        // 3. Fetch email engagement
-        // Fetch once and reuse -- buildContactEngagementTimeline used to re-run
-        // the entire engagement fetch, doubling AC round-trips for every lead.
-        const emailEngagement = await client.getContactEmailEngagement(contact.id);
-        const engagementTimeline = await client.buildContactEngagementTimeline(contact.id, {
-            engagement: emailEngagement,
-        });
-        // AC scores driven by open/click rules -- real per-person engagement.
-        const leadScores = await client.getNamedScores(contact.id, leadId).catch(() => []);
-
-        // 4. Fetch config for region mapping
-        const { PIPELINE_REGION_MAP, DEAL_FIELD_MAP } = require('./lib/config');
-        const region = PIPELINE_REGION_MAP[String(deal.group)] || 'Unknown';
-
-        // 5. Build comprehensive lead profile
         const leadProfile = {
-            id: deal.id,
-            contactId: contact.id,
-            name: [contact.firstName, contact.lastName].filter(Boolean).join(' ') || 'Unknown',
-            email: contact.email || null,
-            phone: contact.phone || null,
-            course: getContactField('course'),
-            region,
-            dealValue: deal.value ? Number(deal.value) / 100 : 0,
-            dealStage: deal.stage || null,
-            dealStatus: deal.status === 1 ? 'Won' : deal.status === 2 ? 'Lost' : 'Active',
-            dealTitle: deal.title || null,
-            assignedTo: deal.owner || null,
-            createdDate: deal.cdate ? deal.cdate.slice(0, 10) : null,
-
-            // Engagement metrics
-            engagement: {
-                emailsEngaged: emailEngagement.opened + emailEngagement.clicked,
-                emailsOpened: emailEngagement.opened,
-                emailOpenRate: Number(emailEngagement.openRate),
-                linksClicked: emailEngagement.clicked,
-                clickRate: Number(emailEngagement.clickRate),
-                lastEmailDate: emailEngagement.lastEmailDate ? emailEngagement.lastEmailDate.slice(0, 10) : null,
-                trackingAvailable: !emailEngagement.unavailable,
-                emailsSent: emailEngagement.sent,
-                // 'campaign-aggregate' means opens/clicks are inferred from
-                // each campaign's overall rates, not from this person's own
-                // tracked actions -- AC does not expose per-recipient opens
-                // through its API. The UI must not present these as facts
-                // about this individual.
-                engagementBasis: emailEngagement.engagementBasis || 'per-contact',
-                // AC scores built from open/click rules are TRUE per-person
-                // engagement, unlike the campaign-aggregate inference above.
-                scores: leadScores,
-                timeline: engagementTimeline,
-            },
-
-            // Custom fields - prioritized for coaching
+            id: rec.id,
+            name: rec.name || 'Unknown',
+            course: rec.course,
+            region: rec.region,
+            dealValue: rec.dealValue,
+            stage: rec.stage,
+            dealStatus: rec.bucket,
+            lostReasons: rec.reasons,
+            owner: rec.assignTo,
+            createdDate: rec.date,
+            source: rec.source, medium: rec.medium, campaign: rec.campaign, location: rec.location,
+            engagement,
             customFields: {
-                admissionsScore: getContactField('admissionsTestScore'),
-                classification: getContactField('classification'),
-                conversationType: getContactField('admissionsConversationType'),
-                leadSentiment: getContactField('leadSentiment'),
-                dealQuality: getDealField(DEAL_FIELD_MAP.dealQuality),
-                feedback: getDealField(DEAL_FIELD_MAP.dealClientComments),
-                offerSentDate: getDealField(DEAL_FIELD_MAP.offerSentDate),
-                wonDate: getDealField(DEAL_FIELD_MAP.wonDate),
-                lostDate: getDealField(DEAL_FIELD_MAP.lostDate),
-                source: getContactField('utmSource'),
-                campaign: getContactField('utmCampaign'),
+                admissionsScore: rec.admissionsScore,
+                classification: rec.classification,
+                conversationType: rec.admissionsConversationType,
+                leadSentiment: rec.leadSentiment,
+                dealQuality: rec.dealQuality,
+                engagementBand: rec.scoreBand,
+                feedback: rec.feedback,
+                offerSentDate: rec.offerSentDate,
+                wonDate: rec.wonDate,
+                lostDate: rec.lostDate,
             },
         };
 
-        // 6. Call Claude with lead coaching prompt
         const coachingSystem = `You are an expert sales coach helping 4Geeks Academy admissions reps close more deals. You are given a specific lead's profile including their email engagement, custom scoring, and interaction history.
 
 Your job is to:
 1. **Analyze** — Why does this lead matter right now? What signals suggest they're ready to move forward (or stuck)?
-2. **Recommend** — What should the rep do next? (Send offer, schedule call, provide financing info, etc.)
-3. **Draft** — Generate 2 personalized templates they can copy and send TODAY:
-   - A warm, personalized EMAIL addressing their specific situation, interests, and engagement level
-   - A brief SMS they could send same-day (under 60 characters)
+2. **Recommend** — What should the rep do next?
+3. **Draft** — 2 personalized templates they can send TODAY: an EMAIL (max 100 words) and an SMS (under 160 characters).
 
-Use their name, course interest, engagement patterns, and signals from custom fields (sentiment, quality score, classification) to make templates feel personal and timely. If they've opened emails about financing but haven't replied, mention financing in your email. If their admission score is high, emphasize their qualification.
+READING THE ENGAGEMENT SCORE (Deal Quality / "Score: Quality + Engagement"), built entirely from email opens and clicks:
+- Below 0: marked email as spam or similar. Do NOT push more email; suggest another channel or backing off.
+- 0: no engagement at all. Do not reference "as you saw in my last email".
+- 6: light engagement. 8: opening consistently -- warm. 14+: CLICKED a link -- high intent, push for the meeting.
+If engagement.engagementBasis is "campaign-aggregate", opens/clicks are inferred from campaign averages -- weak evidence.
+${lang === 'es' ? 'Write the analysis in Spanish. Write the templates in the language the lead most likely speaks (Spanish for Spain/LATAM leads).' : 'Write the analysis in English. Write the templates in the language the lead most likely speaks (Spanish for Spain/LATAM leads).'}
 
-READING THE ENGAGEMENT SCORE ("Score: Quality + Engagement"). This score is built entirely from email opens and clicks, so it is real behaviour, not a guess:
-- Below 0: they marked email as spam or similar. Do NOT push more email. Suggest a different channel or backing off entirely.
-- 0: no engagement at all. Nothing has landed. Assume they have not read anything you sent -- do not reference "as you saw in my last email".
-- 6: light engagement, some opens.
-- 8: opening consistently -- warm.
-- 14 or above: they have CLICKED a link. This is the strongest signal available. Treat as high intent and push for the meeting.
-Match your urgency to this number. Never claim a lead engaged with something when the score says 0.
-
-If engagement.engagementBasis is "campaign-aggregate", the opens/clicks shown are INFERRED from campaign averages, not that person's own actions -- treat them as weak evidence and rely on the engagement score instead.
-
-FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
+FORMAT YOUR RESPONSE EXACTLY LIKE THIS (keep these English headings):
 
 **Analysis:**
-[2-3 sentence analysis of where this lead stands]
+[2-3 sentences]
 
 **Next Steps:**
 - [Action 1]
@@ -781,65 +814,39 @@ FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
 **EMAIL TEMPLATE:**
 Subject: [subject line]
 
-[Email body - max 100 words]
+[Email body]
 
 **SMS TEMPLATE:**
-[SMS text - max 60 characters]`;
+[SMS text]`;
 
-        const userContent = `Lead Profile:\n${JSON.stringify(leadProfile, null, 2)}${question ? `\n\nLead Rep Question: ${question}` : ''}`;
-
-        const claudeReq = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-                'content-type': 'application/json',
-                'x-api-key': process.env.ANTHROPIC_API_KEY,
-                'anthropic-version': '2023-06-01',
-            },
-            body: JSON.stringify({
-                model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
-                max_tokens: 2048,
-                system: coachingSystem,
-                messages: [{ role: 'user', content: userContent }],
-            }),
-        });
-
-        if (!claudeReq.ok) {
-            const errText = await claudeReq.text();
-            return res.status(502).json({ error: `Anthropic API error (${claudeReq.status}): ${errText.slice(0, 300)}` });
-        }
-
-        const claudeData = await claudeReq.json();
-        const coachingText = (claudeData.content || []).map((b) => b.text || '').join('\n').trim();
-
-        // 7. Parse templates from Claude response
-        const parseTemplates = (text) => {
-            const emailMatch = text.match(/\*\*EMAIL TEMPLATE:\*\*\n([\s\S]*?)(?=\*\*SMS TEMPLATE:|$)/);
-            const smsMatch = text.match(/\*\*SMS TEMPLATE:\*\*\n([\s\S]*?)$/);
-
-            return {
-                email: emailMatch ? emailMatch[1].trim() : '',
-                sms: smsMatch ? smsMatch[1].trim() : '',
-            };
-        };
-
-        const templates = parseTemplates(coachingText);
-
-        // 8. Return complete response
-        res.json({
-            lead: leadProfile,
-            aiCoaching: {
-                fullAnalysis: coachingText,
-                templates,
-            },
-        });
+        const userContent = `Lead Profile:\n${JSON.stringify(leadProfile, null, 2)}${question ? `\n\nRep question: ${question}` : ''}`;
+        const coachingText = await callClaude({ system: coachingSystem, messages: [{ role: 'user', content: userContent }], maxTokens: 1500 });
+        res.json({ lead: leadProfile, aiCoaching: { fullAnalysis: coachingText } });
     } catch (e) {
         console.error('[lead-coach] error:', e.message);
-        res.status(500).json({ error: e.message });
+        res.status(e.status || 500).json({ error: e.message });
     }
 });
 
+// Diagnostic: confirms the deal custom-field rows are being read. Shows the
+// key NAMES of side-loaded rows (no values) and how many deals in the window
+// have each mapped deal field populated.
+app.get('/api/diag/deal-fields', requireAuth, (req, res) => {
+    const recs = cache.records || [];
+    const filled = (f) => recs.filter((r) => r[f] != null && r[f] !== '' && !(Array.isArray(r[f]) && !r[f].length)).length;
+    res.json({
+        records: recs.length,
+        sampleRowKeys: dealFieldSample,
+        populated: {
+            reasons: filled('reasons'), dealQuality: filled('dealQuality'), feedback: filled('feedback'),
+            wonDate: filled('wonDate'), lostDate: filled('lostDate'), offerSentDate: filled('offerSentDate'),
+            ownerNamed: recs.filter((r) => r.assignTo && !/^User #/.test(r.assignTo)).length,
+        },
+    });
+});
+
 // Lead Recommendations: Analyze leads and group by recommended action
-app.post('/api/recommendations', async (req, res) => {
+app.post('/api/recommendations', requireAuth, async (req, res) => {
     if (!client) {
         return res.status(500).json({ error: 'AC_API_URL / AC_API_KEY not configured' });
     }
@@ -850,13 +857,21 @@ app.post('/api/recommendations', async (req, res) => {
     try {
         // Get filtered records from request body (dashboard sends filtered data)
         // If not provided, use full cache
-        const { filteredRecords } = req.body || {};
+        // The browser sends deal IDS, not full records: 16k records is ~10MB of
+        // JSON, far past the 2mb body limit, so the old payload 413'd.
+        const { ids, filteredRecords, lang = 'en' } = req.body || {};
 
         if (!cache.records) {
             return res.status(202).json({ ready: false, refreshing });
         }
 
-        const records = filteredRecords && filteredRecords.length > 0 ? filteredRecords : cache.records;
+        let records = cache.records;
+        if (Array.isArray(ids) && ids.length) {
+            const want = new Set(ids.map(String));
+            records = cache.records.filter((r) => want.has(String(r.id)));
+        } else if (Array.isArray(filteredRecords) && filteredRecords.length) {
+            records = filteredRecords;
+        }
 
         // Categorize leads by recommended action
         const today = new Date();
@@ -893,13 +908,13 @@ app.post('/api/recommendations', async (req, res) => {
             // Active deals - categorize by engagement & time
             const daysSinceCreated = r.date ? Math.floor((today - new Date(r.date)) / (1000 * 60 * 60 * 24)) : 999;
             const hasOffer = r.offerSentDate ? true : false;
-            const engagementScore = (r.admissionsScore || 0) + (r.dealQuality || 0);
+            const engagementScore = Number(r.dealQuality) || 0;
             const recentlyEngaged = r.date && r.date >= thirtyDaysAgo;
 
-            if (hasOffer && engagementScore >= 12 && recentlyEngaged) {
+            if (hasOffer && engagementScore >= 8 && recentlyEngaged) {
                 // High engagement + offer sent + recent = ready to close
                 recommendations.readyToClose.push(r);
-            } else if (recentlyEngaged && !hasOffer && engagementScore >= 10) {
+            } else if (recentlyEngaged && !hasOffer && engagementScore >= 8) {
                 // Engaged, good scores, no offer = needs follow-up with offer
                 recommendations.needsFollowUp.push(r);
             } else if (daysSinceCreated > 60 && !recentlyEngaged) {
@@ -918,7 +933,7 @@ app.post('/api/recommendations', async (req, res) => {
             const summary = {
                 name: groupName,
                 count: leads.length,
-                leads: leads.slice(0, 5), // Top 5 per group
+                leads: leads.slice(0, 25), // shown in the group list
                 recommendation: '',
             };
 
@@ -959,7 +974,7 @@ app.post('/api/recommendations', async (req, res) => {
                         body: JSON.stringify({
                             model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
                             max_tokens: 512,
-                            system: 'You are an expert sales coach for 4Geeks Academy. Provide concise, actionable recommendations for admissions teams based on lead data. Be specific about next steps and priorities.',
+                            system: 'You are an expert sales coach for 4Geeks Academy. Provide concise, actionable recommendations for admissions teams based on lead data. Be specific about next steps and priorities. Use at most 4 short bullet points. ' + (lang === 'es' ? 'Answer in Spanish.' : 'Answer in English.'),
                             messages: [{ role: 'user', content: `${question}\n\nLead Group Data:\n${JSON.stringify(context, null, 2)}` }],
                         }),
                     });
@@ -1002,7 +1017,7 @@ app.post('/api/recommendations', async (req, res) => {
 });
 
 // Lead Notes: Save and retrieve notes/tags for each lead
-app.post('/api/lead-notes', (req, res) => {
+app.post('/api/lead-notes', requireAuth, (req, res) => {
     const { leadId, contactId, notes, tags, emailSent, actions } = req.body || {};
     if (!contactId) {
         return res.status(400).json({ error: 'contactId is required' });
@@ -1023,7 +1038,7 @@ app.post('/api/lead-notes', (req, res) => {
     res.json({ success: true, data: leadNotes[key] });
 });
 
-app.get('/api/lead-notes/:contactId', (req, res) => {
+app.get('/api/lead-notes/:contactId', requireAuth, (req, res) => {
     const { contactId } = req.params;
     const key = String(contactId);
     const data = leadNotes[key] || { notes: '', tags: [], emailSent: false, actions: [], updatedAt: null };
@@ -1031,7 +1046,7 @@ app.get('/api/lead-notes/:contactId', (req, res) => {
 });
 
 // Ads Data: Store uploaded ads file metadata and data
-app.post('/api/ads-data', (req, res) => {
+app.post('/api/ads-data', requireAuth, (req, res) => {
     const { sessionId = 'default', filename, data, platform } = req.body || {};
     if (!filename || !data) {
         return res.status(400).json({ error: 'filename and data are required' });
@@ -1051,13 +1066,13 @@ app.post('/api/ads-data', (req, res) => {
     res.json({ success: true, count: sessionAdsData[sessionId].length });
 });
 
-app.get('/api/ads-data/:sessionId', (req, res) => {
+app.get('/api/ads-data/:sessionId', requireAuth, (req, res) => {
     const { sessionId = 'default' } = req.params;
     const files = sessionAdsData[sessionId] || [];
     res.json({ files, count: files.length });
 });
 
-app.delete('/api/ads-data/:sessionId', (req, res) => {
+app.delete('/api/ads-data/:sessionId', requireAuth, (req, res) => {
     const { sessionId = 'default' } = req.params;
     delete sessionAdsData[sessionId];
     res.json({ success: true });
@@ -1214,7 +1229,7 @@ function demoAdsPayload(region) {
   };
 }
 
-app.get('/api/ads-performance', async (req, res) => {
+app.get('/api/ads-performance', requireAuth, async (req, res) => {
   const region = REGION_TO_CENTER[req.query.region] || String(req.query.region || 'US');
   let startDate = req.query.start_date || '';
   let endDate = req.query.end_date || '';

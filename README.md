@@ -55,6 +55,29 @@ git push -u origin main
 4. Deploy. Railway gives you a public `*.up.railway.app` URL — that's your live dashboard.
    Add a custom domain later if you want.
 
+## v2 (Sept 2026)
+
+- **UI**: left sidebar navigation, English/Spanish toggle, light/dark/system theme,
+  friendly filter bar (region, period presets, multi-select filters with counts,
+  removable chips, "More filters" drawer), redesigned charts.
+- **New filters**: admissions rep (owner names resolved from AC users), engagement
+  score band (Deal Quality), lead score, lost reason (now populated), stage.
+- **Overview**: day / week / month granularity (auto by range), win rate + loss rate,
+  period-over-period deltas, admissions-rep leaderboard.
+- **Lead details open instantly** from cached data; email engagement loads in the
+  background on a separate "interactive" AC rate-limit lane (`AC_INTERACTIVE_RPS`,
+  default 3/s) and AI coaching runs only when requested.
+- **AI insights** can answer from Leads, Ads (4Geeks Center) or both, for the same
+  region + period.
+- **Fix**: deal custom fields (lost reasons, deal quality, feedback, won/lost dates)
+  were never read because side-loaded rows use `deal`/`dealCustomFieldMetum` keys.
+  Verify after deploy at `/api/diag/deal-fields?token=<token>`.
+- **Security**: all data endpoints now require the dashboard login token
+  (`/api/summary` was previously public). `/api/status` and `/api/load` stay open
+  for the health check.
+- Optional env: `AC_APP_URL` (defaults to `https://<account>.activehosted.com`,
+  derived from `AC_API_URL`) for "Open in ActiveCampaign" links.
+
 ## Notes
 
 - This app never stores lead data on disk — it's pulled fresh from ActiveCampaign into

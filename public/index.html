@@ -2,60 +2,97 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>4Geeks — Live Lead & Deal Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>4Geeks — Leads & Deals</title>
+<script>
+  // Apply theme before first paint so dark mode never flashes white.
+  (function(){ try{ var t=localStorage.getItem('dashTheme')||'system'; if(t!=='system') document.documentElement.setAttribute('data-theme', t); }catch(e){} })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="/styles.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 </head>
 <body>
-<div id="login-screen" class="login-screen" style="display:none;">
+
+<div id="login-screen" class="login-screen" hidden>
   <div class="login-box">
-    <h1><img src="https://storage.googleapis.com/4geeks-academy-website/media/4geeks-devs-logo_1763162063433.png" alt="4Geeks" class="logo"> 4Geeks Dashboard</h1>
-    <p class="login-subtitle">Access your live lead & deal pipeline</p>
+    <img src="https://storage.googleapis.com/4geeks-academy-website/media/4geeks-devs-logo_1763162063433.png" alt="4Geeks" class="login-logo">
+    <h1 data-i18n="appName">Leads & Deals</h1>
+    <p class="login-subtitle" data-i18n="signInSub"></p>
     <form id="login-form">
-      <div class="form-group">
-        <label for="username">Username</label>
-        <input type="text" id="username" name="username" required autofocus>
-      </div>
-      <div class="form-group">
-        <label for="password">Password</label>
-        <input type="password" id="password" name="password" required>
-      </div>
-      <button type="submit" class="btn-login">Sign In</button>
-      <div id="login-error" class="login-error" style="display:none;"></div>
+      <label for="username" data-i18n="username"></label>
+      <input type="text" id="username" name="username" required autofocus autocomplete="username">
+      <label for="password" data-i18n="password"></label>
+      <input type="password" id="password" name="password" required autocomplete="current-password">
+      <button type="submit" class="btn primary block" data-i18n="signIn"></button>
+      <div id="login-error" class="login-error" hidden></div>
     </form>
+    <div class="login-foot"><button class="lang-mini" data-setlang="en">EN</button><button class="lang-mini" data-setlang="es">ES</button></div>
   </div>
 </div>
 
-<div class="wrap" style="display:none;" id="dashboard">
-  <h1><img src="https://storage.googleapis.com/4geeks-academy-website/media/4geeks-devs-logo_1763162063433.png" alt="4Geeks" class="logo"> 4Geeks — Live Lead &amp; Deal Dashboard</h1>
-  <p class="subtitle">USA · Spain · LATAM — pulled directly from ActiveCampaign deals + contacts.</p>
-  <div class="freshness" id="freshness">Loading…</div>
+<div id="app" class="app" hidden>
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-brand">
+      <img src="https://storage.googleapis.com/4geeks-academy-website/media/4geeks-devs-logo_1763162063433.png" alt="4Geeks" class="sb-logo">
+      <div class="sb-brand-text"><div class="sb-title" data-i18n="appName"></div><div class="sb-sub" data-i18n="appSub"></div></div>
+    </div>
+    <nav class="sb-nav" id="nav"></nav>
+    <div class="sb-footer">
+      <div class="sb-row">
+        <span class="sb-label" data-i18n="language"></span>
+        <div class="seg seg-sm" id="lang-seg"><button data-lang="en">EN</button><button data-lang="es">ES</button></div>
+      </div>
+      <div class="sb-row">
+        <span class="sb-label" data-i18n="theme"></span>
+        <div class="seg seg-sm" id="theme-seg">
+          <button data-theme="light" data-i18n-title="themeLight"></button>
+          <button data-theme="system" data-i18n-title="themeSystem"></button>
+          <button data-theme="dark" data-i18n-title="themeDark"></button>
+        </div>
+      </div>
+      <button class="sb-item sb-logout" id="btn-logout"><span class="ico" data-icon="logout"></span><span class="sb-text" data-i18n="logout"></span></button>
+      <button class="sb-item sb-collapse" id="btn-collapse"><span class="ico" data-icon="collapse"></span><span class="sb-text" data-i18n="collapse"></span></button>
+    </div>
+  </aside>
+  <div class="sb-scrim" id="sb-scrim"></div>
 
-  <div class="tabs" id="tabs">
-    <div class="tab" data-tab="overview">Overview (Combined)</div>
-    <div class="tab" data-tab="recommendations">🎯 Recommendations</div>
-    <div class="tab" data-tab="regions">Compare Regions</div>
-    <div class="tab" data-tab="grouped">Grouped / Pivot</div>
-    <div class="tab" data-tab="individual">Individual Leads</div>
-    <div class="tab active" data-tab="ads">📊 Ads Performance</div>
-    <div class="tab" data-tab="ai">AI Insights</div>
-  </div>
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn only-mobile" id="btn-menu" aria-label="Menu"><span class="ico" data-icon="menu"></span></button>
+      <div class="tb-titles">
+        <h1 id="page-title"></h1>
+        <p id="page-sub" class="tb-sub"></p>
+      </div>
+      <div class="tb-actions">
+        <span id="freshness" class="freshness"></span>
+        <button class="btn ghost sm" id="btn-refresh"><span class="ico" data-icon="refresh"></span><span data-i18n="refresh"></span></button>
+        <button class="btn ghost sm" id="btn-copy-link"><span class="ico" data-icon="link"></span><span class="hide-sm" data-i18n="copyLink"></span></button>
+      </div>
+    </header>
 
-  <div class="kpis" id="kpis"></div>
-  <div class="filters" id="filters"></div>
+    <section class="filterbar" id="filterbar"></section>
+    <div class="chips" id="active-chips"></div>
 
-  <div id="tab-ads"></div>
-  <div id="tab-overview" style="display:none"></div>
-  <div id="tab-recommendations" style="display:none"></div>
-  <div id="tab-regions" style="display:none"></div>
-  <div id="tab-grouped" style="display:none"></div>
-  <div id="tab-individual" style="display:none"></div>
-  <div id="tab-ai" style="display:none"></div>
-
-  <div class="footer">4Geeks Academy · Live data from ActiveCampaign · Cached briefly server-side, click Refresh for the latest <button id="btn-logout" class="ghost" style="float:right;">Logout</button></div>
+    <div class="views">
+      <div id="tab-overview" class="view"></div>
+      <div id="tab-recommendations" class="view"></div>
+      <div id="tab-regions" class="view"></div>
+      <div id="tab-grouped" class="view"></div>
+      <div id="tab-individual" class="view"></div>
+      <div id="tab-ads" class="view"></div>
+      <div id="tab-ai" class="view"></div>
+    </div>
+  </main>
 </div>
-</div>
+
+<div class="drawer-scrim" id="drawer-scrim"></div>
+<aside class="drawer" id="filter-drawer" aria-hidden="true"></aside>
+<aside class="drawer drawer-lg" id="lead-drawer" aria-hidden="true"></aside>
+<div id="popover-root"></div>
+
+<script src="/i18n.js"></script>
 <script src="/dashboard.js"></script>
 </body>
 </html>
