@@ -385,3 +385,9 @@ tr.clickrow{cursor:pointer;}
   .seg{flex-wrap:wrap;}
   .brow{grid-template-columns:minmax(0,1fr) 80px auto;}
 }
+
+a.sb-item{text-decoration:none;}
+a.sb-item:hover{text-decoration:none;}
+.sb-ext{margin-left:auto;display:inline-flex;color:var(--muted);}
+.sb-ext .ico{width:14px;height:14px;}
+.app.collapsed .sb-ext{display:none;}
