@@ -2,6 +2,7 @@
 // t('key', {n: 3}) interpolates {n}.
 window.I18N = {
   en: {
+    nav_enrollments: 'Enrollments',
     appName: 'Leads & Deals', appSub: 'Live from ActiveCampaign',
     signIn: 'Sign in', signInSub: 'Access your live lead & deal pipeline', username: 'Username', password: 'Password', invalidCreds: 'Invalid credentials',
     nav_overview: 'Overview', nav_recommendations: 'Recommendations', nav_regions: 'Compare regions', nav_grouped: 'Pivot / Group by', nav_individual: 'Leads', nav_ads: 'Ads performance', nav_ai: 'AI insights',
@@ -62,6 +63,7 @@ window.I18N = {
     uploadTitle: 'Upload manual exports (optional — feeds AI insights)', uploadNote: 'Upload Meta or Google Ads exports (CSV or images). They are considered in AI insights questions.', uploadDrop: 'Drop CSV or images here, or click to choose', noFiles: 'No files uploaded.', remove: 'Remove', uploaded: 'Loaded {n} ads file(s) — use them in AI insights',
   },
   es: {
+    nav_enrollments: 'Matrículas',
     appName: 'Leads y Deals', appSub: 'En vivo desde ActiveCampaign',
     signIn: 'Entrar', signInSub: 'Accede a tu pipeline de leads y deals en vivo', username: 'Usuario', password: 'Contraseña', invalidCreds: 'Credenciales inválidas',
     nav_overview: 'Resumen', nav_recommendations: 'Recomendaciones', nav_regions: 'Comparar regiones', nav_grouped: 'Pivot / Agrupar', nav_individual: 'Leads', nav_ads: 'Rendimiento de Ads', nav_ai: 'IA Insights',

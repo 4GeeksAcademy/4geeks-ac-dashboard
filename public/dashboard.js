@@ -295,9 +295,14 @@ function renderFreshness() {
 }
 
 // ───────────────────────── shell ─────────────────────────
+// Enrollments (by enrollment date, all history) live in the 4Geeks
+// Enrollment Dashboard, which reads the LATAM Google Sheet and the USA
+// Notion tracker / marketing sheet through the viewer's claude.ai connectors.
+const ENROLLMENT_DASHBOARD_URL = 'https://claude.ai/artifact/MMejYb9nn2Ea3tkZwFFpL5';
 const NAV = [
   { section: 'navSectionPipeline' },
   { view: 'overview', icon: 'overview' },
+  { href: ENROLLMENT_DASHBOARD_URL, icon: 'trophy', label: 'nav_enrollments' },
   { view: 'individual', icon: 'individual' },
   { view: 'recommendations', icon: 'recommendations' },
   { view: 'regions', icon: 'regions' },
@@ -309,6 +314,8 @@ const NAV = [
 function buildNav() {
   $('#nav').innerHTML = NAV.map((n) => (n.section
     ? `<div class="sb-section">${esc(t(n.section))}</div>`
+    : n.href
+    ? `<a class="sb-item" href="${esc(n.href)}" target="_blank" rel="noopener" title="${esc(t(n.label))}">${icon(n.icon)}<span class="sb-text">${esc(t(n.label))}</span><span class="sb-ext">${icon('external')}</span></a>`
     : `<button class="sb-item ${state.view === n.view ? 'active' : ''}" data-view="${n.view}" title="${esc(t('nav_' + n.view))}">${icon(n.icon)}<span class="sb-text">${esc(t('nav_' + n.view))}</span></button>`)).join('');
   $$('#nav .sb-item').forEach((b) => b.addEventListener('click', () => { go(b.dataset.view); $('#app').classList.remove('menu-open'); }));
 }
