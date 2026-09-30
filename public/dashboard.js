@@ -839,11 +839,13 @@ function engagementHtml(e) {
     const col = tone === 'great' || tone === 'good' ? 'var(--good-ink)' : tone === 'bad' ? 'var(--bad-ink)' : tone === 'ok' || tone === 'weak' ? 'var(--warn-ink)' : 'var(--ink)';
     return `<div class="stat"><div class="l">${esc(s.name)}</div><div class="v" style="color:${col}">${esc(s.value)}</div>${s.interpretation ? `<div class="muted" style="font-size:11px">${esc(s.interpretation.label)}</div>` : ''}</div>`;
   }).join('');
+  const perContact = e.engagementBasis !== 'campaign-aggregate';
   return `<div class="stat-row">
       <div class="stat"><div class="l">${esc(t('emailsSent'))}</div><div class="v">${fmtInt(e.emailsSent)}</div></div>
-      <div class="stat"><div class="l">${esc(t('likelyOpens'))}</div><div class="v">${fmtInt(e.emailsOpened)}</div><div class="muted" style="font-size:11px">${esc(e.emailOpenRate)}%</div></div>
-      <div class="stat"><div class="l">${esc(t('likelyClicks'))}</div><div class="v">${fmtInt(e.linksClicked)}</div></div>
-      <div class="stat"><div class="l">${esc(t('lastEmail'))}</div><div class="v" style="font-size:13px">${e.lastEmailDate ? fmtDate(e.lastEmailDate) : '—'}</div></div></div>
+      <div class="stat"><div class="l">${esc(t(perContact ? 'emailsOpened' : 'likelyOpens'))}</div><div class="v" style="${e.emailsOpened ? 'color:var(--good-ink)' : ''}">${fmtInt(e.emailsOpened)}</div><div class="muted" style="font-size:11px">${esc(e.emailOpenRate)}%${e.lastOpenDate ? ' · ' + esc(t('lastOn', { d: fmtDate(e.lastOpenDate) })) : ''}</div></div>
+      <div class="stat"><div class="l">${esc(t(perContact ? 'emailsClicked' : 'likelyClicks'))}</div><div class="v" style="${e.linksClicked ? 'color:var(--good-ink)' : ''}">${fmtInt(e.linksClicked)}</div><div class="muted" style="font-size:11px">${esc(e.clickRate ?? 0)}%${e.lastClickDate ? ' · ' + esc(t('lastOn', { d: fmtDate(e.lastClickDate) })) : ''}</div></div>
+      <div class="stat"><div class="l">${esc(t('lastActivity'))}</div><div class="v" style="font-size:13px">${e.lastEmailDate ? fmtDate(e.lastEmailDate) : '—'}</div></div></div>
+    ${e.appleMppOpens ? `<p class="muted" style="font-size:11.5px;margin:8px 0 0">${esc(t('mppNote'))}</p>` : ''}
     ${scores ? `<div class="stat-row" style="margin-top:8px;grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">${scores}</div>` : ''}
     ${e.engagementBasis === 'campaign-aggregate' ? `<p class="muted" style="font-size:11.5px;margin:10px 0 0">${esc(t('aggregateNote'))}</p>` : ''}
     ${(e.timeline || []).length ? `<div class="timeline">${e.timeline.slice(0, 10).map((ev) => `<div><span class="d">${fmtDate(ev.date)}</span>${esc(ev.detail)}</div>`).join('')}</div>` : `<p class="muted" style="font-size:12.5px;margin:10px 0 0">${esc(t('noEvents'))}</p>`}`;
