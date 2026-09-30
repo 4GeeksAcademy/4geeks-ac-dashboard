@@ -719,6 +719,11 @@ async function getLeadEngagement(dealId) {
             linksClicked: email.clicked ?? 0,
             clickRate: Number(email.clickRate || 0),
             lastEmailDate: email.lastEmailDate ? String(email.lastEmailDate).slice(0, 10) : null,
+            lastOpenDate: email.lastOpenDate ? String(email.lastOpenDate).slice(0, 10) : null,
+            lastClickDate: email.lastClickDate ? String(email.lastClickDate).slice(0, 10) : null,
+            totalOpens: email.totalOpens ?? null,
+            totalClicks: email.totalClicks ?? null,
+            appleMppOpens: !!email.appleMppOpens,
             trackingAvailable: !email.unavailable,
             engagementBasis: email.engagementBasis || 'per-contact',
             scores,
@@ -797,7 +802,7 @@ Your job is to:
 
 THE LEAD'S QUALIFICATION is customFields.admissionsScore = the "Admission Code Test Score" set by the admissions team (e.g. Very Good, Good, No Feedback, Bad, Invalid Traffic, Fake Contact Details, Duplicate). Very Good / Good = qualified, push for the offer and enrollment. No Feedback = not yet qualified, get the qualification call done. Bad = low fit, be brief or suggest closing. Invalid Traffic / Fake Contact Details / Duplicate = not a real opportunity: recommend closing it as lost, do not draft sales templates beyond a short verification message.
 If engagement.scores includes an email engagement score: below 0 = marked spam (switch channel), 0 = never engaged (don't reference past emails), 14+ = clicked a link (high intent).
-If engagement.engagementBasis is "campaign-aggregate", opens/clicks are inferred from campaign averages -- weak evidence.
+engagement.emailsOpened / linksClicked are THIS lead's own opens and clicks (engagementBasis "per-contact"), with dates in engagement.timeline. A click is the strongest intent signal. If engagement.appleMppOpens is true, some opens may be automatic Apple Mail privacy pre-loads, so lean on clicks. If engagementBasis is "campaign-aggregate", opens/clicks are only inferred from campaign averages -- weak evidence.
 ${lang === 'es' ? 'Write the analysis in Spanish. Write the templates in the language the lead most likely speaks (Spanish for Spain/LATAM leads).' : 'Write the analysis in English. Write the templates in the language the lead most likely speaks (Spanish for Spain/LATAM leads).'}
 
 FORMAT YOUR RESPONSE EXACTLY LIKE THIS (keep these English headings):
