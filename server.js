@@ -109,6 +109,9 @@ async function refreshLookups() {
 }
 
 function buildRecords(deals, contactsRaw, dealCustomFieldData, fieldValuesRaw) {
+    // One row per AC deal, whatever the pagination returned.
+    deals = ActiveCampaignClient._dedupeById(deals || []);
+    contactsRaw = ActiveCampaignClient._dedupeById(contactsRaw || []);
     const contactsById = new Map(contactsRaw.map((c) => [String(c.id), c]));
     const contactFieldValuesById = new Map();
     (fieldValuesRaw || []).forEach((fv) => {
@@ -403,6 +406,7 @@ app.get('/api/status', (req, res) => {
     progress: refreshProgress,
     recordCount: cache.records ? cache.records.length : 0,
     acStats: client ? client.stats : null,
+    pagination: client ? client.paginationStats : null,
     lastUpdated: cache.at ? new Date(cache.at).toISOString() : null,
     dataWindowMonths: DATA_WINDOW_MONTHS,
     lastError,
