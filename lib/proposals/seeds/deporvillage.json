@@ -89,34 +89,38 @@
           ]
         },
         {
-          "kind": "steps",
-          "title": "El plan",
+          "kind": "phases",
+          "title": "La hoja de ruta",
           "items": [
             {
-              "title": "Onboarding IA",
-              "text": "Cada nueva incorporación llega sola al nivel de las Fases 1 y 2.",
-              "when": "Semana 3"
+              "when": "Semanas 0–4",
+              "title": "Arranque",
+              "goal": "Todo listo para empezar.",
+              "items": [
+                "Módulo a medida con vuestro AI Operating Model y Gemini Enterprise",
+                "Onboarding IA activo",
+                "Casos de AI Builders elegidos con dirección"
+              ]
             },
             {
-              "title": "AI Fluency",
-              "text": "150 personas rediseñan tareas reales con Gemini Enterprise.",
-              "when": "Meses 1–5"
+              "when": "Meses 1–6",
+              "title": "Despliegue",
+              "goal": "Toda la oficina aprende haciendo.",
+              "items": [
+                "AI Fluency: 5 cohortes, 150 personas",
+                "AI Builders: 2 cohortes con Demo Day",
+                "AI Engineering para el equipo de IT"
+              ]
             },
             {
-              "title": "AI Builders",
-              "text": "30 Champions construyen agentes sobre casos de negocio.",
-              "when": "Meses 2–6"
-            },
-            {
-              "title": "AI Engineering",
-              "text": "IT pasa a diseñar y desplegar sistemas de IA.",
-              "when": "Meses 2–6"
-            },
-            {
-              "title": "Una empresa AI-First",
-              "text": "Automatizaciones en marcha, agentes en producción y cultura viva.",
-              "when": "Mes 12",
-              "highlight": true
+              "when": "Meses 7–12",
+              "title": "Consolidación",
+              "goal": "La IA, en el día a día.",
+              "items": [
+                "Automatizaciones y agentes en producción",
+                "Contenidos actualizados en los meses 6 y 12",
+                "Píldoras mensuales y sesión con un experto"
+              ]
             }
           ]
         },
@@ -468,34 +472,127 @@
     },
     {
       "eyebrow": "Calendario y próximos pasos",
-      "headline": "En marcha en",
-      "accent": "tres semanas.",
-      "lead": "Desde la firma, el Onboarding IA está activo en tres semanas y la primera cohorte de AI Fluency arranca en el primer mes.",
+      "headline": "Un año,",
+      "accent": "mes a mes.",
+      "lead": "Así se ve el año desde la firma: cuatro programas en paralelo y una cultura de IA que se mantiene viva.",
       "blocks": [
         {
-          "kind": "numbered",
-          "items": [
+          "kind": "timeline",
+          "units": 12,
+          "unit_label": "Mes",
+          "lanes": [
             {
-              "title": "Semanas 0–3 · Puesta en marcha",
-              "text": "Módulo a medida con vuestro AI Operating Model y Gemini Enterprise; Onboarding IA activo."
+              "label": "Arranque",
+              "sub": "Módulo a medida y casos",
+              "items": [
+                {
+                  "start": 0,
+                  "end": 1,
+                  "text": "4 sem.",
+                  "tone": "gray"
+                }
+              ]
             },
             {
-              "title": "Mes 1 · Selección de casos",
-              "text": "Con dirección y los AI Champions elegimos los casos de AI Builders, cada uno con dueño interno y métrica."
+              "label": "Onboarding IA",
+              "sub": "20 plazas al año",
+              "items": [
+                {
+                  "start": 0.75,
+                  "end": 12,
+                  "text": "Activo todo el año para cada nueva incorporación",
+                  "tone": "gray"
+                }
+              ]
             },
             {
-              "title": "Meses 1–5 · AI Fluency",
-              "text": "Cinco cohortes de 30 personas, con capstone al cierre de cada una."
+              "label": "AI Fluency",
+              "sub": "150 personas · 5 cohortes de 2 semanas",
+              "items": [
+                {
+                  "start": 0.35,
+                  "end": 1.05,
+                  "text": "C1"
+                },
+                {
+                  "start": 1.35,
+                  "end": 2.05,
+                  "text": "C2"
+                },
+                {
+                  "start": 2.35,
+                  "end": 3.05,
+                  "text": "C3"
+                },
+                {
+                  "start": 3.35,
+                  "end": 4.05,
+                  "text": "C4"
+                },
+                {
+                  "start": 4.35,
+                  "end": 5.05,
+                  "text": "C5"
+                }
+              ]
             },
             {
-              "title": "Meses 2–6 · AI Builders y AI Engineering",
-              "text": "Dos cohortes de Champions con Demo Day ante dirección; reconversión del equipo de IT en paralelo."
+              "label": "AI Builders",
+              "sub": "30 Champions · Demo Day al cierre de cada cohorte",
+              "items": [
+                {
+                  "start": 1,
+                  "end": 3.5,
+                  "text": "Cohorte 1",
+                  "tone": "amber"
+                },
+                {
+                  "start": 3.5,
+                  "end": 6,
+                  "text": "Cohorte 2",
+                  "tone": "amber"
+                }
+              ]
             },
             {
-              "title": "Meses 6 y 12 · Actualización",
-              "text": "Revisión semestral de contenidos y sesión abierta con un experto."
+              "label": "AI Engineering for Developers",
+              "sub": "35 personas de IT",
+              "items": [
+                {
+                  "start": 1,
+                  "end": 6,
+                  "text": "Reconversión del equipo de IT"
+                }
+              ]
+            },
+            {
+              "label": "Cultura IA",
+              "sub": "Para toda la plantilla",
+              "items": [
+                {
+                  "start": 1,
+                  "end": 12,
+                  "text": "Píldoras formativas mensuales",
+                  "tone": "gray"
+                }
+              ]
+            },
+            {
+              "label": "Actualización",
+              "sub": "Contenidos y experto",
+              "marks": [
+                {
+                  "at": 5.5,
+                  "text": "Revisión semestral"
+                },
+                {
+                  "at": 11.5,
+                  "text": "Revisión + sesión experto"
+                }
+              ]
             }
-          ]
+          ],
+          "legend": "Fechas orientativas desde la firma; las cohortes se ajustan al calendario de Deporvillage. Azul: formación en vivo · Ámbar: AI Builders · Gris: continuo."
         },
         {
           "kind": "checklist",
