@@ -33,6 +33,10 @@ function fmtMoney(n, cur = 'USD') {
 }
 
 const I = { // inline icons (24px, stroke)
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  doc: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  download: '<path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/>',
   overview: '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/>',
   recommendations: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
   regions: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
@@ -170,7 +174,7 @@ const FILTER_BY_KEY = Object.fromEntries(FILTERS.map((f) => [f.key, f]));
 const fVals = (f, r) => (f.vals ? f.vals(r) : (r[f.key] != null && r[f.key] !== '' ? [String(r[f.key])] : []));
 const fLabel = (f, v) => (f.label ? f.label(v) : v);
 
-const VIEWS = ['overview', 'recommendations', 'regions', 'grouped', 'individual', 'ads', 'ai'];
+const VIEWS = ['overview', 'recommendations', 'regions', 'grouped', 'individual', 'ads', 'ai', 'proposals', 'users'];
 const state = { view: 'overview', region: 'all', q: '', dateFrom: '', dateTo: '', preset: '', gran: 'auto', page: 1, sort: { field: 'date', dir: 'desc' }, groupBy: 'assignTo', aiScope: 'both', adsRegion: 'US', recUsePeriod: '0' };
 FILTERS.forEach((f) => { state[f.key] = []; });
 
@@ -310,9 +314,13 @@ const NAV = [
   { section: 'navSectionMarketing' },
   { view: 'ads', icon: 'ads' },
   { view: 'ai', icon: 'ai' },
+  { section: 'navSectionB2B' },
+  { view: 'proposals', icon: 'doc' },
+  { section: 'navSectionAdmin', adminOnly: true },
+  { view: 'users', icon: 'users', adminOnly: true },
 ];
 function buildNav() {
-  $('#nav').innerHTML = NAV.map((n) => (n.section
+  $('#nav').innerHTML = NAV.filter((n) => !n.adminOnly || window.__isAdmin).map((n) => (n.section
     ? `<div class="sb-section">${esc(t(n.section))}</div>`
     : n.href
     ? `<a class="sb-item" href="${esc(n.href)}" target="_blank" rel="noopener" title="${esc(t(n.label))}">${icon(n.icon)}<span class="sb-text">${esc(t(n.label))}</span><span class="sb-ext">${icon('external')}</span></a>`
@@ -320,6 +328,7 @@ function buildNav() {
   $$('#nav .sb-item').forEach((b) => b.addEventListener('click', () => { go(b.dataset.view); $('#app').classList.remove('menu-open'); }));
 }
 function go(view) {
+  if (view === 'proposals') { delete $('#tab-proposals').dataset.ready; if (window.resetProposals) window.resetProposals(); }
   state.view = view; state.page = 1;
   $$('#nav .sb-item').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   buildFilterBar();
@@ -1216,6 +1225,12 @@ function renderAll(o = {}) {
   $('#page-sub').textContent = t('sub_' + state.view);
   VIEWS.forEach((v) => $('#tab-' + v).classList.toggle('active', v === state.view));
   const el = $('#tab-' + state.view);
+  // Proposal Studio has its own UI and doesn't use the lead filters or AC data.
+  if (state.view === 'users') { $('#filterbar').hidden = true; $('#active-chips').hidden = true; window.renderUsers(el); return; }
+  const isProposals = state.view === 'proposals';
+  $('#filterbar').hidden = isProposals; $('#active-chips').hidden = isProposals;
+  // Render it once per visit: background lead refreshes must not wipe a half-filled intake.
+  if (isProposals) { if (!el.dataset.ready) { el.dataset.ready = '1'; window.renderProposals(el); } return; }
   const needsLeads = !['ads'].includes(state.view);
   if (needsLeads && !ALL.length) {
     el.innerHTML = META.loading
@@ -1266,6 +1281,8 @@ function renderAll(o = {}) {
   syncStateFromUrl();
   booted = true;
   buildNav();
+  // Role-aware nav: admins also see Admin → Users.
+  api('/api/me').then((r) => r.json()).then((me) => { window.__me = me; window.__isAdmin = !!me.admin; if (me.admin) buildNav(); else if (state.view === 'users') go('overview'); }).catch(() => {});
   buildFilterBar();
   renderAll();
   // Lead data loads in the background; Ads renders independently meanwhile.

@@ -349,51 +349,35 @@ if (client) {
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json({ limit: '2mb' }));
 
-// Simple auth middleware
-const DASHBOARD_USER = process.env.DASHBOARD_USER || 'admin';
-const DASHBOARD_PASS = process.env.DASHBOARD_PASS || 'password';
+// ---------------------------------------------------------------------------
+// Auth — one login per person, roles admin/editor (see lib/auth.js).
+// ---------------------------------------------------------------------------
+const { createAuth } = require('./lib/auth');
+const { createStore } = require('./lib/proposals/store');
+const proposalStore = createStore();
+const auth = createAuth({ store: proposalStore });
+const requireAuth = auth.requireAuth;
+// Victor (editor) and Alejandro (admin) exist from the first boot; an admin
+// sets their passwords in Admin → Users before they can sign in.
+auth.ensureUsers([{ name: 'victor', role: 'editor' }, { name: 'alejandro', role: 'admin' }]).catch((e) => console.error('[auth]', e.message));
 
-// Validates the token issued by /api/login (base64 "<user>:<issuedAt>").
-// The previous version compared against process.env.DASHBOARD_TOKEN, which is
-// never set anywhere -- so this middleware could only ever return 401.
-function isValidDashboardToken(token) {
-  if (!token) return false;
-  // Still honour an explicitly configured static token, if one is set.
-  if (process.env.DASHBOARD_TOKEN && token === process.env.DASHBOARD_TOKEN) return true;
-  try {
-    const decoded = Buffer.from(String(token), 'base64').toString('utf8');
-    const sep = decoded.lastIndexOf(':');
-    if (sep < 1) return false;
-    const user = decoded.slice(0, sep);
-    const issuedAt = Number(decoded.slice(sep + 1));
-    if (user !== DASHBOARD_USER) return false;
-    if (!Number.isFinite(issuedAt)) return false;
-    // Tokens are good for 7 days.
-    return Date.now() - issuedAt < 7 * 24 * 60 * 60 * 1000;
-  } catch (e) {
-    return false;
-  }
-}
-
-function requireAuth(req, res, next) {
-  const token = req.headers['x-dashboard-token'] || req.query.token;
-  if (!isValidDashboardToken(token)) {
-    return res.status(401).json({ error: 'Unauthorized', needsAuth: true });
-  }
-  next();
-}
-
-// Login endpoint
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
   const { username, password } = req.body || {};
-  if (username === DASHBOARD_USER && password === DASHBOARD_PASS) {
-    // In production, use proper JWT or session tokens
-    const token = Buffer.from(`${DASHBOARD_USER}:${Date.now()}`).toString('base64');
-    res.json({ success: true, token });
-  } else {
-    res.status(401).json({ error: 'Invalid credentials' });
-  }
+  const r = await auth.login(username, password).catch(() => null);
+  if (!r) return res.status(401).json({ error: 'Invalid credentials' });
+  res.json({ success: true, token: r.token, user: r.user });
 });
+
+app.get('/api/me', requireAuth, (req, res) => res.json(req.user));
+
+// Admin → Users
+const wrapA = (fn) => (req, res) => fn(req, res).catch((e) => res.status(e.status || 500).json({ error: e.message }));
+app.get('/api/users', auth.requireAdmin, wrapA(async (req, res) => res.json({ users: await auth.listUsers(), roles: auth.ROLES })));
+app.post('/api/users', auth.requireAdmin, wrapA(async (req, res) => { await auth.saveUser(req.body || {}, req.user.name); res.json({ success: true }); }));
+app.delete('/api/users/:name', auth.requireAdmin, wrapA(async (req, res) => { await auth.removeUser(req.params.name, req.user.name); res.json({ success: true }); }));
+
+// B2B proposal builder (Proposal Studio).
+require('./lib/proposals/routes').mountProposals(app, requireAuth, proposalStore);
 
 
 app.get('/api/status', (req, res) => {
