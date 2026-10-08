@@ -219,7 +219,7 @@
             {
               "tag": "Toda la oficina",
               "title": "AI Fluency aplicada a Gemini Enterprise",
-              "meta": "150 personas · 5 cohortes · 2 semanas · desde 299 € por persona",
+              "meta": "150 personas · 5 cohortes · 2 semanas · desde 284 € por persona",
               "bullets": [
                 "Prompting avanzado sobre el trabajo real de cada persona.",
                 "Asistentes propios en Gemini Enterprise conectados a su Workspace.",
@@ -230,15 +230,15 @@
               "tiers": [
                 {
                   "range": "1–49",
-                  "price": "399 €"
+                  "price": "385 €"
                 },
                 {
                   "range": "50–99",
-                  "price": "349 €"
+                  "price": "344 €"
                 },
                 {
-                  "range": "100–150",
-                  "price": "299 €",
+                  "range": "100–200",
+                  "price": "284 €",
                   "highlight": true
                 }
               ]
@@ -433,8 +433,8 @@
             [
               "AI Fluency aplicada a Gemini Enterprise",
               "150 · 5 cohortes",
-              "299 €",
-              "44.850 €"
+              "284 €",
+              "42.600 €"
             ],
             [
               "AI Builders",
@@ -452,8 +452,8 @@
           "total": [
             "Plan completo",
             "180 personas",
-            "916 € / persona",
-            "164.850 €"
+            "903 € / persona",
+            "162.600 €"
           ]
         },
         {
@@ -463,18 +463,18 @@
           "items": [
             {
               "range": "1–49 personas",
-              "price": "399 €",
+              "price": "385 €",
               "note": "Para empezar por un área"
             },
             {
               "range": "50–99 personas",
-              "price": "349 €",
+              "price": "344 €",
               "note": "Para varias áreas a la vez"
             },
             {
-              "range": "100–150 personas",
-              "price": "299 €",
-              "note": "Vuestro tramo: 150 personas = 44.850 €",
+              "range": "100–200 personas",
+              "price": "284 €",
+              "note": "Vuestro tramo: 150 personas = 42.600 €",
               "highlight": true
             }
           ],
@@ -484,7 +484,7 @@
           "kind": "panel",
           "title": "Los cuatro programas juntos:",
           "accent": "20 % de descuento.",
-          "text": "Cada programa se puede contratar por separado al precio de la tabla. Con el plan completo: 131.880 € (733 € por persona), 32.970 € de ahorro, y un workshop gratuito de Gemini Enterprise cada 2–3 meses."
+          "text": "Cada programa se puede contratar por separado al precio de la tabla. Con el plan completo: 130.080 € (723 € por persona), 32.520 € de ahorro, y un workshop gratuito de Gemini Enterprise cada 2–3 meses."
         },
         {
           "kind": "text",
