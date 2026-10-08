@@ -112,6 +112,8 @@ B2B proposals inside the dashboard (sidebar → **B2B → Proposal Studio**).
   Admin → Users (stored as a scrypt hash). The Railway login (`DASHBOARD_USER/PASS`, plus
   optional `DASHBOARD_USERS=name:pass[:admin]`) stays as the bootstrap admin.
   Set `TOKEN_SECRET` to a long random value.
+- **Brief (1 page).** Built automatically from the same version: title, people in numbers,
+  roadmap, investment table with the discount, next steps and contact. "Brief" button → Save as PDF.
 - **Google Docs version.** The "Google Docs" button downloads an .html that Google Drive
   opens as an editable Google Doc (same content, Docs-native tables and headings).
 - **Building blocks** Claude can use: stats, phases (roadmap), timeline (12-month Gantt),

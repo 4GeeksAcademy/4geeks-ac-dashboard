@@ -20,6 +20,7 @@ const PS_STR = {
     s_draft: 'Draft', s_in_review: 'In review', s_approved: 'Approved', s_sent: 'Sent', s_won: 'Won', s_lost: 'Lost',
     src_ai_draft: 'Claude draft', src_ai_revise: 'Claude edit', src_manual: 'Manual edit', src_clone: 'Cloned', src_seed: 'Imported',
     invalidJson: 'That is not valid JSON', brandNote: 'Always rendered with the 4Geeks brand kit.',
+    brief: 'Brief (1 page)', briefHint: 'One-page summary of this version: title, people, roadmap, investment, next steps and contact',
     gdoc: 'Google Docs', gdocHint: 'Downloads a file: upload it to Google Drive and open it with Google Docs to get an editable copy',
     users: 'Users', addUser: 'Add or update user', username: 'Username', role: 'Role', password: 'Password', newPassword: 'New password (10+ characters)', setPassword: 'Set password', remove: 'Remove', noPassword: 'No password yet — set one so they can sign in', fromEnv: 'Set in Railway variables', fromApp: 'Created in the app', role_admin: 'Admin · everything, including approvals, library and users', role_editor: 'Editor · leads + proposals; cannot approve, close, delete or manage users', confirmRemove: 'Remove this user?', saveUser: 'Save user',
   },
@@ -38,6 +39,7 @@ const PS_STR = {
     s_draft: 'Borrador', s_in_review: 'En revisión', s_approved: 'Aprobada', s_sent: 'Enviada', s_won: 'Ganada', s_lost: 'Perdida',
     src_ai_draft: 'Borrador de Claude', src_ai_revise: 'Cambio de Claude', src_manual: 'Edición manual', src_clone: 'Clonada', src_seed: 'Importada',
     invalidJson: 'Ese JSON no es válido', brandNote: 'Siempre con el kit de marca de 4Geeks.',
+    brief: 'Brief (1 página)', briefHint: 'Resumen de una página de esta versión: título, personas, hoja de ruta, inversión, próximos pasos y contacto',
     gdoc: 'Google Docs', gdocHint: 'Descarga un archivo: súbelo a Google Drive y ábrelo con Google Docs para tener una copia editable',
     users: 'Usuarios', addUser: 'Añadir o actualizar usuario', username: 'Usuario', role: 'Rol', password: 'Contraseña', newPassword: 'Nueva contraseña (10+ caracteres)', setPassword: 'Poner contraseña', remove: 'Eliminar', noPassword: 'Sin contraseña: ponle una para que pueda entrar', fromEnv: 'Definido en variables de Railway', fromApp: 'Creado en la app', role_admin: 'Admin · todo, incluidas aprobaciones, biblioteca y usuarios', role_editor: 'Editor · leads + propuestas; no puede aprobar, cerrar, borrar ni gestionar usuarios', confirmRemove: '¿Eliminar este usuario?', saveUser: 'Guardar usuario',
   },
@@ -154,6 +156,7 @@ async function psRenderDetail(el) {
       <div class="ps-top-actions">
         <select id="ps-status" class="ps-select">${PS_STATUSES.map((s) => `<option value="${s}" ${s === p.status ? 'selected' : ''} ${['approved', 'won', 'lost'].includes(s) && !admin ? 'disabled' : ''}>${esc(ps('s_' + s))}</option>`).join('')}</select>
         ${cur ? `<a class="btn ghost" href="/proposals/${p.id}/v/${cur}/gdoc?token=${encodeURIComponent(authToken)}" title="${esc(ps('gdocHint'))}">${icon('doc')}${esc(ps('gdoc'))}</a>
+        <a class="btn soft" href="/proposals/${p.id}/v/${cur}/brief?token=${encodeURIComponent(authToken)}&print=1" target="_blank" rel="noopener" title="${esc(ps('briefHint'))}">${icon('doc')}${esc(ps('brief'))}</a>
         <a class="btn primary" href="${viewUrl}&print=1" target="_blank" rel="noopener">${icon('download')}${esc(ps('pdf'))}</a>` : ''}
       </div>
     </div>
