@@ -350,66 +350,34 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json({ limit: '2mb' }));
 
 // ---------------------------------------------------------------------------
-// Auth — one login per person.
-//   DASHBOARD_USERS="marcelo:<pass>:admin,victor:<pass>,alejandro:<pass>:admin"
-//   (the legacy DASHBOARD_USER / DASHBOARD_PASS pair keeps working as an admin).
-// Tokens are "<user>.<issuedAt>.<hmac>" signed with TOKEN_SECRET, so they can't
-// be forged by base64-encoding a username (the old scheme allowed that).
+// Auth — one login per person, roles admin/editor (see lib/auth.js).
 // ---------------------------------------------------------------------------
-const crypto = require('crypto');
-const DASHBOARD_USER = process.env.DASHBOARD_USER || 'admin';
-const DASHBOARD_PASS = process.env.DASHBOARD_PASS || 'password';
-const USERS = new Map();
-USERS.set(DASHBOARD_USER, { name: DASHBOARD_USER, pass: DASHBOARD_PASS, admin: true });
-String(process.env.DASHBOARD_USERS || '').split(',').map((s) => s.trim()).filter(Boolean).forEach((entry) => {
-  const [name, pass, role] = entry.split(':');
-  if (name && pass) USERS.set(name.toLowerCase(), { name: name.toLowerCase(), pass, admin: role === 'admin' });
-});
-const TOKEN_SECRET = process.env.TOKEN_SECRET
-  || crypto.createHash('sha256').update('4geeks-dash:' + [...USERS.values()].map((u) => u.name + u.pass).join('|')).digest('hex');
-const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const sign = (payload) => crypto.createHmac('sha256', TOKEN_SECRET).update(payload).digest('base64url');
+const { createAuth } = require('./lib/auth');
+const { createStore } = require('./lib/proposals/store');
+const proposalStore = createStore();
+const auth = createAuth({ store: proposalStore });
+const requireAuth = auth.requireAuth;
+// Victor (editor) and Alejandro (admin) exist from the first boot; an admin
+// sets their passwords in Admin → Users before they can sign in.
+auth.ensureUsers([{ name: 'victor', role: 'editor' }, { name: 'alejandro', role: 'admin' }]).catch((e) => console.error('[auth]', e.message));
 
-function issueToken(user) {
-  const payload = `${Buffer.from(user).toString('base64url')}.${Date.now()}`;
-  return `${payload}.${sign(payload)}`;
-}
-
-// Returns the user for a valid token, or null.
-function userFromToken(token) {
-  if (!token) return null;
-  if (process.env.DASHBOARD_TOKEN && token === process.env.DASHBOARD_TOKEN) return { name: 'token', admin: true };
-  const parts = String(token).split('.');
-  if (parts.length !== 3) return null;
-  const [u64, issued, sig] = parts;
-  const expected = sign(`${u64}.${issued}`);
-  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
-  if (!(Date.now() - Number(issued) < TOKEN_TTL_MS)) return null;
-  const user = USERS.get(Buffer.from(u64, 'base64url').toString('utf8'));
-  return user ? { name: user.name, admin: user.admin } : null;
-}
-
-function requireAuth(req, res, next) {
-  const user = userFromToken(req.headers['x-dashboard-token'] || req.query.token);
-  if (!user) return res.status(401).json({ error: 'Unauthorized', needsAuth: true });
-  req.user = user;
-  next();
-}
-
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
   const { username, password } = req.body || {};
-  const key = String(username || '').trim();
-  const user = USERS.get(key) || USERS.get(key.toLowerCase());
-  const ok = user && password && user.pass.length === String(password).length
-    && crypto.timingSafeEqual(Buffer.from(user.pass), Buffer.from(String(password)));
-  if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
-  res.json({ success: true, token: issueToken(user.name), user: { name: user.name, admin: user.admin } });
+  const r = await auth.login(username, password).catch(() => null);
+  if (!r) return res.status(401).json({ error: 'Invalid credentials' });
+  res.json({ success: true, token: r.token, user: r.user });
 });
 
 app.get('/api/me', requireAuth, (req, res) => res.json(req.user));
 
+// Admin → Users
+const wrapA = (fn) => (req, res) => fn(req, res).catch((e) => res.status(e.status || 500).json({ error: e.message }));
+app.get('/api/users', auth.requireAdmin, wrapA(async (req, res) => res.json({ users: await auth.listUsers(), roles: auth.ROLES })));
+app.post('/api/users', auth.requireAdmin, wrapA(async (req, res) => { await auth.saveUser(req.body || {}, req.user.name); res.json({ success: true }); }));
+app.delete('/api/users/:name', auth.requireAdmin, wrapA(async (req, res) => { await auth.removeUser(req.params.name, req.user.name); res.json({ success: true }); }));
+
 // B2B proposal builder (Proposal Studio).
-require('./lib/proposals/routes').mountProposals(app, requireAuth);
+require('./lib/proposals/routes').mountProposals(app, requireAuth, proposalStore);
 
 
 app.get('/api/status', (req, res) => {

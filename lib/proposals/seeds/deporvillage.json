@@ -15,7 +15,7 @@
     "badge": "Propuesta AI Culture · Octubre 2026",
     "headline": "180 personas.",
     "accent": "Un solo equipo AI-First.",
-    "subhead": "Ya formasteis a toda la plantilla en Gemini. Ahora toca ganar con ello: 150 personas que trabajan con IA, 30 AI Champions que construyen agentes y un equipo de IT convertido en ingenieros de IA.",
+    "subhead": "Ya formasteis a toda la plantilla en Gemini. Ahora, a ganar con ello: IA en el trabajo de cada persona, agentes construidos en casa e IT convertido en ingenieros de IA.",
     "lineup_title": "Vuestra alineación para 2027",
     "lineup": [
       {
@@ -35,7 +35,6 @@
         "label": "incorporaciones al año, al nivel desde el día 1"
       }
     ],
-    "lineup_foot": "Cada persona termina con una automatización funcionando sobre su propio trabajo.",
     "proof": [
       {
         "value": "+8.000",
@@ -57,7 +56,15 @@
       "Miami Dade College",
       "Forbes",
       "Fortune"
-    ]
+    ],
+    "multiplier": {
+      "from": "180",
+      "from_label": "personas formadas",
+      "factor": "2",
+      "to": "360",
+      "to_label": "de capacidad desde el mes 2",
+      "note": "Una persona AI-First que trabaja con agentes bien entrenados rinde el doble: formáis a 180 y, desde el mes 2, contáis con la capacidad de 360."
+    }
   },
   "sections": [
     {
@@ -212,14 +219,29 @@
             {
               "tag": "Toda la oficina",
               "title": "AI Fluency aplicada a Gemini Enterprise",
-              "meta": "150 personas · 5 cohortes · 2 semanas",
+              "meta": "150 personas · 5 cohortes · 2 semanas · desde 299 € por persona",
               "bullets": [
                 "Prompting avanzado sobre el trabajo real de cada persona.",
                 "Asistentes propios en Gemini Enterprise conectados a su Workspace.",
                 "Automatización con la IA como paso de decisión.",
                 "Capstone con defensa ante instructor y compañeros."
               ],
-              "foot": "Sale con una automatización funcionando sobre su propio trabajo, no con apuntes."
+              "foot": "Sale con una automatización funcionando sobre su propio trabajo, no con apuntes.",
+              "tiers": [
+                {
+                  "range": "1–49",
+                  "price": "399 €"
+                },
+                {
+                  "range": "50–99",
+                  "price": "349 €"
+                },
+                {
+                  "range": "100–150",
+                  "price": "299 €",
+                  "highlight": true
+                }
+              ]
             },
             {
               "tag": "AI Champions",
@@ -282,7 +304,7 @@
         },
         {
           "kind": "cards",
-          "columns": 3,
+          "columns": 2,
           "title": "Una cultura de IA que no caduca",
           "items": [
             {
@@ -296,6 +318,12 @@
             {
               "title": "Sesión anual con un experto",
               "text": "Una sesión abierta para resolver preguntas de implementación de toda la plantilla."
+            },
+            {
+              "tag": "Solo plan completo",
+              "title": "Workshop Gemini Enterprise cada 2–3 meses",
+              "text": "Sin coste: novedades y lanzamientos de Gemini Enterprise y casos de éxito, aplicados a Deporvillage.",
+              "featured": true
             }
           ]
         },
@@ -378,8 +406,8 @@
     {
       "eyebrow": "Inversión",
       "headline": "Un plan completo.",
-      "accent": "Cada programa, a la carta.",
-      "lead": "El plan completo cubre a las 180 personas de la oficina durante 12 meses, más cada nueva incorporación. Cada programa se puede contratar por separado.",
+      "accent": "O a la carta.",
+      "lead": "180 personas durante 12 meses, más cada nueva incorporación. Cada programa por separado, o todos juntos con un 20 % de descuento.",
       "blocks": [
         {
           "kind": "table",
@@ -398,15 +426,15 @@
           "rows": [
             [
               "Onboarding IA",
-              "20 al año, reutilizables",
+              "20/año, reutilizables",
               "500 €",
               "10.000 € / año"
             ],
             [
               "AI Fluency aplicada a Gemini Enterprise",
               "150 · 5 cohortes",
-              "267 €",
-              "40.000 €"
+              "299 €",
+              "44.850 €"
             ],
             [
               "AI Builders",
@@ -424,44 +452,44 @@
           "total": [
             "Plan completo",
             "180 personas",
-            "889 € / persona",
-            "160.000 €"
+            "916 € / persona",
+            "164.850 €"
           ]
         },
         {
-          "kind": "stats",
+          "kind": "tiers",
+          "title": "AI Fluency: cuantas más personas, menos por persona",
+          "unit": "/ persona",
           "items": [
             {
-              "value": "160.000 €",
-              "label": "plan completo, 12 meses"
+              "range": "1–49 personas",
+              "price": "399 €",
+              "note": "Para empezar por un área"
             },
             {
-              "value": "889 €",
-              "label": "por persona de la oficina, todo incluido",
-              "tone": "amber"
+              "range": "50–99 personas",
+              "price": "349 €",
+              "note": "Para varias áreas a la vez"
             },
             {
-              "value": "Incluido",
-              "label": "actualización semestral, píldoras mensuales y sesión anual con un experto"
+              "range": "100–150 personas",
+              "price": "299 €",
+              "note": "Vuestro tramo: 150 personas = 44.850 €",
+              "highlight": true
             }
-          ]
+          ],
+          "foot": "El tramo se fija por el total de personas contratadas en el año, aunque se repartan en varias cohortes."
         },
         {
-          "kind": "table",
-          "title": "Condiciones de pago",
-          "columns": [
-            "Concepto",
-            "Esquema"
-          ],
-          "rows": [
-            [
-              "Onboarding IA",
-              "Suscripción anual, pago por adelantado"
-            ],
-            [
-              "AI Fluency, AI Builders y AI Engineering for Developers",
-              "60 % al iniciar cada programa, 40 % al finalizar"
-            ]
+          "kind": "panel",
+          "title": "Los cuatro programas juntos:",
+          "accent": "20 % de descuento.",
+          "text": "Cada programa se puede contratar por separado al precio de la tabla. Con el plan completo: 131.880 € (733 € por persona), 32.970 € de ahorro, y un workshop gratuito de Gemini Enterprise cada 2–3 meses."
+        },
+        {
+          "kind": "text",
+          "paragraphs": [
+            "**Condiciones de pago.** Onboarding IA: suscripción anual por adelantado. AI Fluency, AI Builders y AI Engineering for Developers: 60 % al iniciar cada programa y 40 % al finalizar."
           ]
         },
         {
@@ -578,21 +606,29 @@
               ]
             },
             {
-              "label": "Actualización",
-              "sub": "Contenidos y experto",
+              "label": "Actualización y workshops",
+              "sub": "Workshops: solo plan completo",
               "marks": [
                 {
+                  "at": 2.5,
+                  "text": "Workshop"
+                },
+                {
                   "at": 5.5,
-                  "text": "Revisión semestral"
+                  "text": "Workshop + revisión"
+                },
+                {
+                  "at": 8.5,
+                  "text": "Workshop"
                 },
                 {
                   "at": 11.5,
-                  "text": "Revisión + sesión experto"
+                  "text": "Workshop + revisión"
                 }
               ]
             }
           ],
-          "legend": "Fechas orientativas desde la firma; las cohortes se ajustan al calendario de Deporvillage. Azul: formación en vivo · Ámbar: AI Builders · Gris: continuo."
+          "legend": "Fechas orientativas desde la firma; las cohortes se ajustan al calendario de Deporvillage. Mes 12: sesión abierta con un experto. Azul: formación en vivo · Ámbar: AI Builders · Gris: continuo."
         },
         {
           "kind": "checklist",
@@ -615,12 +651,9 @@
           "people": [
             {
               "name": "Víctor Gómez",
-              "role": "4Geeks España"
-            },
-            {
-              "name": "Marcelo Ricigliano",
-              "role": "CEO y Co-founder, 4Geeks",
-              "email": "mricigliano@4geeksacademy.com"
+              "role": "4Geeks España",
+              "email": "vgomez@4geeks.co",
+              "phone": "+34 684 33 25 81"
             }
           ]
         }

@@ -20,6 +20,8 @@ const PS_STR = {
     s_draft: 'Draft', s_in_review: 'In review', s_approved: 'Approved', s_sent: 'Sent', s_won: 'Won', s_lost: 'Lost',
     src_ai_draft: 'Claude draft', src_ai_revise: 'Claude edit', src_manual: 'Manual edit', src_clone: 'Cloned', src_seed: 'Imported',
     invalidJson: 'That is not valid JSON', brandNote: 'Always rendered with the 4Geeks brand kit.',
+    gdoc: 'Google Docs', gdocHint: 'Downloads a file: upload it to Google Drive and open it with Google Docs to get an editable copy',
+    users: 'Users', addUser: 'Add or update user', username: 'Username', role: 'Role', password: 'Password', newPassword: 'New password (10+ characters)', setPassword: 'Set password', remove: 'Remove', noPassword: 'No password yet — set one so they can sign in', fromEnv: 'Set in Railway variables', fromApp: 'Created in the app', role_admin: 'Admin · everything, including approvals, library and users', role_editor: 'Editor · leads + proposals; cannot approve, close, delete or manage users', confirmRemove: 'Remove this user?', saveUser: 'Save user',
   },
   es: {
     newProposal: 'Nueva propuesta', proposals: 'Propuestas', client: 'Cliente', title: 'Título', owner: 'Responsable', status: 'Estado', version: 'Versión', updated: 'Actualizada',
@@ -36,6 +38,8 @@ const PS_STR = {
     s_draft: 'Borrador', s_in_review: 'En revisión', s_approved: 'Aprobada', s_sent: 'Enviada', s_won: 'Ganada', s_lost: 'Perdida',
     src_ai_draft: 'Borrador de Claude', src_ai_revise: 'Cambio de Claude', src_manual: 'Edición manual', src_clone: 'Clonada', src_seed: 'Importada',
     invalidJson: 'Ese JSON no es válido', brandNote: 'Siempre con el kit de marca de 4Geeks.',
+    gdoc: 'Google Docs', gdocHint: 'Descarga un archivo: súbelo a Google Drive y ábrelo con Google Docs para tener una copia editable',
+    users: 'Usuarios', addUser: 'Añadir o actualizar usuario', username: 'Usuario', role: 'Rol', password: 'Contraseña', newPassword: 'Nueva contraseña (10+ caracteres)', setPassword: 'Poner contraseña', remove: 'Eliminar', noPassword: 'Sin contraseña: ponle una para que pueda entrar', fromEnv: 'Definido en variables de Railway', fromApp: 'Creado en la app', role_admin: 'Admin · todo, incluidas aprobaciones, biblioteca y usuarios', role_editor: 'Editor · leads + propuestas; no puede aprobar, cerrar, borrar ni gestionar usuarios', confirmRemove: '¿Eliminar este usuario?', saveUser: 'Guardar usuario',
   },
 };
 const ps = (k) => (PS_STR[LANG] || PS_STR.en)[k] || PS_STR.en[k] || k;
@@ -148,8 +152,9 @@ async function psRenderDetail(el) {
       <div><h2 class="ps-h2">${esc(p.client)}${p.title ? ` <span class="muted">· ${esc(p.title)}</span>` : ''}</h2>
         <div class="muted">${esc(ps('owner'))}: ${esc(p.owner || '—')} · ${esc(psDate(p.updated_at))}</div></div>
       <div class="ps-top-actions">
-        <select id="ps-status" class="ps-select">${PS_STATUSES.map((s) => `<option value="${s}" ${s === p.status ? 'selected' : ''} ${s === 'approved' && !admin ? 'disabled' : ''}>${esc(ps('s_' + s))}</option>`).join('')}</select>
-        ${cur ? `<a class="btn primary" href="${viewUrl}&print=1" target="_blank" rel="noopener">${icon('download')}${esc(ps('pdf'))}</a>` : ''}
+        <select id="ps-status" class="ps-select">${PS_STATUSES.map((s) => `<option value="${s}" ${s === p.status ? 'selected' : ''} ${['approved', 'won', 'lost'].includes(s) && !admin ? 'disabled' : ''}>${esc(ps('s_' + s))}</option>`).join('')}</select>
+        ${cur ? `<a class="btn ghost" href="/proposals/${p.id}/v/${cur}/gdoc?token=${encodeURIComponent(authToken)}" title="${esc(ps('gdocHint'))}">${icon('doc')}${esc(ps('gdoc'))}</a>
+        <a class="btn primary" href="${viewUrl}&print=1" target="_blank" rel="noopener">${icon('download')}${esc(ps('pdf'))}</a>` : ''}
       </div>
     </div>
     <div class="ps-cols">
@@ -220,5 +225,35 @@ async function psRenderDetail(el) {
   });
 }
 
+// ---------------- Admin → Users ----------------
+async function renderUsers(el) {
+  el.innerHTML = '<div class="panel"><div class="skeleton" style="height:160px"></div></div>';
+  let data;
+  try { data = await psJson('/api/users'); } catch (e) { el.innerHTML = `<div class="panel state-card">${icon('alert')}<p>${esc(e.message)}</p></div>`; return; }
+  const roleOpts = (sel) => data.roles.map((r) => `<option value="${r}" ${r === sel ? 'selected' : ''}>${esc(r)}</option>`).join('');
+  el.innerHTML = `
+    <div class="panel ps-list"><table class="tbl ps-tbl"><thead><tr><th>${esc(ps('username'))}</th><th>${esc(ps('role'))}</th><th>${esc(ps('password'))}</th><th></th></tr></thead><tbody>
+      ${data.users.map((u) => `<tr data-u="${esc(u.name)}">
+        <td><strong>${esc(u.name)}</strong><div class="muted">${esc(u.source === 'env' ? ps('fromEnv') : ps('fromApp'))}</div></td>
+        <td>${u.source === 'env' ? esc(u.role) : `<select class="ps-select u-role">${roleOpts(u.role)}</select>`}<div class="muted">${esc(ps('role_' + u.role))}</div></td>
+        <td>${u.source === 'env' ? '—' : `${u.has_password ? '' : `<div class="ps-warn" style="margin:0 0 6px">${esc(ps('noPassword'))}</div>`}<input class="u-pass" type="password" autocomplete="new-password" placeholder="${esc(ps('newPassword'))}">`}</td>
+        <td>${u.source === 'env' ? '' : `<button class="btn soft sm u-save">${esc(ps('saveUser'))}</button> <button class="btn ghost sm u-del">${esc(ps('remove'))}</button>`}</td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="panel"><h3 class="ps-h3">${esc(ps('addUser'))}</h3>
+      <div class="ps-form"><div class="ps-grid3">
+        <label class="ps-f"><span>${esc(ps('username'))}</span><input id="nu-name" placeholder="maria"></label>
+        <label class="ps-f"><span>${esc(ps('role'))}</span><select id="nu-role">${roleOpts('editor')}</select></label>
+        <label class="ps-f"><span>${esc(ps('password'))}</span><input id="nu-pass" type="password" autocomplete="new-password" placeholder="${esc(ps('newPassword'))}"></label>
+      </div><div class="ps-actions"><button class="btn primary" id="nu-save">${icon('plus')}${esc(ps('saveUser'))}</button></div></div></div>`;
+  const save = async (body) => { try { await psJson('/api/users', { method: 'POST', body }); showToast(ps('saved')); renderUsers(el); } catch (e) { showToast(e.message); } };
+  $$('tr[data-u]', el).forEach((tr) => {
+    const name = tr.dataset.u;
+    const b = $('.u-save', tr); if (b) b.addEventListener('click', () => save({ name, role: $('.u-role', tr).value, password: $('.u-pass', tr).value || undefined }));
+    const d = $('.u-del', tr); if (d) d.addEventListener('click', async () => { if (!window.confirm(ps('confirmRemove'))) return; try { await psJson(`/api/users/${encodeURIComponent(name)}`, { method: 'DELETE' }); renderUsers(el); } catch (e) { showToast(e.message); } });
+  });
+  $('#nu-save', el).addEventListener('click', () => save({ name: $('#nu-name', el).value, role: $('#nu-role', el).value, password: $('#nu-pass', el).value }));
+}
+
+window.renderUsers = renderUsers;
 window.renderProposals = renderProposals;
 window.resetProposals = () => { psState.route = 'list'; psState.id = null; };

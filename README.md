@@ -105,9 +105,17 @@ B2B proposals inside the dashboard (sidebar → **B2B → Proposal Studio**).
 - **One source of truth.** `lib/proposals/library.js` holds programs, prices, proof
   points, ROI data with sources, payment terms and past deals. Admins can override
   any key via `PUT /api/proposal-library/:key`.
-- **Logins per person.** `DASHBOARD_USERS=marcelo:<pass>:admin,victor:<pass>,alejandro:<pass>:admin`.
-  Only admins approve proposals; a proposal is marked sent only after approval.
+- **Users and roles (Admin → Users).** `admin` can do everything (approve/close/delete
+  proposals, edit the library, manage users). `editor` uses the leads dashboard and
+  Proposal Studio but can't approve, close, delete or manage users. Victor (editor) and
+  Alejandro (admin) are created on first boot without a password: an admin sets it in
+  Admin → Users (stored as a scrypt hash). The Railway login (`DASHBOARD_USER/PASS`, plus
+  optional `DASHBOARD_USERS=name:pass[:admin]`) stays as the bootstrap admin.
   Set `TOKEN_SECRET` to a long random value.
+- **Google Docs version.** The "Google Docs" button downloads an .html that Google Drive
+  opens as an editable Google Doc (same content, Docs-native tables and headings).
+- **Building blocks** Claude can use: stats, phases (roadmap), timeline (12-month Gantt),
+  cards (with optional price tiers), tiers (volume pricing), tables, panels, checklists.
 - **Storage.** Add a Railway Postgres service and set `DATABASE_URL`. Without it,
   proposals go to `./data/proposals.json` (fine locally, lost on redeploy).
 - Model: `PROPOSALS_MODEL` (default `claude-opus-5-5`); needs `ANTHROPIC_API_KEY`.
