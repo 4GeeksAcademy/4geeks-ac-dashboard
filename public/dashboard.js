@@ -33,6 +33,9 @@ function fmtMoney(n, cur = 'USD') {
 }
 
 const I = { // inline icons (24px, stroke)
+  doc: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  download: '<path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/>',
   overview: '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/>',
   recommendations: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
   regions: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
@@ -170,7 +173,7 @@ const FILTER_BY_KEY = Object.fromEntries(FILTERS.map((f) => [f.key, f]));
 const fVals = (f, r) => (f.vals ? f.vals(r) : (r[f.key] != null && r[f.key] !== '' ? [String(r[f.key])] : []));
 const fLabel = (f, v) => (f.label ? f.label(v) : v);
 
-const VIEWS = ['overview', 'recommendations', 'regions', 'grouped', 'individual', 'ads', 'ai'];
+const VIEWS = ['overview', 'recommendations', 'regions', 'grouped', 'individual', 'ads', 'ai', 'proposals'];
 const state = { view: 'overview', region: 'all', q: '', dateFrom: '', dateTo: '', preset: '', gran: 'auto', page: 1, sort: { field: 'date', dir: 'desc' }, groupBy: 'assignTo', aiScope: 'both', adsRegion: 'US', recUsePeriod: '0' };
 FILTERS.forEach((f) => { state[f.key] = []; });
 
@@ -310,6 +313,8 @@ const NAV = [
   { section: 'navSectionMarketing' },
   { view: 'ads', icon: 'ads' },
   { view: 'ai', icon: 'ai' },
+  { section: 'navSectionB2B' },
+  { view: 'proposals', icon: 'doc' },
 ];
 function buildNav() {
   $('#nav').innerHTML = NAV.map((n) => (n.section
@@ -320,6 +325,7 @@ function buildNav() {
   $$('#nav .sb-item').forEach((b) => b.addEventListener('click', () => { go(b.dataset.view); $('#app').classList.remove('menu-open'); }));
 }
 function go(view) {
+  if (view === 'proposals') { delete $('#tab-proposals').dataset.ready; if (window.resetProposals) window.resetProposals(); }
   state.view = view; state.page = 1;
   $$('#nav .sb-item').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   buildFilterBar();
@@ -1216,6 +1222,11 @@ function renderAll(o = {}) {
   $('#page-sub').textContent = t('sub_' + state.view);
   VIEWS.forEach((v) => $('#tab-' + v).classList.toggle('active', v === state.view));
   const el = $('#tab-' + state.view);
+  // Proposal Studio has its own UI and doesn't use the lead filters or AC data.
+  const isProposals = state.view === 'proposals';
+  $('#filterbar').hidden = isProposals; $('#active-chips').hidden = isProposals;
+  // Render it once per visit: background lead refreshes must not wipe a half-filled intake.
+  if (isProposals) { if (!el.dataset.ready) { el.dataset.ready = '1'; window.renderProposals(el); } return; }
   const needsLeads = !['ads'].includes(state.view);
   if (needsLeads && !ALL.length) {
     el.innerHTML = META.loading

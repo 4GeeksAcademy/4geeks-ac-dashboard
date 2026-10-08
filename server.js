@@ -349,51 +349,67 @@ if (client) {
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json({ limit: '2mb' }));
 
-// Simple auth middleware
+// ---------------------------------------------------------------------------
+// Auth — one login per person.
+//   DASHBOARD_USERS="marcelo:<pass>:admin,victor:<pass>,alejandro:<pass>:admin"
+//   (the legacy DASHBOARD_USER / DASHBOARD_PASS pair keeps working as an admin).
+// Tokens are "<user>.<issuedAt>.<hmac>" signed with TOKEN_SECRET, so they can't
+// be forged by base64-encoding a username (the old scheme allowed that).
+// ---------------------------------------------------------------------------
+const crypto = require('crypto');
 const DASHBOARD_USER = process.env.DASHBOARD_USER || 'admin';
 const DASHBOARD_PASS = process.env.DASHBOARD_PASS || 'password';
+const USERS = new Map();
+USERS.set(DASHBOARD_USER, { name: DASHBOARD_USER, pass: DASHBOARD_PASS, admin: true });
+String(process.env.DASHBOARD_USERS || '').split(',').map((s) => s.trim()).filter(Boolean).forEach((entry) => {
+  const [name, pass, role] = entry.split(':');
+  if (name && pass) USERS.set(name.toLowerCase(), { name: name.toLowerCase(), pass, admin: role === 'admin' });
+});
+const TOKEN_SECRET = process.env.TOKEN_SECRET
+  || crypto.createHash('sha256').update('4geeks-dash:' + [...USERS.values()].map((u) => u.name + u.pass).join('|')).digest('hex');
+const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const sign = (payload) => crypto.createHmac('sha256', TOKEN_SECRET).update(payload).digest('base64url');
 
-// Validates the token issued by /api/login (base64 "<user>:<issuedAt>").
-// The previous version compared against process.env.DASHBOARD_TOKEN, which is
-// never set anywhere -- so this middleware could only ever return 401.
-function isValidDashboardToken(token) {
-  if (!token) return false;
-  // Still honour an explicitly configured static token, if one is set.
-  if (process.env.DASHBOARD_TOKEN && token === process.env.DASHBOARD_TOKEN) return true;
-  try {
-    const decoded = Buffer.from(String(token), 'base64').toString('utf8');
-    const sep = decoded.lastIndexOf(':');
-    if (sep < 1) return false;
-    const user = decoded.slice(0, sep);
-    const issuedAt = Number(decoded.slice(sep + 1));
-    if (user !== DASHBOARD_USER) return false;
-    if (!Number.isFinite(issuedAt)) return false;
-    // Tokens are good for 7 days.
-    return Date.now() - issuedAt < 7 * 24 * 60 * 60 * 1000;
-  } catch (e) {
-    return false;
-  }
+function issueToken(user) {
+  const payload = `${Buffer.from(user).toString('base64url')}.${Date.now()}`;
+  return `${payload}.${sign(payload)}`;
+}
+
+// Returns the user for a valid token, or null.
+function userFromToken(token) {
+  if (!token) return null;
+  if (process.env.DASHBOARD_TOKEN && token === process.env.DASHBOARD_TOKEN) return { name: 'token', admin: true };
+  const parts = String(token).split('.');
+  if (parts.length !== 3) return null;
+  const [u64, issued, sig] = parts;
+  const expected = sign(`${u64}.${issued}`);
+  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  if (!(Date.now() - Number(issued) < TOKEN_TTL_MS)) return null;
+  const user = USERS.get(Buffer.from(u64, 'base64url').toString('utf8'));
+  return user ? { name: user.name, admin: user.admin } : null;
 }
 
 function requireAuth(req, res, next) {
-  const token = req.headers['x-dashboard-token'] || req.query.token;
-  if (!isValidDashboardToken(token)) {
-    return res.status(401).json({ error: 'Unauthorized', needsAuth: true });
-  }
+  const user = userFromToken(req.headers['x-dashboard-token'] || req.query.token);
+  if (!user) return res.status(401).json({ error: 'Unauthorized', needsAuth: true });
+  req.user = user;
   next();
 }
 
-// Login endpoint
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body || {};
-  if (username === DASHBOARD_USER && password === DASHBOARD_PASS) {
-    // In production, use proper JWT or session tokens
-    const token = Buffer.from(`${DASHBOARD_USER}:${Date.now()}`).toString('base64');
-    res.json({ success: true, token });
-  } else {
-    res.status(401).json({ error: 'Invalid credentials' });
-  }
+  const key = String(username || '').trim();
+  const user = USERS.get(key) || USERS.get(key.toLowerCase());
+  const ok = user && password && user.pass.length === String(password).length
+    && crypto.timingSafeEqual(Buffer.from(user.pass), Buffer.from(String(password)));
+  if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+  res.json({ success: true, token: issueToken(user.name), user: { name: user.name, admin: user.admin } });
 });
+
+app.get('/api/me', requireAuth, (req, res) => res.json(req.user));
+
+// B2B proposal builder (Proposal Studio).
+require('./lib/proposals/routes').mountProposals(app, requireAuth);
 
 
 app.get('/api/status', (req, res) => {

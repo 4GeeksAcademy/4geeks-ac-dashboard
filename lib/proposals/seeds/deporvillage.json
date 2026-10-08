@@ -1,0 +1,533 @@
+{
+  "meta": {
+    "title": "Propuesta 4Geeks × Deporvillage · AI Culture",
+    "language": "es",
+    "currency": "EUR",
+    "page_size": "A4",
+    "date_label": "Octubre 2026",
+    "footer_label": "4Geeks · Propuesta AI Culture · Deporvillage · Confidencial"
+  },
+  "client": {
+    "name": "Deporvillage",
+    "country": "España"
+  },
+  "cover": {
+    "badge": "Propuesta AI Culture · Octubre 2026",
+    "headline": "180 personas.",
+    "accent": "Un solo equipo AI-First.",
+    "subhead": "Ya formasteis a toda la plantilla en Gemini. Ahora toca ganar con ello: 150 personas que trabajan con IA, 30 AI Champions que construyen agentes y un equipo de IT convertido en ingenieros de IA.",
+    "lineup_title": "Vuestra alineación para 2027",
+    "lineup": [
+      {
+        "value": "150",
+        "label": "personas con AI Fluency en Gemini Enterprise"
+      },
+      {
+        "value": "30",
+        "label": "AI Champions que construyen agentes"
+      },
+      {
+        "value": "35",
+        "label": "ingenieros de IA en el equipo de IT"
+      },
+      {
+        "value": "20",
+        "label": "incorporaciones al año, al nivel desde el día 1"
+      }
+    ],
+    "lineup_foot": "Cada persona termina con una automatización funcionando sobre su propio trabajo.",
+    "proof": [
+      {
+        "value": "+8.000",
+        "label": "graduados en EE. UU., España y LATAM"
+      },
+      {
+        "value": "11 años",
+        "label": "formando talento tech, desde 2015"
+      },
+      {
+        "value": "FLDOE",
+        "label": "certificación del Florida Dept. of Education"
+      }
+    ],
+    "recognized_label": "Nos reconocen",
+    "recognized": [
+      "Premios Excelencia Educativa",
+      "Escuela de IA de Europa",
+      "Miami Dade College",
+      "Forbes",
+      "Fortune"
+    ]
+  },
+  "sections": [
+    {
+      "eyebrow": "Resumen ejecutivo",
+      "headline": "Un plan por perfil.",
+      "accent": "Medido persona a persona.",
+      "lead": "Deporvillage ya formó a toda su plantilla en Gemini. El siguiente paso no es otro curso: es que la IA cambie cómo se trabaja cada día, medido persona a persona.",
+      "blocks": [
+        {
+          "kind": "stats",
+          "items": [
+            {
+              "value": "150",
+              "label": "personas con AI Fluency aplicada a Gemini Enterprise"
+            },
+            {
+              "value": "30",
+              "label": "AI Champions que pasan de usar a construir"
+            },
+            {
+              "value": "35",
+              "label": "personas de IT reconvertidas a AI Engineers"
+            },
+            {
+              "value": "20",
+              "label": "incorporaciones al año, al nivel de las Fases 1 y 2 desde su primera semana",
+              "tone": "amber"
+            }
+          ]
+        },
+        {
+          "kind": "steps",
+          "title": "El plan",
+          "items": [
+            {
+              "title": "Onboarding IA",
+              "text": "Cada nueva incorporación llega sola al nivel de las Fases 1 y 2.",
+              "when": "Semana 3"
+            },
+            {
+              "title": "AI Fluency",
+              "text": "150 personas rediseñan tareas reales con Gemini Enterprise.",
+              "when": "Meses 1–5"
+            },
+            {
+              "title": "AI Builders",
+              "text": "30 Champions construyen agentes sobre casos de negocio.",
+              "when": "Meses 2–6"
+            },
+            {
+              "title": "AI Engineering",
+              "text": "IT pasa a diseñar y desplegar sistemas de IA.",
+              "when": "Meses 2–6"
+            },
+            {
+              "title": "Una empresa AI-First",
+              "text": "Automatizaciones en marcha, agentes en producción y cultura viva.",
+              "when": "Mes 12",
+              "highlight": true
+            }
+          ]
+        },
+        {
+          "kind": "panel",
+          "title": "La única forma de implementar la IA",
+          "accent": "es implementándola.",
+          "text": "Cada persona termina con una automatización funcionando sobre su propio trabajo, y cada Champion con un caso de negocio defendido ante dirección."
+        }
+      ]
+    },
+    {
+      "eyebrow": "Lo que nos contasteis",
+      "headline": "Vuestra AI Culture,",
+      "accent": "en su fase decisiva.",
+      "lead": "Deporvillage lleva un recorrido claro, y esta propuesta continúa desde donde estáis hoy.",
+      "blocks": [
+        {
+          "kind": "steps",
+          "items": [
+            {
+              "n": "1",
+              "title": "Fase 1 · Hecha",
+              "text": "Formaciones de nivel 1 y 2 en Gemini y la suite de Google, con clases de prompting de 4 horas para toda la plantilla."
+            },
+            {
+              "n": "2",
+              "title": "Fase 2 · Hecha",
+              "text": "AI Operating Model: buen uso de la IA y cuándo acudir al comité de IA."
+            },
+            {
+              "n": "3",
+              "title": "Fase 3 · Ahora",
+              "text": "De Gemini Pro a Gemini Enterprise: qué es un agente, cómo consultarlo, para qué existe y cómo crearlo.",
+              "highlight": true
+            }
+          ]
+        },
+        {
+          "kind": "numbered",
+          "title": "Nos pedisteis cuatro cosas",
+          "items": [
+            {
+              "title": "Incorporaciones al día",
+              "text": "Que cada nueva incorporación (20–25 al año) llegue sola al nivel de las Fases 1 y 2, con un test de conocimientos."
+            },
+            {
+              "title": "Adopción real",
+              "text": "Que la plantilla use bien la IA y la abrace de verdad, más allá de resumir textos."
+            },
+            {
+              "title": "Champions que construyen",
+              "text": "Que los AI Champions, perfiles técnicos y de negocio, lideren el cambio creando herramientas, agentes y soluciones multiagente."
+            },
+            {
+              "title": "Contenido vivo",
+              "text": "Que los contenidos se revisen cada seis meses, porque la IA cambia más rápido que cualquier vídeo."
+            }
+          ]
+        },
+        {
+          "kind": "highlight",
+          "text": "Nuestra respuesta: un programa para cada perfil, todos sobre Gemini Enterprise, todos medidos por lo que cada persona construye."
+        }
+      ]
+    },
+    {
+      "eyebrow": "Programas",
+      "headline": "Cuatro programas.",
+      "accent": "Uno por perfil.",
+      "lead": "Cada persona recibe el programa que corresponde a lo que hará con la IA: usarla, aplicarla a su puesto, construir con ella o diseñar sistemas sobre ella.",
+      "blocks": [
+        {
+          "kind": "cards",
+          "columns": 2,
+          "items": [
+            {
+              "tag": "Nuevas incorporaciones",
+              "title": "Onboarding IA",
+              "meta": "20 plazas reutilizables al año · Online autoguiado",
+              "bullets": [
+                "Fundamentos de IA e ingeniería de prompts.",
+                "Módulo a medida con vuestro AI Operating Model y vuestro uso de Gemini Enterprise.",
+                "Test de conocimientos por módulo y reporting trimestral a Formación.",
+                "Mentoría 1:1 de 30 minutos por licencia; si no se usa, pasa a la siguiente incorporación."
+              ],
+              "foot": "Sale con el nivel de las Fases 1 y 2, sin convocar una sesión presencial para dos personas."
+            },
+            {
+              "tag": "Toda la oficina",
+              "title": "AI Fluency aplicada a Gemini Enterprise",
+              "meta": "150 personas · 5 cohortes · 2 semanas",
+              "bullets": [
+                "Prompting avanzado sobre el trabajo real de cada persona.",
+                "Asistentes propios en Gemini Enterprise conectados a su Workspace.",
+                "Automatización con la IA como paso de decisión.",
+                "Capstone con defensa ante instructor y compañeros."
+              ],
+              "foot": "Sale con una automatización funcionando sobre su propio trabajo, no con apuntes."
+            },
+            {
+              "tag": "AI Champions",
+              "title": "AI Builders",
+              "meta": "30 personas · 2 cohortes",
+              "featured": true,
+              "bullets": [
+                "Agentes de Gemini Enterprise sobre fuentes internas y orquestación.",
+                "Sistemas multiagente con guardrails y trazabilidad.",
+                "Gobierno de la IA: EU AI Act, RGPD y OWASP.",
+                "Casos de negocio elegidos con vosotros, con dueño interno y problema medible."
+              ],
+              "foot": "Cada cohorte cierra con un Demo Day ante dirección. Dos cohortes: mismo contenido, ritmo para perfiles técnicos y de negocio."
+            },
+            {
+              "tag": "Equipo de IT",
+              "title": "AI Engineering for Developers",
+              "meta": "35 personas · Reconversión técnica",
+              "bullets": [
+                "Agentes autónomos y servidores MCP.",
+                "Pipelines de datos, entrenamiento de modelos y RAG.",
+                "Tiempo real y ciberseguridad AI-first.",
+                "Desde React/Next.js con TypeScript y FastAPI o Flask."
+              ],
+              "foot": "IT pasa a construir en casa lo que hoy compraría fuera."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "eyebrow": "El retorno",
+      "headline": "Formar cuesta menos que contratar.",
+      "accent": "Y se queda en casa.",
+      "lead": "El 80 % de las empresas que adoptan IA generativa sin formación no ve impacto en sus resultados. La diferencia no es la herramienta: es que la gente sepa aplicarla a su trabajo.",
+      "blocks": [
+        {
+          "kind": "stats",
+          "items": [
+            {
+              "value": "~15.000 h",
+              "label": "de capacidad liberada al año si 150 personas ahorran 2,2 h por semana con IA",
+              "tone": "amber"
+            },
+            {
+              "value": "234 %",
+              "label": "de ROI en organizaciones con capacitación formal en IA"
+            },
+            {
+              "value": "+56 %",
+              "label": "de prima salarial que se evita pagar fuera al formar talento de IA dentro"
+            }
+          ]
+        },
+        {
+          "kind": "panel",
+          "title": "Cumplimiento incluido:",
+          "accent": "EU AI Act, artículo 4.",
+          "text": "Desde el 2 de febrero de 2025, las empresas que usan IA deben garantizar un nivel suficiente de alfabetización en IA de su personal. Este plan deja evidencia persona a persona: tests, capstones y reporting."
+        },
+        {
+          "kind": "cards",
+          "columns": 3,
+          "title": "Una cultura de IA que no caduca",
+          "items": [
+            {
+              "title": "Actualización semestral",
+              "text": "Revisamos el Onboarding IA y los módulos de Gemini Enterprise cada seis meses."
+            },
+            {
+              "title": "Píldoras mensuales",
+              "text": "Novedades de IA aplicables a vuestro trabajo, listas para vuestras comunicaciones de AI Culture."
+            },
+            {
+              "title": "Sesión anual con un experto",
+              "text": "Una sesión abierta para resolver preguntas de implementación de toda la plantilla."
+            }
+          ]
+        },
+        {
+          "kind": "note",
+          "text": "Fuentes: Enterprise AI Training Report 2025 (ROI); PwC Global AI Jobs Barometer 2025 (prima salarial); MIT, The GenAI Divide 2025 (impacto sin formación); Federal Reserve Bank of St. Louis 2025 (horas ahorradas). Horas liberadas: estimación de 4Geeks, 150 personas × 2,2 h × 46 semanas."
+        }
+      ]
+    },
+    {
+      "eyebrow": "Quiénes somos",
+      "headline": "Formamos talento tecnológico.",
+      "accent": "AI-First.",
+      "lead": "4Geeks es una escuela de tecnología AI-First: la IA no es un curso aparte, es la forma de aprender y de trabajar en cada programa, con tutor IA, copilots y agentes desde la primera semana.",
+      "blocks": [
+        {
+          "kind": "stats",
+          "items": [
+            {
+              "value": "3",
+              "label": "regiones con operación propia: EE. UU., España y Latinoamérica"
+            },
+            {
+              "value": "FLDOE",
+              "label": "certificación del Florida Department of Education"
+            },
+            {
+              "value": "Clark",
+              "label": "University avala nuestros programas"
+            },
+            {
+              "value": "BID",
+              "label": "y gobiernos financian programas que ejecutamos",
+              "tone": "amber"
+            }
+          ]
+        },
+        {
+          "kind": "table",
+          "title": "Lo que ya construimos con organizaciones",
+          "columns": [
+            "Organización",
+            "Proyecto"
+          ],
+          "rows": [
+            [
+              "Banco líder en Perú",
+              "Reskilling de desarrolladores hacia tecnologías modernas, en grupos paralelos con horarios distintos."
+            ],
+            [
+              "Miami Dade College (EE. UU.)",
+              "Catálogo de cursos asíncronos de IA aplicada en un campus propio de la institución."
+            ],
+            [
+              "UTEC (Uruguay)",
+              "Formación de 46 estudiantes en Ciberseguridad y Desarrollo Full Stack con IA, part-time."
+            ],
+            [
+              "BID y Gobierno de Bahamas",
+              "Programas con financiación pública y reporte de desempeño por estudiante para el cliente."
+            ]
+          ]
+        },
+        {
+          "kind": "cards",
+          "columns": 2,
+          "items": [
+            {
+              "title": "LearnPack",
+              "text": "Nuestra plataforma de ejercicios prácticos autocorregidos: se aprende haciendo, sobre casos reales."
+            },
+            {
+              "title": "Rigobot",
+              "text": "Tutor IA 24/7 integrado en cada lección, que se adapta al contexto y a las herramientas de cada empresa."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "eyebrow": "Inversión",
+      "headline": "Un plan completo.",
+      "accent": "Cada programa, a la carta.",
+      "lead": "El plan completo cubre a las 180 personas de la oficina durante 12 meses, más cada nueva incorporación. Cada programa se puede contratar por separado.",
+      "blocks": [
+        {
+          "kind": "table",
+          "columns": [
+            "Programa",
+            "Participantes",
+            "Por participante",
+            "Inversión"
+          ],
+          "align": [
+            "l",
+            "l",
+            "r",
+            "r"
+          ],
+          "rows": [
+            [
+              "Onboarding IA",
+              "20 al año, reutilizables",
+              "500 €",
+              "10.000 € / año"
+            ],
+            [
+              "AI Fluency aplicada a Gemini Enterprise",
+              "150 · 5 cohortes",
+              "267 €",
+              "40.000 €"
+            ],
+            [
+              "AI Builders",
+              "30 · 2 cohortes",
+              "2.000 €",
+              "60.000 €"
+            ],
+            [
+              "AI Engineering for Developers",
+              "35",
+              "1.429 €",
+              "50.000 €"
+            ]
+          ],
+          "total": [
+            "Plan completo",
+            "180 personas",
+            "889 € / persona",
+            "160.000 €"
+          ]
+        },
+        {
+          "kind": "stats",
+          "items": [
+            {
+              "value": "160.000 €",
+              "label": "plan completo, 12 meses"
+            },
+            {
+              "value": "889 €",
+              "label": "por persona de la oficina, todo incluido",
+              "tone": "amber"
+            },
+            {
+              "value": "Incluido",
+              "label": "actualización semestral, píldoras mensuales y sesión anual con un experto"
+            }
+          ]
+        },
+        {
+          "kind": "table",
+          "title": "Condiciones de pago",
+          "columns": [
+            "Concepto",
+            "Esquema"
+          ],
+          "rows": [
+            [
+              "Onboarding IA",
+              "Suscripción anual, pago por adelantado"
+            ],
+            [
+              "AI Fluency, AI Builders y AI Engineering for Developers",
+              "60 % al iniciar cada programa, 40 % al finalizar"
+            ]
+          ]
+        },
+        {
+          "kind": "note",
+          "text": "Las 180 personas de la oficina incluyen a los 30 AI Champions y a las 35 personas de IT, que también cursan AI Fluency. Importes en euros, IVA no incluido."
+        }
+      ]
+    },
+    {
+      "eyebrow": "Calendario y próximos pasos",
+      "headline": "En marcha en",
+      "accent": "tres semanas.",
+      "lead": "Desde la firma, el Onboarding IA está activo en tres semanas y la primera cohorte de AI Fluency arranca en el primer mes.",
+      "blocks": [
+        {
+          "kind": "numbered",
+          "items": [
+            {
+              "title": "Semanas 0–3 · Puesta en marcha",
+              "text": "Módulo a medida con vuestro AI Operating Model y Gemini Enterprise; Onboarding IA activo."
+            },
+            {
+              "title": "Mes 1 · Selección de casos",
+              "text": "Con dirección y los AI Champions elegimos los casos de AI Builders, cada uno con dueño interno y métrica."
+            },
+            {
+              "title": "Meses 1–5 · AI Fluency",
+              "text": "Cinco cohortes de 30 personas, con capstone al cierre de cada una."
+            },
+            {
+              "title": "Meses 2–6 · AI Builders y AI Engineering",
+              "text": "Dos cohortes de Champions con Demo Day ante dirección; reconversión del equipo de IT en paralelo."
+            },
+            {
+              "title": "Meses 6 y 12 · Actualización",
+              "text": "Revisión semestral de contenidos y sesión abierta con un experto."
+            }
+          ]
+        },
+        {
+          "kind": "checklist",
+          "title": "Para avanzar, Deporvillage confirma",
+          "items": [
+            "Programas y volúmenes, en la reunión de seguimiento con Formación",
+            "Listado de AI Champions y de personas de IT participantes",
+            "Acceso al AI Operating Model para producir el módulo a medida",
+            "Firma del acuerdo e inicio de la puesta en marcha"
+          ]
+        },
+        {
+          "kind": "panel",
+          "title": "Construyamos juntos la Deporvillage",
+          "accent": "AI-First.",
+          "text": "Un plan por perfil, medido persona a persona, con la IA como copiloto desde el primer día."
+        },
+        {
+          "kind": "signature",
+          "people": [
+            {
+              "name": "Víctor Gómez",
+              "role": "4Geeks España"
+            },
+            {
+              "name": "Marcelo Ricigliano",
+              "role": "CEO y Co-founder, 4Geeks",
+              "email": "mricigliano@4geeksacademy.com"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

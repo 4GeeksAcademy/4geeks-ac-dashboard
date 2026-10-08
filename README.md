@@ -87,3 +87,29 @@ git push -u origin main
 - If you add authentication later (recommended before sharing the Railway URL widely,
   since deal/contact data includes PII), Railway supports simple env-var-gated basic auth
   middleware — ask and I'll wire it in.
+
+## Proposal Studio (Oct 2026)
+
+B2B proposals inside the dashboard (sidebar → **B2B → Proposal Studio**).
+
+- **Intake → Claude draft → versions → branded PDF.** The team fills the deal intake
+  (client, headcount, what they asked for, programs with people and price, call notes).
+  "Draft with Claude" writes the proposal as structured JSON; "Ask Claude to change"
+  applies one instruction and saves a new version. Every save is a version (v1, v2…)
+  with author, note and source; any version can be opened, printed or duplicated
+  for another client.
+- **Always on brand.** Claude writes content only. `lib/proposals/render.js` lays it
+  out with the 4Geeks brand kit (Inter, #2381FF, italic-blue key phrase, current
+  logo in `public/brand/`). "Download PDF" opens the print dialog → Save as PDF.
+  To swap in the high-resolution logo, replace `public/brand/4geeks-logo-dark.png`.
+- **One source of truth.** `lib/proposals/library.js` holds programs, prices, proof
+  points, ROI data with sources, payment terms and past deals. Admins can override
+  any key via `PUT /api/proposal-library/:key`.
+- **Logins per person.** `DASHBOARD_USERS=marcelo:<pass>:admin,victor:<pass>,alejandro:<pass>:admin`.
+  Only admins approve proposals; a proposal is marked sent only after approval.
+  Set `TOKEN_SECRET` to a long random value.
+- **Storage.** Add a Railway Postgres service and set `DATABASE_URL`. Without it,
+  proposals go to `./data/proposals.json` (fine locally, lost on redeploy).
+- Model: `PROPOSALS_MODEL` (default `claude-opus-5-5`); needs `ANTHROPIC_API_KEY`.
+- Build a PDF from the CLI: `node -e "…renderProposal(json)…"` then any HTML→PDF tool;
+  `lib/proposals/seeds/deporvillage.json` is the reference example.
