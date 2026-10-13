@@ -351,6 +351,8 @@ tr.clickrow{cursor:pointer;}
 /* Ads */
 .ads-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;}
 .ads-status{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+.ads-ctrls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.ads-ctrls:empty{display:none;}
 .upload-zone{border:2px dashed var(--border-strong);border-radius:14px;padding:22px;text-align:center;color:var(--body);cursor:pointer;margin-top:10px;}
 .upload-zone.drag{border-color:var(--blue);background:var(--blue-tint);}
 .file-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12.5px;}

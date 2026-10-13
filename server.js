@@ -1132,7 +1132,9 @@ function normalizeCenterAds(data, region) {
     ctr: _pickNum(s, ['avg_ctr', 'ctr']),
     cpc: _pickNum(s, ['avg_cpc', 'cpc']),
     conversions: _pickNum(s, ['conversions']),
-    wonPaid: _pickNum(s, ['won_paid']),
+    // Paid sales follow the attribution: in 'same' (Gen+Close) Center sends them as
+    // won_paid_same; won_paid is always by close date, whatever the mode.
+    wonPaid: _pickNum(s, data.sales_mode === 'same' ? ['won_paid_same', 'won_paid'] : ['won_paid']),
     activeCampaigns: _pickNum(s, ['active_campaigns']),
   };
   const channels = (Array.isArray(data.channels) ? data.channels : []).map((c) => ({
@@ -1175,6 +1177,7 @@ function normalizeCenterAds(data, region) {
   return {
     region,
     currency,
+    salesMode: data.sales_mode || null, // attribution Center actually applied (echo)
     summary,
     channels,
     campaigns,
@@ -1232,7 +1235,10 @@ app.get('/api/ads-performance', requireAuth, async (req, res) => {
     endDate = now.toISOString().slice(0, 10);
     startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   }
-  const cacheKey = `${region}|${startDate}|${endDate}`;
+  // Sales attribution, as Center's own toggle: 'same' = lead generated AND won in
+  // the period (Gen+Close); anything else = Center's default 'close' (by won date).
+  const salesMode = req.query.sales_mode === 'same' ? 'same' : 'close';
+  const cacheKey = `${region}|${startDate}|${endDate}|${salesMode}`;
 
   // No key configured: show the layout with sample data locally, or 503 in prod.
   if (!CENTER_ADS_API_KEY) {
@@ -1254,6 +1260,7 @@ app.get('/api/ads-performance', requireAuth, async (req, res) => {
   url.searchParams.set('region', region);
   if (startDate) url.searchParams.set('start_date', startDate);
   if (endDate) url.searchParams.set('end_date', endDate);
+  if (salesMode === 'same') url.searchParams.set('sales_mode', 'same'); // 'close' = Center's default, sent as before
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 20000);
