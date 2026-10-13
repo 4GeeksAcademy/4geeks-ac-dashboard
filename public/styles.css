@@ -432,3 +432,7 @@ a.sb-item:hover{text-decoration:none;}
 .ps-preview{width:100%;height:calc(100vh - 150px);min-height:600px;border:1px solid var(--border);border-radius:var(--radius);background:#EEF1F6;}
 @media (max-width:1100px){.ps-cols{grid-template-columns:1fr;} .ps-right{position:static;}}
 @media (max-width:640px){.ps-grid2,.ps-grid3{grid-template-columns:1fr;} .ps-prow{grid-template-columns:1fr 1fr;}}
+
+/* Press (4G Press) */
+.press-ctrls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.press-ctrls .seg{flex-wrap:wrap;}

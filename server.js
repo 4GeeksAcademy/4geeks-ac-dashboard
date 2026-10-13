@@ -1286,4 +1286,66 @@ app.get('/api/ads-performance', requireAuth, async (req, res) => {
   }
 });
 
+// ───────────────────────── 4G Press (press releases) ─────────────────────────
+// Read-only summary of the press-release campaign that lives in 4G Press
+// (https://4gpress.duckdns.org): KPIs, releases, pickups, per-country table and
+// AI visibility. Server-to-server with a dedicated READ-ONLY key (4G Press env
+// PRESS_PUBLIC_API_KEY), cached 10 min, last good payload served if 4G Press is
+// down. Every signed-in user can see it; use auth.requireAdmin to restrict it.
+const PRESS_API_URL = process.env.PRESS_API_URL || 'https://4gpress.duckdns.org/api/public/press-summary';
+const PRESS_API_KEY = process.env.PRESS_API_KEY || '';
+const PRESS_TTL_MS = Number(process.env.PRESS_TTL_SECONDS || 600) * 1000;
+// Only these top-level fields are passed to the browser (4G Press already
+// strips release bodies, notes and users; this keeps it that way).
+const PRESS_FIELDS = ['generatedAt', 'appUrl', 'country', 'statuses', 'stats', 'byCountry', 'geo', 'radar', 'releases', 'pickups'];
+const PRESS_RELEASE_FIELDS = ['id', 'headline', 'country', 'flag', 'lang', 'status', 'theme', 'platform', 'cost', 'target_date', 'sent_date', 'published_date', 'pickups', 'appearances', 'url'];
+const PRESS_PICKUP_FIELDS = ['id', 'release_id', 'release_headline', 'outlet', 'url', 'kind', 'status', 'mentions', 'published_at', 'last_checked_at'];
+const _pressPick = (o, keys) => Object.fromEntries(keys.map((k) => [k, o && o[k] !== undefined ? o[k] : null]));
+const _pressCache = new Map();     // country -> { at, data }
+const _pressLastGood = new Map();  // country -> data
+
+app.get('/api/press', requireAuth, async (req, res) => {
+  const country = String(req.query.pais || '').trim().slice(0, 40);
+  const cacheKey = country.toLowerCase();
+  if (!PRESS_API_KEY) {
+    return res.status(503).json({ error: 'PRESS_API_KEY is not set. Add it as an environment variable (in Railway) to show 4G Press live.', needsKey: true });
+  }
+  const cached = _pressCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < PRESS_TTL_MS) {
+    return res.json({ ...cached.data, _cache: { stale: false, ageSeconds: Math.round((Date.now() - cached.at) / 1000) } });
+  }
+  const url = new URL(PRESS_API_URL);
+  if (country) url.searchParams.set('pais', country);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  const fallback = (error) => {
+    const stale = _pressLastGood.get(cacheKey);
+    return stale ? res.json({ ...stale, _cache: { stale: true, error } }) : null;
+  };
+  try {
+    const r = await fetch(url.toString(), { headers: { 'X-Api-Key': PRESS_API_KEY, Accept: 'application/json' }, signal: controller.signal });
+    clearTimeout(timer);
+    if (!r.ok) {
+      if (fallback(`4G Press ${r.status}`)) return;
+      return res.status(r.status === 401 ? 502 : r.status).json({
+        error: r.status === 401 ? 'PRESS_API_KEY was rejected by 4G Press (401).' : `4G Press returned ${r.status}.`,
+      });
+    }
+    const raw = await r.json();
+    if (!raw || typeof raw !== 'object' || !raw.stats || typeof raw.stats !== 'object' || !Array.isArray(raw.releases)) {
+      throw new Error('unexpected response shape from 4G Press');
+    }
+    const data = Object.fromEntries(PRESS_FIELDS.map((f) => [f, raw[f] ?? null]));
+    data.releases = raw.releases.map((x) => _pressPick(x, PRESS_RELEASE_FIELDS));
+    data.pickups = (Array.isArray(raw.pickups) ? raw.pickups : []).map((x) => _pressPick(x, PRESS_PICKUP_FIELDS));
+    _pressCache.set(cacheKey, { at: Date.now(), data });
+    _pressLastGood.set(cacheKey, data);
+    res.json({ ...data, _cache: { stale: false, ageSeconds: 0 } });
+  } catch (e) {
+    clearTimeout(timer);
+    if (fallback(e.message)) return;
+    res.status(504).json({ error: `Could not reach 4G Press: ${e.message}` });
+  }
+});
+
 app.listen(PORT, () => console.log(`4Geeks AC dashboard listening on :${PORT}`));

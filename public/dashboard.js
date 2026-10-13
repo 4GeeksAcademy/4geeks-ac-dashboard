@@ -44,6 +44,7 @@ const I = { // inline icons (24px, stroke)
   individual: '<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M17 11h5M19.5 8.5v5"/>',
   ads: '<path d="M3 11v3a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M16 8a5 5 0 0 1 0 8M19 5a9 9 0 0 1 0 14"/>',
   ai: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
+  press: '<path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8M15 18h-5M10 6h8v4h-8z"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>',
   collapse: '<path d="m11 17-5-5 5-5M18 17l-5-5 5-5"/>',
   menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
@@ -174,7 +175,7 @@ const FILTER_BY_KEY = Object.fromEntries(FILTERS.map((f) => [f.key, f]));
 const fVals = (f, r) => (f.vals ? f.vals(r) : (r[f.key] != null && r[f.key] !== '' ? [String(r[f.key])] : []));
 const fLabel = (f, v) => (f.label ? f.label(v) : v);
 
-const VIEWS = ['overview', 'recommendations', 'regions', 'grouped', 'individual', 'ads', 'ai', 'proposals', 'users'];
+const VIEWS = ['overview', 'recommendations', 'regions', 'grouped', 'individual', 'ads', 'ai', 'press', 'proposals', 'users'];
 const state = { view: 'overview', region: 'all', q: '', dateFrom: '', dateTo: '', preset: '', gran: 'auto', page: 1, sort: { field: 'date', dir: 'desc' }, groupBy: 'assignTo', aiScope: 'both', adsRegion: 'US', recUsePeriod: '0' };
 FILTERS.forEach((f) => { state[f.key] = []; });
 
@@ -314,6 +315,7 @@ const NAV = [
   { section: 'navSectionMarketing' },
   { view: 'ads', icon: 'ads' },
   { view: 'ai', icon: 'ai' },
+  { view: 'press', icon: 'press' },
   { section: 'navSectionB2B' },
   { view: 'proposals', icon: 'doc' },
   { section: 'navSectionAdmin', adminOnly: true },
@@ -1216,6 +1218,86 @@ async function askAI(rows) {
   entry.loading = false; drawThread();
 }
 
+// ───────────────────────── press (4G Press) ─────────────────────────
+// Read-only view of the press-release campaign run in 4G Press: releases, where
+// they got picked up, mentions, per-country KPIs and AI visibility (GEO). The
+// workflow itself (writing, sending, tracking) stays in 4G Press.
+const pressCache = new Map();
+state.pressCountry = ''; // ISO code ('' = all countries)
+async function fetchPress(country) {
+  const k = country || 'all';
+  if (pressCache.has(k) && Date.now() - pressCache.get(k).at < 5 * 60 * 1000) return pressCache.get(k).res;
+  const res = await api('/api/press' + (country ? '?pais=' + encodeURIComponent(country) : ''));
+  const data = await res.json().catch(() => ({}));
+  const out = { ok: res.ok, data };
+  if (res.ok) pressCache.set(k, { at: Date.now(), res: out });
+  return out;
+}
+// 4G Press sends canonical country names in Spanish plus a flag emoji: the flag
+// gives the ISO code, and Intl names the country in the dashboard's language.
+function flagIso(flag) {
+  const cps = [...String(flag || '')].map((c) => c.codePointAt(0) - 0x1F1E6);
+  return cps.length === 2 && cps.every((n) => n >= 0 && n < 26) ? String.fromCharCode(65 + cps[0], 65 + cps[1]) : '';
+}
+function pressCountryName(name, flag) {
+  const iso = flagIso(flag);
+  if (iso) { try { return new Intl.DisplayNames([LANG], { type: 'region' }).of(iso) || name || iso; } catch (e) { /* older browsers: keep 4G Press' name */ } }
+  return name || '—';
+}
+const PRESS_STATUS = { Idea: ['ps_idea', 'b-neutral'], Borrador: ['ps_draft', 'b-neutral'], 'En revisión': ['ps_review', 'b-neutral'], Aprobada: ['ps_approved', 'b-other'], Enviada: ['ps_sent', 'b-other'], Publicada: ['ps_published', 'b-won'], Pendiente: ['pk_pending', 'b-neutral'], Activa: ['pk_live', 'b-won'], 'Sin mención': ['pk_nomention', 'b-lostu'], 'Caída': ['pk_down', 'b-lostc'] };
+const pressStatusLabel = (s) => (PRESS_STATUS[s] ? t(PRESS_STATUS[s][0]) : String(s || '—'));
+const pressBadge = (s) => `<span class="badge ${PRESS_STATUS[s] ? PRESS_STATUS[s][1] : 'b-neutral'}">${esc(pressStatusLabel(s))}</span>`;
+const pressPct = (x) => (x == null || isNaN(x) ? '—' : Math.round(Number(x) * 100) + '%');
+const pressUrl = (u) => (/^https?:\/\//i.test(String(u || '')) ? String(u) : '');
+async function renderPress(el) {
+  el.innerHTML = `<div class="panel"><div class="ads-bar">
+      <div class="ads-status" id="press-status"><span class="dots"><span></span><span></span><span></span></span></div>
+      <div class="press-ctrls" id="press-ctrls"></div>
+    </div></div><div id="press-body"><div class="panel"><div class="skeleton" style="height:90px"></div><div class="skeleton" style="height:220px"></div></div></div>`;
+  let out;
+  try { out = await fetchPress(state.pressCountry); } catch (e) { if (state.view === 'press') $('#press-body').innerHTML = `<div class="panel state-card">${icon('alert')}<p>${esc(t('networkError'))}</p><p class="muted">${esc(e.message)}</p></div>`; return; }
+  if (state.view !== 'press') return;
+  const body = $('#press-body'); const st = $('#press-status'); const d = out.data || {};
+  if (!out.ok) { st.innerHTML = ''; body.innerHTML = `<div class="panel state-card">${icon('alert')}<p style="font-weight:700">${esc(d.needsKey ? t('pressNeedsKey') : t('pressError'))}</p><p class="muted">${esc(d.error || '')}</p></div>`; return; }
+  const s = d.stats || {}; const geo = d.geo || s.geo || {}; const by = d.byCountry || []; const rel = d.releases || []; const pk = d.pickups || [];
+  const app = (pressUrl(d.appUrl) || 'https://4gpress.duckdns.org').replace(/\/$/, '');
+  const cur = by.find((r) => flagIso(r.flag) === state.pressCountry);
+  const c = d._cache || {};
+  st.innerHTML = `${c.stale ? `<span class="badge plain b-lostu">${esc(t('pressStale'))}</span>` : `<span class="badge b-won">${esc(t('adsLive'))}</span>`}<b>${esc(state.pressCountry ? `${cur ? cur.flag + ' ' : ''}${pressCountryName(d.country, cur && cur.flag)}` : t('pressAll'))}</b>${d.generatedAt ? ` · ${esc(t('pressUpdated', { d: new Date(d.generatedAt).toLocaleString(LANG === 'es' ? 'es-ES' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' }) }))}` : ''}`;
+  $('#press-ctrls').innerHTML = (by.length ? `<div class="seg" id="press-ct"><button data-c="" class="${state.pressCountry ? '' : 'active'}">${esc(t('pressAll'))}</button>${by.map((r) => { const iso = flagIso(r.flag); return iso ? `<button data-c="${esc(iso)}" class="${iso === state.pressCountry ? 'active' : ''}">${esc(r.flag)} ${esc(pressCountryName(r.country, r.flag))}</button>` : ''; }).join('')}</div>` : '')
+    + `<a class="btn ghost sm" href="${esc(app)}/app${state.pressCountry ? '?pais=' + encodeURIComponent(state.pressCountry) : ''}" target="_blank" rel="noopener">${icon('external')}${esc(t('pressOpen'))}</a>`;
+  $$('#press-ct button').forEach((b) => b.addEventListener('click', () => { state.pressCountry = b.dataset.c; renderPress(el); }));
+
+  const k = (lbl, val, cls = '', title = '') => `<div class="kpi ${cls}"><div class="k-lbl">${esc(lbl)}</div><div class="k-val" ${title ? `title="${esc(title)}" style="font-size:15px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"` : ''}>${val}</div></div>`;
+  const bs = s.byStatus || {};
+  const sent = (bs.Enviada || 0) + (bs.Publicada || 0);
+  const next = s.nextRelease;
+  const kpis = `<div class="kpis">${k(t('pressReleases'), aNum(s.releases), 'hl-blue')}${k(t('pressSent'), aNum(sent))}${k(t('pressAppearances'), aNum(s.appearances), 'hl-good')}${k(t('pressOutlets'), aNum(s.outlets))}${k(t('pressMentions'), aNum(s.mentionsTotal))}${k(t('pressSpent'), fmtMoney(s.spent, 'USD'))}${k(t('pressCpa'), fmtMoney(s.costPerAppearance, 'USD'))}</div>
+    <div class="kpis k8">${k(t('pressLinks'), aNum(s.links))}${k(t('pressDofollow'), aNum(s.dofollow))}${k(t('pressLost'), aNum(s.lostLinks))}${k(t('pressDomains'), aNum(s.referringDomains))}${k(t('pressGeoPrompts'), aNum(geo.prompts))}${k(t('pressGeoMention'), pressPct(geo.mentionRate))}${k(t('pressGeoCitation'), pressPct(geo.citationRate))}${k(t('pressNext'), next ? esc(next.headline || '—') : '—', '', next ? `${next.headline || ''} · ${next.target_date || ''}` : '')}</div>`;
+
+  const statuses = Array.isArray(d.statuses) && d.statuses.length ? d.statuses : Object.keys(bs);
+  const maxSt = Math.max(1, ...statuses.map((x) => bs[x] || 0));
+  const pipeline = `<div class="panel"><div class="panel-head"><h2>${esc(t('pressPipeline'))}</h2></div><div class="blist">${statuses.map((x) => `<div class="brow" style="cursor:default"><div class="lab">${esc(pressStatusLabel(x))}</div><div class="track"><i style="width:${((bs[x] || 0) / maxSt * 100).toFixed(1)}%;background:${x === 'Publicada' ? 'var(--s-won)' : 'var(--s-active)'}"></i></div><div class="num"><b>${aNum(bs[x] || 0)}</b></div></div>`).join('')}</div></div>`;
+  const geoCard = `<div class="panel"><div class="panel-head"><h2>${esc(t('pressGeo'))}</h2><a class="btn ghost sm" href="${esc(app)}/app/geo" target="_blank" rel="noopener">${icon('external')}${esc(t('pressOpen'))}</a></div>
+    <dl class="kv"><div><dt>${esc(t('pressGeoPrompts'))}</dt><dd>${aNum(geo.prompts)}</dd></div><div><dt>${esc(t('pressGeoChecks'))}</dt><dd>${aNum(geo.checks)}</dd></div><div><dt>${esc(t('pressGeoMention'))}</dt><dd>${pressPct(geo.mentionRate)}</dd></div><div><dt>${esc(t('pressGeoCitation'))}</dt><dd>${pressPct(geo.citationRate)}</dd></div>
+    <div class="wide"><dt>${esc(t('pressGeoLast'))}</dt><dd>${geo.lastCheckedAt ? esc(String(geo.lastCheckedAt).slice(0, 16).replace('T', ' ')) : esc(t('pressGeoNone'))}</dd></div></dl></div>`;
+
+  const byTable = by.length ? `<div class="panel"><div class="panel-head"><h2>${esc(t('pressByCountry'))} <span class="count-tag">${by.length}</span></h2></div><div class="tablewrap"><table class="sortable">
+    <thead><tr><th>${esc(t('pr_country'))}</th><th class="num">${esc(t('pressReleases'))}</th><th class="num">${esc(t('pressSent'))}</th><th class="num">${esc(t('pressAppearances'))}</th><th class="num">${esc(t('pressOutlets'))}</th><th class="num">${esc(t('pressMentions'))}</th><th class="num">${esc(t('pressLinks'))}</th><th class="num">${esc(t('pressSpent'))}</th><th class="num">${esc(t('pressCpa'))}</th></tr></thead>
+    <tbody>${by.map((r) => `<tr><td>${esc(r.flag || '')} ${esc(pressCountryName(r.country, r.flag))}</td><td class="num">${aNum(r.releases)}</td><td class="num">${aNum(r.sent)}</td><td class="num">${aNum(r.appearances)}</td><td class="num">${aNum(r.outlets)}</td><td class="num">${aNum(r.mentions)}</td><td class="num">${aNum(r.links)}</td><td class="num">${fmtMoney(r.spent, 'USD')}</td><td class="num">${fmtMoney(r.costPerAppearance, 'USD')}</td></tr>`).join('')}</tbody></table></div></div>` : '';
+
+  const relTable = `<div class="panel"><div class="panel-head"><h2>${esc(t('pressReleasesT'))} <span class="count-tag">${rel.length}</span></h2></div>${rel.length ? `<div class="tablewrap"><table class="sortable">
+    <thead><tr><th>${esc(t('pr_headline'))}</th><th>${esc(t('pr_country'))}</th><th>${esc(t('pr_status'))}</th><th>${esc(t('pr_target'))}</th><th>${esc(t('pr_platform'))}</th><th class="num">${esc(t('pr_cost'))}</th><th class="num">${esc(t('pressAppearances'))}</th></tr></thead>
+    <tbody>${rel.map((r) => { const u = pressUrl(r.url); return `<tr><td class="truncate" title="${esc(r.headline)}">${u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(r.headline || '—')}</a>` : esc(r.headline || '—')}</td><td>${esc(r.flag || '')} ${esc(pressCountryName(r.country, r.flag))}</td><td>${pressBadge(r.status)}</td><td>${esc(r.target_date || '—')}</td><td>${esc(r.platform || '—')}</td><td class="num">${fmtMoney(r.cost, 'USD')}</td><td class="num">${aNum(r.appearances)}</td></tr>`; }).join('')}</tbody></table></div>` : `<div class="empty">${esc(t('pressNoReleases'))}</div>`}</div>`;
+
+  const pkTable = `<div class="panel"><div class="panel-head"><h2>${esc(t('pressPickups'))} <span class="count-tag">${pk.length}</span></h2></div>${pk.length ? `<div class="tablewrap"><table class="sortable">
+    <thead><tr><th>${esc(t('pr_outlet'))}</th><th>${esc(t('pr_release'))}</th><th>${esc(t('pr_kind'))}</th><th>${esc(t('pr_status'))}</th><th class="num">${esc(t('pressMentions'))}</th><th>${esc(t('pr_published'))}</th></tr></thead>
+    <tbody>${pk.map((p) => { const u = pressUrl(p.url); return `<tr><td class="truncate" title="${esc(p.outlet)}">${u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(p.outlet || u)}</a>` : esc(p.outlet || '—')}</td><td class="truncate" title="${esc(p.release_headline)}">${esc(p.release_headline || '—')}</td><td>${esc(p.kind || '—')}</td><td>${pressBadge(p.status)}</td><td class="num">${aNum(p.mentions)}</td><td>${esc(String(p.published_at || '').slice(0, 10) || '—')}</td></tr>`; }).join('')}</tbody></table></div>` : `<div class="empty">${esc(t('pressNoPickups'))}</div>`}</div>`;
+
+  body.innerHTML = kpis + `<div class="grid2">${pipeline}${geoCard}</div>` + byTable + relTable + pkTable + `<p class="muted" style="font-size:12px">${esc(t('pressDefs'))}</p>`;
+  makeSortable(body);
+}
+
 // ───────────────────────── render orchestration ─────────────────────────
 function renderAll(o = {}) {
   syncStateToUrl();
@@ -1227,6 +1309,8 @@ function renderAll(o = {}) {
   const el = $('#tab-' + state.view);
   // Proposal Studio has its own UI and doesn't use the lead filters or AC data.
   if (state.view === 'users') { $('#filterbar').hidden = true; $('#active-chips').hidden = true; window.renderUsers(el); return; }
+  // Press is campaign-wide: it doesn't use the lead filters or ActiveCampaign data.
+  if (state.view === 'press') { $('#filterbar').hidden = true; $('#active-chips').hidden = true; renderPress(el); return; }
   const isProposals = state.view === 'proposals';
   $('#filterbar').hidden = isProposals; $('#active-chips').hidden = isProposals;
   // Render it once per visit: background lead refreshes must not wipe a half-filled intake.
@@ -1272,7 +1356,7 @@ function renderAll(o = {}) {
   $('#btn-refresh').addEventListener('click', async () => {
     const b = $('#btn-refresh'); b.disabled = true;
     await api('/api/refresh', { method: 'POST' }).catch(() => {});
-    adsCache.clear(); recAdvice.clear();
+    adsCache.clear(); recAdvice.clear(); pressCache.clear();
     try { await loadData(); } catch (e) { META.error = e.message; }
     b.disabled = false; renderAll();
   });

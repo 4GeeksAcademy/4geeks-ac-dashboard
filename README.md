@@ -123,3 +123,22 @@ B2B proposals inside the dashboard (sidebar → **B2B → Proposal Studio**).
 - Model: `PROPOSALS_MODEL` (default `claude-opus-5-5`); needs `ANTHROPIC_API_KEY`.
 - Build a PDF from the CLI: `node -e "…renderProposal(json)…"` then any HTML→PDF tool;
   `lib/proposals/seeds/deporvillage.json` is the reference example.
+
+## Press (Oct 2026)
+
+Sidebar → **Marketing & AI → Press**: a read-only view of the press-release campaign
+run in [4G Press](https://4gpress.duckdns.org) (releases in 19 countries, where they
+got picked up, mentions of 4Geeks, links, spend and cost per appearance, and AI
+visibility / GEO). Writing, sending and tracking releases stays in 4G Press; the
+**Open 4G Press** button goes there (it has its own login).
+
+- **Data.** `GET /api/press?pais=<ISO>` proxies 4G Press' public, read-only
+  endpoint `/api/public/press-summary` with the `X-Api-Key` header. It never
+  returns release bodies, internal notes or users. Cached 10 min; if 4G Press is
+  down it serves the last good payload, marked as cached.
+- **Config.** `PRESS_API_KEY` in Railway → Variables (optional: `PRESS_API_URL`,
+  `PRESS_TTL_SECONDS`). Without the key the view shows "4G Press is not connected".
+- **Who sees it.** Every signed-in user. To restrict it to admins, use
+  `auth.requireAdmin` on `/api/press` in `server.js` and add `adminOnly: true` to
+  the `press` entry of `NAV` in `public/dashboard.js`.
+
