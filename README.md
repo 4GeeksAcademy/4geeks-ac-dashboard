@@ -55,6 +55,29 @@ git push -u origin main
 4. Deploy. Railway gives you a public `*.up.railway.app` URL — that's your live dashboard.
    Add a custom domain later if you want.
 
+## v2 (Sept 2026)
+
+- **UI**: left sidebar navigation, English/Spanish toggle, light/dark/system theme,
+  friendly filter bar (region, period presets, multi-select filters with counts,
+  removable chips, "More filters" drawer), redesigned charts.
+- **New filters**: admissions rep (owner names resolved from AC users), engagement
+  score band (Deal Quality), lead score, lost reason (now populated), stage.
+- **Overview**: day / week / month granularity (auto by range), win rate + loss rate,
+  period-over-period deltas, admissions-rep leaderboard.
+- **Lead details open instantly** from cached data; email engagement loads in the
+  background on a separate "interactive" AC rate-limit lane (`AC_INTERACTIVE_RPS`,
+  default 3/s) and AI coaching runs only when requested.
+- **AI insights** can answer from Leads, Ads (4Geeks Center) or both, for the same
+  region + period.
+- **Fix**: deal custom fields (lost reasons, deal quality, feedback, won/lost dates)
+  were never read because side-loaded rows use `deal`/`dealCustomFieldMetum` keys.
+  Verify after deploy at `/api/diag/deal-fields?token=<token>`.
+- **Security**: all data endpoints now require the dashboard login token
+  (`/api/summary` was previously public). `/api/status` and `/api/load` stay open
+  for the health check.
+- Optional env: `AC_APP_URL` (defaults to `https://<account>.activehosted.com`,
+  derived from `AC_API_URL`) for "Open in ActiveCampaign" links.
+
 ## Notes
 
 - This app never stores lead data on disk — it's pulled fresh from ActiveCampaign into
@@ -64,3 +87,39 @@ git push -u origin main
 - If you add authentication later (recommended before sharing the Railway URL widely,
   since deal/contact data includes PII), Railway supports simple env-var-gated basic auth
   middleware — ask and I'll wire it in.
+
+## Proposal Studio (Oct 2026)
+
+B2B proposals inside the dashboard (sidebar → **B2B → Proposal Studio**).
+
+- **Intake → Claude draft → versions → branded PDF.** The team fills the deal intake
+  (client, headcount, what they asked for, programs with people and price, call notes).
+  "Draft with Claude" writes the proposal as structured JSON; "Ask Claude to change"
+  applies one instruction and saves a new version. Every save is a version (v1, v2…)
+  with author, note and source; any version can be opened, printed or duplicated
+  for another client.
+- **Always on brand.** Claude writes content only. `lib/proposals/render.js` lays it
+  out with the 4Geeks brand kit (Inter, #2381FF, italic-blue key phrase, current
+  logo in `public/brand/`). "Download PDF" opens the print dialog → Save as PDF.
+  To swap in the high-resolution logo, replace `public/brand/4geeks-logo-dark.png`.
+- **One source of truth.** `lib/proposals/library.js` holds programs, prices, proof
+  points, ROI data with sources, payment terms and past deals. Admins can override
+  any key via `PUT /api/proposal-library/:key`.
+- **Users and roles (Admin → Users).** `admin` can do everything (approve/close/delete
+  proposals, edit the library, manage users). `editor` uses the leads dashboard and
+  Proposal Studio but can't approve, close, delete or manage users. Victor (editor) and
+  Alejandro (admin) are created on first boot without a password: an admin sets it in
+  Admin → Users (stored as a scrypt hash). The Railway login (`DASHBOARD_USER/PASS`, plus
+  optional `DASHBOARD_USERS=name:pass[:admin]`) stays as the bootstrap admin.
+  Set `TOKEN_SECRET` to a long random value.
+- **Brief (1 page).** Built automatically from the same version: title, people in numbers,
+  roadmap, investment table with the discount, next steps and contact. "Brief" button → Save as PDF.
+- **Google Docs version.** The "Google Docs" button downloads an .html that Google Drive
+  opens as an editable Google Doc (same content, Docs-native tables and headings).
+- **Building blocks** Claude can use: stats, phases (roadmap), timeline (12-month Gantt),
+  cards (with optional price tiers), tiers (volume pricing), tables, panels, checklists.
+- **Storage.** Add a Railway Postgres service and set `DATABASE_URL`. Without it,
+  proposals go to `./data/proposals.json` (fine locally, lost on redeploy).
+- Model: `PROPOSALS_MODEL` (default `claude-opus-5-5`); needs `ANTHROPIC_API_KEY`.
+- Build a PDF from the CLI: `node -e "…renderProposal(json)…"` then any HTML→PDF tool;
+  `lib/proposals/seeds/deporvillage.json` is the reference example.
