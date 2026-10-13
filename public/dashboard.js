@@ -200,7 +200,7 @@ function syncStateFromUrl() {
   const p = new URLSearchParams(location.search);
   if (p.has('view') && VIEWS.includes(p.get('view'))) state.view = p.get('view');
   else if (p.has('tab') && VIEWS.includes(p.get('tab'))) state.view = p.get('tab');
-  ['region', 'q', 'dateFrom', 'dateTo', 'preset', 'gran', 'groupBy', 'aiScope'].forEach((k) => { if (p.has(k)) state[k] = p.get(k); });
+  ['region', 'q', 'dateFrom', 'dateTo', 'preset', 'gran', 'groupBy', 'aiScope', 'adsCur', 'adsSales'].forEach((k) => { if (p.has(k)) state[k] = p.get(k); });
   FILTERS.forEach((f) => { const v = p.getAll(f.key).filter((x) => x && x !== 'all'); if (v.length) state[f.key] = v; });
   // Relative presets stay relative: a link to "last 7 days" means last 7 days
   // when opened, not the 7 days it was copied on.
@@ -215,6 +215,8 @@ function syncStateToUrl() {
   if (state.preset && state.preset !== 'custom') p.set('preset', state.preset);
   else { if (state.dateFrom) p.set('dateFrom', state.dateFrom); if (state.dateTo) p.set('dateTo', state.dateTo); if (state.preset) p.set('preset', 'custom'); }
   if (state.gran !== 'auto') p.set('gran', state.gran);
+  if (ADS_CURS.includes(state.adsCur)) p.set('adsCur', state.adsCur);
+  if (state.adsSales === 'same') p.set('adsSales', 'same');
   FILTERS.forEach((f) => state[f.key].forEach((v) => p.append(f.key, v)));
   const qs = p.toString();
   history.replaceState(null, '', qs ? `${location.pathname}?${qs}` : location.pathname);
@@ -984,15 +986,42 @@ const REGION_TO_CENTER = { USA: 'US', Spain: 'ES', LATAM: 'LATAM', all: 'US' };
 const CENTER_LABEL = { US: 'USA', ES: 'España', LATAM: 'LATAM', CL: 'Chile' };
 const adsCache = new Map();
 const adsRegion = () => (state.region !== 'all' ? REGION_TO_CENTER[state.region] : state.adsRegion);
-async function fetchAds(region, from, to) {
-  const k = `${region}|${from}|${to}`;
+// Ads view prefs (URL-synced). adsSales = Center's sales attribution: 'close' (default,
+// sale on its won date) or 'same' (lead generated AND won in the period = "Gen+Close").
+// adsCur = display currency: '' = the region's native one, or EUR/USD converted below.
+state.adsSales = 'close'; state.adsCur = '';
+const ADS_CURS = ['EUR', 'USD'];
+const ADS_EUR_USD = 1.08; // approx. rate, display only: Center data stays in the native currency
+const adsSalesMode = () => (state.adsSales === 'same' ? 'same' : 'close');
+async function fetchAds(region, from, to, salesMode = 'close') {
+  const k = `${region}|${from}|${to}|${salesMode}`;
   if (adsCache.has(k) && Date.now() - adsCache.get(k).at < 5 * 60 * 1000) return adsCache.get(k).res;
-  const params = new URLSearchParams({ region }); if (from) params.set('start_date', from); if (to) params.set('end_date', to);
+  const params = new URLSearchParams({ region }); if (from) params.set('start_date', from); if (to) params.set('end_date', to); if (salesMode === 'same') params.set('sales_mode', 'same');
   const res = await api('/api/ads-performance?' + params.toString());
   const data = await res.json().catch(() => ({}));
   const out = { ok: res.ok, data };
   if (res.ok) adsCache.set(k, { at: Date.now(), res: out });
   return out;
+}
+// Copy of an ads payload with every money field converted EUR⇄USD (ratios, counts and
+// the cached original are untouched). Returns the payload as-is when no conversion applies.
+function adsDisplay(data, want) {
+  const from = data.currency || 'USD';
+  if (!ADS_CURS.includes(want) || !ADS_CURS.includes(from) || want === from) return data;
+  const f = from === 'EUR' ? ADS_EUR_USD : 1 / ADS_EUR_USD;
+  const conv = (o, keys) => { if (!o) return o; const c = { ...o }; keys.forEach((k) => { if (c[k] != null && c[k] !== '' && !isNaN(c[k])) c[k] = Number(c[k]) * f; }); return c; };
+  const MONEY = ['spend', 'cpl', 'cpa', 'cpc', 'revenue', 'revenueTotal'];
+  const cp = data.campaignsPerf;
+  const ef = data.emailFunnels;
+  return {
+    ...data, currency: want, nativeCurrency: from,
+    summary: conv(data.summary, MONEY),
+    channels: (data.channels || []).map((x) => conv(x, MONEY)),
+    campaigns: (data.campaigns || []).map((x) => conv(x, MONEY)),
+    campaignsPerf: cp ? { ...cp, campaigns: (cp.campaigns || []).map((x) => conv(x, MONEY)), totals: conv(cp.totals, MONEY) } : cp,
+    daily: (data.daily || []).map((x) => conv(x, ['spend'])),
+    emailFunnels: ef ? { ...ef, automations: (ef.automations || []).map((x) => conv(x, ['revenue_atribuido'])) } : ef,
+  };
 }
 const aNum = (n) => (n == null || isNaN(n) ? '—' : fmtInt(n));
 const aRoas = (n) => (n == null || isNaN(n) ? '—' : Number(n).toFixed(2) + '×');
@@ -1041,18 +1070,26 @@ async function renderAds() {
   const region = adsRegion();
   el.innerHTML = `<div class="panel"><div class="ads-bar">
       <div class="ads-status" id="ads-status"><span class="dots"><span></span><span></span><span></span></span></div>
+      <div class="ads-ctrls" id="ads-ctrls"></div>
       ${state.region === 'all' ? `<div style="display:flex;gap:8px;align-items:center"><span class="muted" style="font-size:12px">${esc(t('adsRegionNote'))}</span><div class="seg" id="ads-rg">${['US', 'ES', 'LATAM'].map((rg) => `<button data-rg="${rg}" class="${rg === region ? 'active' : ''}">${CENTER_LABEL[rg]}</button>`).join('')}</div></div>` : ''}
     </div></div><div id="ads-body"><div class="panel"><div class="skeleton" style="height:90px"></div><div class="skeleton" style="height:220px"></div></div></div>`;
   $$('#ads-rg button').forEach((b) => b.addEventListener('click', () => { state.adsRegion = b.dataset.rg; renderAds(); }));
   let out;
-  try { out = await fetchAds(region, state.dateFrom, state.dateTo); } catch (e) { $('#ads-body').innerHTML = `<div class="panel state-card"><p>${esc(t('networkError'))}</p><p class="muted">${esc(e.message)}</p></div>`; return; }
+  try { out = await fetchAds(region, state.dateFrom, state.dateTo, adsSalesMode()); } catch (e) { $('#ads-body').innerHTML = `<div class="panel state-card"><p>${esc(t('networkError'))}</p><p class="muted">${esc(e.message)}</p></div>`; return; }
   if (state.view !== 'ads') return;
   const body = $('#ads-body'); const st = $('#ads-status');
-  const data = out.data;
+  const data = out.ok ? adsDisplay(out.data, state.adsCur) : out.data;
   if (!out.ok) { st.innerHTML = ''; body.innerHTML = `<div class="panel state-card">${icon('alert')}<p style="font-weight:700">${esc(data.needsKey ? t('adsNeedsKey') : t('adsError'))}</p><p class="muted">${esc(data.error || '')}</p></div>` + uploadHtml(); wireUpload(); return; }
   const cur = data.currency || 'USD'; const c = data._cache || {};
   const dot = c.demo ? `<span class="badge plain b-lostu">${esc(t('adsDemo'))}</span>` : c.stale ? `<span class="badge plain b-lostu">${esc(t('adsStale'))}</span>` : `<span class="badge b-won">${esc(t('adsLive'))}</span>`;
-  st.innerHTML = `${dot}<b>${esc(CENTER_LABEL[data.region] || data.region)}</b> · ${esc(t('adsCurrency', { c: cur }))}${data.period ? ` · ${esc(t('adsPeriod', { a: data.period.start_date || '…', b: data.period.end_date || '…' }))}` : ''}`;
+  const sm = data.salesMode || adsSalesMode(); // the attribution Center echoes back
+  const convTag = data.nativeCurrency ? ` <span title="${esc(t('adsConvHint', { r: String(ADS_EUR_USD) }))}" style="cursor:help;text-decoration:underline dotted">(${esc(t('adsConverted'))})</span>` : '';
+  st.innerHTML = `${dot}<b>${esc(CENTER_LABEL[data.region] || data.region)}</b> · ${esc(t('adsCurrency', { c: cur }))}${convTag} · ${esc(t('adsAttribution'))}: <b title="${esc(t('smHint'))}" style="cursor:help">${esc(t(sm === 'same' ? 'smSame' : 'smClose'))}</b>${data.period ? ` · ${esc(t('adsPeriod', { a: data.period.start_date || '…', b: data.period.end_date || '…' }))}` : ''}`;
+  const native = data.nativeCurrency || cur;
+  $('#ads-ctrls').innerHTML = `<div class="seg" id="ads-sm" title="${esc(t('smHint'))}">${['close', 'same'].map((m) => `<button data-sm="${m}" class="${m === adsSalesMode() ? 'active' : ''}">${esc(t(m === 'same' ? 'smSame' : 'smClose'))}</button>`).join('')}</div>`
+    + (ADS_CURS.includes(native) ? `<div class="seg" id="ads-cur">${ADS_CURS.map((c2) => `<button data-cur="${c2}" class="${c2 === cur ? 'active' : ''}">${c2}</button>`).join('')}</div>` : '');
+  $$('#ads-sm button').forEach((b) => b.addEventListener('click', () => { state.adsSales = b.dataset.sm; syncStateToUrl(); renderAds(); }));
+  $$('#ads-cur button').forEach((b) => b.addEventListener('click', () => { state.adsCur = b.dataset.cur === native ? '' : b.dataset.cur; syncStateToUrl(); renderAds(); }));
   const s = data.summary || {};
   const cps = (data.campaignsPerf && data.campaignsPerf.campaigns) || [];
   const chs = data.channels || [];
