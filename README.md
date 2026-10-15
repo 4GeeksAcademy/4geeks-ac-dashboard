@@ -189,3 +189,19 @@ JSON response under `/api` goes through `lib/pii.js`.
   Studio (B2B documents that must carry the client's contact).
 - Tests: `npm test` (`node --test`, no extra dependencies).
 
+
+## Brand redesign + Compare (Oct 2026)
+
+- **Look:** same system as the 4Geeks decks, guides and Campaign Studio graphics —
+  white surfaces, one dominant blue `#2381FF`, headline key word in italic blue,
+  yellow section numbers / badges / CTA on blue, navy dark mode, pastel KPI cards,
+  hairline borders, no gradients and no edge stripes. Tokens in `public/styles.css`,
+  brand layer in `public/brand.css` (loaded last). Current logo pack in `public/brand/`.
+  Chart colors follow the tokens: won = blue, open = slate, lost = red, lost without reason = amber.
+- **Compare** replaces *Compare regions* and *Pivot / Group by* (removed; old links redirect).
+  Pick a dimension — region, campaign, source, medium, location, course, admissions rep,
+  test score, lost reason, stage or **period** (date ranges) — and up to 4 sets (A–D),
+  each one or more values. You get a scorecard (best value highlighted, delta vs A),
+  leads and win rate over time, outcome mix, a side-by-side breakdown by a second
+  dimension, quick comparisons, a shareable URL (`cmp=` param) and "Explain the
+  difference with AI". It respects every filter in the bar except the one being compared.

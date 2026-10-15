@@ -1,6 +1,6 @@
 /* Marketing Hub — Events + Social calendar. Builds on styles.css tokens. */
 :root{
-  --m-usa:#2381FF; --m-es:#F5B93E; --m-latam:#12A150;
+  --m-usa:var(--blue); --m-es:var(--amber); --m-latam:var(--c-c);
   --ch-instagram:#D6249F; --ch-tiktok:#111111; --ch-linkedin:#0A66C2; --ch-facebook:#1877F2; --ch-youtube:#E62117; --ch-x:#5B6470; --ch-threads:#444;
 }
 :root[data-theme="dark"]{ --ch-tiktok:#E8E8E8; --ch-threads:#BBB; }
@@ -59,7 +59,7 @@
 .hub-mk{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--surface-3);color:var(--body);}
 .hub-mk.m-usa{background:color-mix(in srgb,var(--m-usa) 15%,var(--surface));color:var(--blue-ink);}
 .hub-mk.m-es{background:var(--warn-soft);color:var(--warn-ink);}
-.hub-mk.m-latam{background:var(--good-soft);color:var(--good-ink);}
+.hub-mk.m-latam{background:var(--neutral-soft);color:var(--ink);}
 .hub-links{display:flex;gap:8px;} .hub-links a{font-size:12px;font-weight:600;}
 
 /* board */
@@ -84,7 +84,7 @@
 .hub-bar-v{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;} .hub-bar-v em{font-style:normal;color:var(--muted);font-weight:500;}
 .hub-defs{margin-top:16px;display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--body);} .hub-defs b{color:var(--ink);margin-right:4px;}
 td.hub-under{color:var(--warn-ink);font-weight:700;background:var(--warn-soft);} td.hub-ok{color:var(--good-ink);font-weight:700;}
-.hub-ai-panel{border-color:var(--blue-soft);background:linear-gradient(170deg,var(--blue-tint),var(--surface) 40%);}
+
 .hub-ai-panel h2 .ico{color:var(--blue);vertical-align:-3px;}
 .hub-acc-picks{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}
 .hub-pick{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:999px;padding:6px 12px;font-size:12.5px;background:var(--surface);cursor:pointer;}

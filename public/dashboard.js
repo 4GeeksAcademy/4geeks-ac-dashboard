@@ -196,7 +196,7 @@ const FILTER_BY_KEY = Object.fromEntries(FILTERS.map((f) => [f.key, f]));
 const fVals = (f, r) => (f.vals ? f.vals(r) : (r[f.key] != null && r[f.key] !== '' ? [String(r[f.key])] : []));
 const fLabel = (f, v) => (f.label ? f.label(v) : v);
 
-const VIEWS = ['overview', 'recommendations', 'regions', 'grouped', 'individual', 'ads', 'ai', 'press', 'events', 'social', 'proposals', 'users'];
+const VIEWS = ['overview', 'recommendations', 'compare', 'individual', 'ads', 'ai', 'press', 'events', 'social', 'proposals', 'users'];
 const state = { view: 'overview', region: 'all', q: '', dateFrom: '', dateTo: '', preset: '', gran: 'auto', page: 1, sort: { field: 'date', dir: 'desc' }, groupBy: 'assignTo', aiScope: 'both', adsRegion: 'US', recUsePeriod: '0' };
 FILTERS.forEach((f) => { state[f.key] = []; });
 
@@ -220,10 +220,14 @@ const PRESETS = ['today', 'yesterday', '7d', '30d', 'thisWeek', 'thisMonth', 'la
 
 function syncStateFromUrl() {
   const p = new URLSearchParams(location.search);
-  if (p.has('view') && VIEWS.includes(p.get('view'))) state.view = p.get('view');
+  // Old links: Compare regions → Compare, Pivot (removed) → Overview.
+  const alias = { regions: 'compare', grouped: 'overview' };
+  const v0 = alias[p.get('view')] || p.get('view');
+  if (p.has('view') && VIEWS.includes(v0)) state.view = v0;
   else if (p.has('tab') && VIEWS.includes(p.get('tab'))) state.view = p.get('tab');
   ['region', 'q', 'dateFrom', 'dateTo', 'preset', 'gran', 'groupBy', 'aiScope', 'adsCur', 'adsSales'].forEach((k) => { if (p.has(k)) state[k] = p.get(k); });
   FILTERS.forEach((f) => { const v = p.getAll(f.key).filter((x) => x && x !== 'all'); if (v.length) state[f.key] = v; });
+  if (p.has('cmp') && window.cmpFromUrl) window.cmpFromUrl(p.get('cmp'));
   // Relative presets stay relative: a link to "last 7 days" means last 7 days
   // when opened, not the 7 days it was copied on.
   if (state.preset && state.preset !== 'custom') { const r = presetRange(state.preset); if (r) [state.dateFrom, state.dateTo] = r; }
@@ -240,6 +244,7 @@ function syncStateToUrl() {
   if (ADS_CURS.includes(state.adsCur)) p.set('adsCur', state.adsCur);
   if (state.adsSales === 'same') p.set('adsSales', 'same');
   FILTERS.forEach((f) => state[f.key].forEach((v) => p.append(f.key, v)));
+  if (state.view === 'compare' && state.cmp) p.set('cmp', state.cmp);
   const qs = p.toString();
   history.replaceState(null, '', qs ? `${location.pathname}?${qs}` : location.pathname);
 }
@@ -334,8 +339,7 @@ const NAV = [
   { href: ENROLLMENT_DASHBOARD_URL, icon: 'trophy', label: 'nav_enrollments' },
   { view: 'individual', icon: 'individual' },
   { view: 'recommendations', icon: 'recommendations' },
-  { view: 'regions', icon: 'regions' },
-  { view: 'grouped', icon: 'grouped' },
+  { view: 'compare', icon: 'regions' },
   { section: 'navSectionMarketing' },
   { view: 'ads', icon: 'ads' },
   { view: 'ai', icon: 'ai' },
@@ -664,75 +668,6 @@ function renderOverview(rows) {
     options: { ...base, scales: { x: base.scales.x, y: { ...base.scales.y, max: 100, ticks: { callback: (v) => v + '%' } } },
       plugins: { ...base.plugins, tooltip: { ...base.plugins.tooltip, callbacks: { label: (i) => `${i.dataset.label}: ${i.parsed.y == null ? '—' : i.parsed.y.toFixed(1) + '%'}` } } } },
   });
-}
-
-// ───────────────────────── regions ─────────────────────────
-function renderRegions() {
-  const el = $('#tab-regions');
-  const base = ALL.filter((r) => match(r, { skipRegion: true }));
-  el.innerHTML = `<div class="grid3">${REGIONS.map((region) => {
-    const rows = base.filter((r) => r.region === region);
-    const s = stats(rows);
-    const seg = (n, v) => (s.total ? `<i style="width:${(n / s.total * 100).toFixed(2)}%;background:var(${v})"></i>` : '');
-    const lostRows = rows.filter((r) => r.bucket === 'Lost - Classified');
-    const rc = {}; lostRows.forEach((r) => (r.reasons || []).forEach((x) => { rc[x] = (rc[x] || 0) + 1; }));
-    const reasonGroups = Object.entries(rc).map(([key, total]) => ({ key, total, won: 0, winRate: null }));
-    return `<div class="panel">
-      <div class="panel-head"><h2>${esc(region === 'Spain' && LANG === 'es' ? 'España' : region)}</h2><span class="count-tag">${fmtInt(s.total)} ${esc(t('deals'))}</span></div>
-      <div class="stat-row" style="grid-template-columns:repeat(3,1fr)">
-        <div class="stat"><div class="l">${esc(t('k_won'))}</div><div class="v">${fmtInt(s.won)}</div></div>
-        <div class="stat"><div class="l">${esc(t('k_winRate'))}</div><div class="v" style="color:var(--good-ink)">${s.winRate == null ? '—' : s.winRate.toFixed(1) + '%'}</div></div>
-        <div class="stat"><div class="l">${esc(t('k_lossRate'))}</div><div class="v" style="color:var(--bad-ink)">${s.lossRate == null ? '—' : s.lossRate.toFixed(1) + '%'}</div></div>
-      </div>
-      <div class="brow" style="grid-template-columns:1fr;padding:12px 0 4px;cursor:default"><div class="track" style="height:12px">${seg(s.won, '--s-won')}${seg(s.active, '--s-active')}${seg(s.lostc, '--s-lostc')}${seg(s.lostu, '--s-lostu')}</div></div>
-      <div class="legend" style="margin-top:4px">${BUCKETS.map((b) => `<span><i style="background:var(${BUCKET_VAR[b]})"></i>${esc(t('b_' + b))}</span>`).join('')}</div>
-      <h3>${esc(t('reasonsTitle'))}</h3>
-      ${reasonGroups.length ? (() => { const top = reasonGroups.sort((a, b) => b.total - a.total).slice(0, 5); const pk = top[0].total; return `<div class="blist">${top.map((g) => `<div class="brow" data-field="reason" data-value="${esc(g.key)}" title="${esc(g.key)}"><div class="lab">${esc(g.key)}</div><div class="track"><i style="width:${(g.total / pk * 100).toFixed(1)}%;background:var(--s-lostc)"></i></div><div class="num"><b>${g.total}</b> · ${pct(g.total, lostRows.length)}</div></div>`).join('')}</div>`; })() : `<div class="muted" style="font-size:12.5px">${esc(t('noData'))}</div>`}
-      <h3>${esc(t('ownersTitle'))}</h3>
-      ${barList(groupStats(rows, (r) => (r.assignTo ? [r.assignTo] : [])), { field: 'assignTo', max: 5 })}
-      <h3>${esc(t('campaignsTitle'))}</h3>
-      ${barList(groupStats(rows, (r) => (r.campaign ? [r.campaign] : [])), { field: 'campaign', max: 5 })}
-    </div>`;
-  }).join('')}</div>`;
-  wireBarLists(el);
-}
-
-// ───────────────────────── pivot ─────────────────────────
-const GROUP_DIMS = [
-  ['assignTo', 'f_assignTo'], ['region', 'dimRegion'], ['source', 'f_source'], ['medium', 'f_medium'], ['campaign', 'f_campaign'], ['location', 'f_location'], ['course', 'f_course'], ['stage', 'f_stage'],
-  ['day', 'dimDay'], ['week', 'dimWeek'], ['month', 'dimMonth'], ['reason', 'f_reason'], ['bucket', 'f_bucket'], ['admissionsScore', 'f_admissionsScore'], ['leadSentiment', 'f_leadSentiment'], ['classification', 'f_classification'], ['admissionsConversationType', 'f_admissionsConversationType'],
-];
-let groupSort = { field: 'total', dir: 'desc' };
-function renderGrouped(rows) {
-  const el = $('#tab-grouped');
-  el.innerHTML = `<div class="panel">
-    <div class="panel-head"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2>${esc(t('groupBy'))}</h2>
-      <select id="grp-field">${GROUP_DIMS.map(([k, l]) => `<option value="${k}" ${state.groupBy === k ? 'selected' : ''}>${esc(t(l))}</option>`).join('')}</select></div>
-      <span class="count-tag">${esc(t('dealsInFilter', { n: fmtInt(rows.length) }))}</span></div>
-    <div class="tablewrap" id="grp-table"></div></div>`;
-  $('#grp-field').addEventListener('change', (e) => { state.groupBy = e.target.value; drawGroupTable(rows); });
-  drawGroupTable(rows);
-}
-function drawGroupTable(rows) {
-  const f = state.groupBy;
-  const keyFn = f === 'reason' ? (r) => r.reasons || [] : f === 'day' ? (r) => (r.date ? [r.date] : []) : f === 'month' ? (r) => (r.date ? [r.date.slice(0, 7)] : []) : (r) => (r[f] ? [String(r[f])] : []);
-  const groups = groupStats(rows, keyFn);
-  const sortVal = (g) => (groupSort.field === 'key' ? String(g.key) : g[groupSort.field] ?? -1);
-  groups.sort((a, b) => { const av = sortVal(a); const bv = sortVal(b); return (av < bv ? -1 : av > bv ? 1 : 0) * (groupSort.dir === 'asc' ? 1 : -1); });
-  const lbl = (k) => (f === 'bucket' ? t('b_' + k) : f === 'admissionsScore' ? scoreLabel(k) : k);
-  const cols = [['key', GROUP_DIMS.find((d) => d[0] === f)[1], false], ['total', 'colTotal', true], ['won', 'colWon', true], ['winRate', 'colWinRate', true], ['lostc', 'colLostReason', true], ['lostu', 'colNoReason', true], ['lossRate', 'colLossRate', true], ['active', 'colActive', true]];
-  $('#grp-table').innerHTML = `<table><thead><tr>${cols.map(([k, l, n]) => `<th class="${n ? 'num' : ''}" data-sort="${k}">${esc(t(l))}${groupSort.field === k ? (groupSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr></thead>
-    <tbody>${groups.map((g) => `<tr class="clickrow" data-k="${esc(g.key)}"><td class="truncate" title="${esc(lbl(g.key))}">${esc(lbl(g.key))}</td><td class="num">${fmtInt(g.total)}</td><td class="num">${fmtInt(g.won)}</td><td class="num"><span class="minibar"><i style="width:${Math.min(100, (g.winRate || 0) * 4)}%"></i></span>${g.winRate == null ? '—' : g.winRate.toFixed(1) + '%'}</td><td class="num">${fmtInt(g.lostc)}</td><td class="num">${fmtInt(g.lostu)}</td><td class="num">${g.lossRate == null ? '—' : g.lossRate.toFixed(1) + '%'}</td><td class="num">${fmtInt(g.active)}</td></tr>`).join('')}</tbody></table>`;
-  $$('#grp-table th').forEach((th) => th.addEventListener('click', () => { const k = th.dataset.sort; groupSort = groupSort.field === k ? { field: k, dir: groupSort.dir === 'asc' ? 'desc' : 'asc' } : { field: k, dir: k === 'key' ? 'asc' : 'desc' }; drawGroupTable(rows); }));
-  $$('#grp-table tr[data-k]').forEach((tr) => tr.addEventListener('click', () => {
-    const v = tr.dataset.k; if (v === '(none)') return;
-    if (f === 'day') { state.dateFrom = v; state.dateTo = v; state.preset = 'custom'; }
-    else if (f === 'month') { const [y, m] = v.split('-').map(Number); state.dateFrom = `${v}-01`; state.dateTo = isoLocal(new Date(y, m, 0)); state.preset = 'custom'; }
-    else if (f === 'week') { state.dateFrom = v; state.dateTo = addDays(v, 6); state.preset = 'custom'; }
-    else if (f === 'region') { state.region = v; }
-    else if (FILTER_BY_KEY[f]) { if (!state[f].includes(v)) state[f] = [...state[f], v]; }
-    state.view = 'individual'; buildNav(); onFiltersChanged();
-  }));
 }
 
 // ───────────────────────── leads table ─────────────────────────
@@ -1268,6 +1203,8 @@ function drawThread() {
   el.innerHTML = aiHistory.slice().reverse().map((h) => `<div class="ai-msg q"><span class="who">${icon('user')}</span><div class="bubble">${esc(h.question)}<div class="scope-tag">${esc(t(h.scope === 'leads' ? 'scopeLeads' : h.scope === 'ads' ? 'scopeAds' : 'scopeBoth'))} · ${esc(h.ctx)}</div></div></div>
     <div class="ai-msg a"><span class="who">AI</span><div class="bubble md">${h.loading ? `<span class="dots"><span></span><span></span><span></span></span> ${esc(t('thinking'))}` : h.error ? `<span style="color:var(--bad-ink)">${esc(h.error)}</span>` : mdToHtml(h.answer)}</div></div>`).join('');
 }
+// Other views (Compare) can open AI insights with a ready question.
+window.askAIPrefill = (question) => { go('ai'); const q = $('#ai-q'); if (q) { q.value = question; askAI(filtered()); } };
 async function askAI(rows) {
   const qEl = $('#ai-q'); const question = (qEl.value || '').trim(); if (!question) return;
   const scope = state.aiScope;
@@ -1368,7 +1305,15 @@ function renderAll(o = {}) {
   syncStateToUrl();
   if (!o.keepPopover) closePopover();
   destroyCharts();
-  $('#page-title').textContent = t('nav_' + state.view);
+  // Brand headline: short statement, key word in italic blue, ending in a period.
+  const title = t('nav_' + state.view); const words = title.split(' ');
+  const last = words.pop();
+  $('#page-title').innerHTML = `${esc(words.join(' '))}${words.length ? ' ' : ''}<em>${esc(last)}.</em>`;
+  // Eyebrow: yellow section number + section name (same numbers as the sidebar).
+  const secs = NAV.filter((n) => n.section); let sec = null;
+  for (const n of NAV) { if (n.section) sec = n.section; if (n.view === state.view) break; }
+  const sIdx = secs.findIndex((n) => n.section === sec);
+  $('#page-eyebrow').innerHTML = sec ? `<span class="ytag">${String(sIdx + 1).padStart(2, '0')}</span>${esc(t(sec))}` : '';
   $('#page-sub').textContent = t('sub_' + state.view);
   VIEWS.forEach((v) => $('#tab-' + v).classList.toggle('active', v === state.view));
   const el = $('#tab-' + state.view);
@@ -1396,8 +1341,7 @@ function renderAll(o = {}) {
   const rows = filtered();
   if (state.view === 'overview') renderOverview(rows);
   else if (state.view === 'recommendations') renderRecommendations();
-  else if (state.view === 'regions') renderRegions();
-  else if (state.view === 'grouped') renderGrouped(rows);
+  else if (state.view === 'compare') window.renderCompare();
   else if (state.view === 'individual') renderIndividual(rows);
   else if (state.view === 'ads') renderAds();
   else if (state.view === 'ai') renderAI(rows);
