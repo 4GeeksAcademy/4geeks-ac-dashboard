@@ -123,3 +123,27 @@ B2B proposals inside the dashboard (sidebar → **B2B → Proposal Studio**).
 - Model: `PROPOSALS_MODEL` (default `claude-opus-5-5`); needs `ANTHROPIC_API_KEY`.
 - Build a PDF from the CLI: `node -e "…renderProposal(json)…"` then any HTML→PDF tool;
   `lib/proposals/seeds/deporvillage.json` is the reference example.
+
+## Marketing Hub (Oct 2026)
+
+The app is now the **4Geeks Marketing Hub**. Two new sections under *Content & events*:
+
+- **Workshops & events** — calendar, list and results for every workshop / webinar /
+  masterclass, by market (USA · Spain · LATAM). Each event has its links (Luma, 4Geeks
+  landing, registration, recording, slides), a UTM link builder, a dated promo checklist
+  (D-21 → D+7, overdue items flagged), results (registrations, attendees, leads,
+  enrollments, cost) and one-click actions:
+  - **Add promo posts to the social calendar** (announcement, teaser, reminder, day-of, recap).
+  - **Write event copy with Claude** (description, announcement, reminder, email subject, follow-up).
+  - **Luma**: paste any lu.ma / luma.com link to prefill an event. With `LUMA_API_KEY`
+    (Luma Plus → Calendar → Settings → API keys) you also get **Import from Luma** and
+    **Sync registrations** (approved guests + check-ins).
+- **Social calendar** — organic posts per account: month calendar (events shown too),
+  pipeline board (idea → drafting → design → ready → scheduled → published), plan view
+  (funnel mix and pillar mix vs targets, posts per week vs target, **Plan the month with
+  Claude**), history with per-post results and weekly account metrics (seeded with the
+  @4geeksacademy weekly report), and shared settings (accounts, targets, mix, TOFU/MOFU/BOFU
+  definitions, key links). Each post can be written with Claude.
+
+Storage: `hub_items` table in the same Postgres (`DATABASE_URL`). Optional env:
+`LUMA_API_KEY`, `HUB_SEED=0` to skip the metrics seed. Claude uses the existing `ANTHROPIC_API_KEY`.

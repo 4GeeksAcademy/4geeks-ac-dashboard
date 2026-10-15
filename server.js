@@ -379,6 +379,9 @@ app.delete('/api/users/:name', auth.requireAdmin, wrapA(async (req, res) => { aw
 // B2B proposal builder (Proposal Studio).
 require('./lib/proposals/routes').mountProposals(app, requireAuth, proposalStore);
 
+// Marketing Hub: Events tracker (Luma) + Social organic calendar.
+require('./lib/hub/routes').mountHub(app, requireAuth);
+
 
 app.get('/api/status', (req, res) => {
   res.json({
