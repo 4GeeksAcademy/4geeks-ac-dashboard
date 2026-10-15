@@ -13,6 +13,26 @@ const pctNum = (n, d) => (d ? n / d * 100 : null);
 const fmtInt = (n) => (n == null || isNaN(n) ? '—' : Number(n).toLocaleString(LANG === 'es' ? 'es-ES' : 'en-US'));
 const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const initials = (name) => String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
+// Lead names, emails and phones never reach the browser in clear (server
+// lib/pii.js): each comes as a SHA-256 hash plus a partial version to recognise
+// the lead ("Juan P.", "ju•••@gmail.com", "+•••••• 456"); the hash is on hover.
+const isHash = (v) => typeof v === 'string' && /^[0-9a-f]{64}$/i.test(v);
+const pii = (v) => (v == null || v === '' ? '—' : isHash(v) ? `<span class="hash" title="${esc(v)}">${esc(v.slice(0, 12))}…</span>` : esc(v));
+const leadField = (rec, key) => {
+  const partial = rec[`${key}Partial`]; const v = rec[key];
+  return partial ? `<span class="pii-partial" title="${esc(isHash(v) ? `SHA-256 ${v}` : '')}">${esc(partial)}</span>` : pii(v);
+};
+const leadInitials = (rec) => (rec.namePartial ? initials(rec.namePartial) : isHash(rec.name) ? '#' : initials(rec.name));
+// Search over hashed data: an exact email, phone or full name is hashed like the
+// server does (email lowercase, phone digits only, name lowercase) and matched.
+async function qToHash(q) {
+  const s = String(q || '').trim();
+  if (!s || !(window.crypto && window.crypto.subtle)) return '';
+  const digits = s.replace(/\D/g, '');
+  const v = s.includes('@') ? s.toLowerCase() : (/^[\d\s().+-]+$/.test(s) && digits.length >= 6 ? digits : s.toLowerCase());
+  const buf = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(v));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
 const isoLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const addDays = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return isoLocal(d); };
 const daysBetween = (a, b) => Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 86400000);
@@ -240,8 +260,9 @@ function match(r, o = {}) {
   }
   if (state.q) {
     const q = state.q.toLowerCase();
-    const hay = [r.name, r.email, r.phone, r.id, r.campaign, r.location, r.course, r.reason, r.assignTo].join(' ').toLowerCase();
-    if (!hay.includes(q)) return false;
+    const hay = [r.namePartial, r.emailPartial, r.phonePartial, r.name, r.email, r.phone, r.id, r.campaign, r.location, r.course, r.reason, r.assignTo].join(' ').toLowerCase();
+    const exact = state.qHash && (r.name === state.qHash || r.email === state.qHash || r.phone === state.qHash);
+    if (!exact && !hay.includes(q)) return false;
   }
   return true;
 }
@@ -370,7 +391,7 @@ function buildFilterBar() {
   $$('#filterbar [data-filter]').forEach((b) => b.addEventListener('click', (e) => openFilterPopover(e.currentTarget, FILTER_BY_KEY[b.dataset.filter])));
   const more = $('#more-btn'); if (more) more.addEventListener('click', openFilterDrawer);
   const q = $('#f-q');
-  if (q) { let tmr; q.addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(() => { state.q = q.value.trim(); onFiltersChanged({ keepBar: true }); }, 200); }); }
+  if (q) { let tmr; q.addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(async () => { state.q = q.value.trim(); state.qHash = await qToHash(state.q); onFiltersChanged({ keepBar: true }); }, 200); }); }
   renderChips();
 }
 function renderChips() {
@@ -381,10 +402,10 @@ function renderChips() {
   if (state.q) chips.push(`<span class="chip">“<b>${esc(state.q)}</b>”<button data-rm="q" aria-label="remove">${icon('x')}</button></span>`);
   el.innerHTML = chips.length ? chips.join('') + `<button class="chip-clear" id="clear-all">${esc(t('clearAll'))}</button>` : '';
   $$('#active-chips [data-rm]').forEach((b) => b.addEventListener('click', () => {
-    if (b.dataset.rm === 'q') state.q = ''; else state[b.dataset.rm] = state[b.dataset.rm].filter((x) => x !== b.dataset.v);
+    if (b.dataset.rm === 'q') { state.q = ''; state.qHash = ''; } else state[b.dataset.rm] = state[b.dataset.rm].filter((x) => x !== b.dataset.v);
     onFiltersChanged();
   }));
-  const ca = $('#clear-all'); if (ca) ca.addEventListener('click', () => { FILTERS.forEach((f) => { state[f.key] = []; }); state.q = ''; onFiltersChanged(); });
+  const ca = $('#clear-all'); if (ca) ca.addEventListener('click', () => { FILTERS.forEach((f) => { state[f.key] = []; }); state.q = ''; state.qHash = ''; onFiltersChanged(); });
 }
 function onFiltersChanged(o = {}) {
   state.page = 1;
@@ -730,7 +751,7 @@ function renderIndividual(rows) {
       <button class="btn ghost sm" id="btn-export">${esc(t('exportCsv'))}</button></div>
     ${rows.length ? `<div class="tablewrap"><table><thead><tr>${LEAD_COLS.map(([f, l]) => `<th data-sort="${f}" class="${f === 'dealValue' ? 'num' : ''}">${esc(t(l))}${state.sort.field === f ? (state.sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr></thead>
     <tbody>${slice.map((r) => `<tr class="clickrow" data-id="${esc(r.id)}">
-      <td><div class="cell-lead"><span class="avatar">${esc(initials(r.name))}</span><div><div class="nm">${esc(r.name || '—')}</div><div class="em">${esc(r.email || '')}</div></div></div></td>
+      <td><div class="cell-lead"><span class="avatar">${esc(leadInitials(r))}</span><div><div class="nm">${leadField(r, 'name')}</div><div class="em">${r.email ? leadField(r, 'email') : ''}</div></div></div></td>
       <td>${fmtDate(r.date)}</td><td>${esc(r.region || '—')}</td><td class="truncate">${esc(r.course || '—')}</td><td>${esc(r.source || '—')}</td><td class="truncate" title="${esc(r.campaign || '')}">${esc(r.campaign || '—')}</td>
       <td>${r.assignTo ? esc(r.assignTo) : `<span class="muted">${esc(t('unassigned'))}</span>`}</td><td class="truncate">${esc(r.stage || '—')}</td>
       <td>${statusBadge(r.bucket)}</td><td class="truncate" title="${esc(r.reasons && r.reasons.length ? r.reasons.join(', ') : '')}">${r.reasons && r.reasons.length ? esc(r.reasons.join(', ')) : '<span class="muted">—</span>'}</td>
@@ -792,17 +813,19 @@ async function openLead(id) {
   const r = ALL.find((x) => String(x.id) === String(id));
   const d = $('#lead-drawer');
   if (!r) { d.innerHTML = `<div class="dr-head"><div class="dr-titles"><h2>#${esc(id)}</h2></div><button class="icon-btn" data-close>${icon('x')}</button></div><div class="dr-body"><p class="muted">${esc(t('notInWindow'))}</p></div>`; $('[data-close]', d).addEventListener('click', closeDrawers); openDrawer('#lead-drawer'); return; }
-  const phoneDigits = String(r.phone || '').replace(/[^\d+]/g, '');
+  const phoneDigits = isHash(r.phone) ? '' : String(r.phone || '').replace(/[^\d+]/g, '');
   const acLink = META.acAppUrl ? `${META.acAppUrl}/app/deals/${encodeURIComponent(r.id)}` : null;
   d.innerHTML = `
-    <div class="dr-head"><div class="dr-titles"><div class="lead-hero"><span class="avatar">${esc(initials(r.name))}</span><div style="min-width:0"><h2>${esc(r.name || '—')}</h2>
+    <div class="dr-head"><div class="dr-titles"><div class="lead-hero"><span class="avatar">${esc(leadInitials(r))}</span><div style="min-width:0"><h2>${leadField(r, 'name')}</h2>
       <div class="lead-meta">${statusBadge(r.bucket)}${r.region ? `<span class="badge plain b-neutral">${esc(regionLabel(r.region))}</span>` : ''}${r.admissionsScore ? scoreBadge(r.admissionsScore) : ''}<span class="badge plain b-neutral">#${esc(r.id)}</span></div></div></div></div>
       <button class="icon-btn" data-close aria-label="${esc(t('close'))}">${icon('x')}</button></div>
     <div class="dr-body">
       <div class="contact-actions">
-        ${r.email ? `<a class="btn ghost sm" href="mailto:${esc(r.email)}">${icon('mail')}${esc(r.email)}</a>` : ''}
+        ${r.email && !isHash(r.email) ? `<a class="btn ghost sm" href="mailto:${esc(r.email)}">${icon('mail')}${esc(r.email)}</a>` : ''}
         ${phoneDigits ? `<a class="btn ghost sm" href="tel:${esc(phoneDigits)}">${icon('phone')}${esc(r.phone)}</a><a class="btn ghost sm" target="_blank" rel="noopener" href="https://wa.me/${esc(phoneDigits.replace(/^\+/, ''))}">${icon('chat')}${esc(t('whatsapp'))}</a>` : ''}
         ${acLink ? `<a class="btn soft sm" target="_blank" rel="noopener" href="${esc(acLink)}">${icon('external')}${esc(t('openInAC'))}</a>` : ''}
+        ${isHash(r.email) ? `<span class="pii-chip">${icon('mail')}${leadField(r, 'email')}</span>` : ''}${isHash(r.phone) ? `<span class="pii-chip">${icon('phone')}${leadField(r, 'phone')}</span>` : ''}
+        ${isHash(r.name) || isHash(r.email) || isHash(r.phone) ? `<p class="pii-note">${esc(t('piiNote'))}</p>` : ''}
       </div>
       <div class="lsec"><h3>${icon('briefcase')}${esc(t('leadDeal'))}</h3><dl class="kv">
         ${kvRow(t('owner'), r.assignTo ? esc(r.assignTo) : esc(t('unassigned')))}${kvRow(t('stage'), esc(r.stage))}
@@ -958,7 +981,7 @@ function renderRecommendations() {
         ${list.length ? `<div class="rc-foot">
           <button class="btn ghost sm" data-toggle="${g.key}">${esc(t(recOpen.has(g.key) ? 'hideLeads' : 'viewLeads', { n: fmtInt(list.length) }))}</button>
           <button class="btn soft sm" data-ai="${g.key}" ${adv && adv.loading ? 'disabled' : ''}>${icon('sparkle')}${esc(t('recAskAI'))}</button></div>
-          ${recOpen.has(g.key) ? `<div class="rec-leads">${list.slice(0, 100).map((l) => `<div class="rec-lead" data-id="${esc(l.id)}"><span class="avatar">${esc(initials(l.name))}</span><div style="flex:1;min-width:0"><div style="font-weight:600">${esc(l.name || '—')}</div><div class="muted" style="font-size:11.5px">${esc([l.assignTo || t('unassigned'), l.course, fmtDate(l.date)].filter(Boolean).join(' · '))}</div></div>${scoreBadge(l.admissionsScore)}</div>`).join('')}${list.length > 100 ? `<div class="muted" style="font-size:12px;padding:6px 8px">+${fmtInt(list.length - 100)}</div>` : ''}</div>` : ''}` : `<p class="muted" style="font-size:12.5px;margin-top:auto">${esc(t('recNone'))}</p>`}
+          ${recOpen.has(g.key) ? `<div class="rec-leads">${list.slice(0, 100).map((l) => `<div class="rec-lead" data-id="${esc(l.id)}"><span class="avatar">${esc(leadInitials(l))}</span><div style="flex:1;min-width:0"><div style="font-weight:600">${leadField(l, 'name')}</div><div class="muted" style="font-size:11.5px">${esc([l.assignTo || t('unassigned'), l.course, fmtDate(l.date)].filter(Boolean).join(' · '))}</div></div>${scoreBadge(l.admissionsScore)}</div>`).join('')}${list.length > 100 ? `<div class="muted" style="font-size:12px;padding:6px 8px">+${fmtInt(list.length - 100)}</div>` : ''}</div>` : ''}` : `<p class="muted" style="font-size:12.5px;margin-top:auto">${esc(t('recNone'))}</p>`}
       </div>`;
     }).join('')}</div>`;
   $$('#rec-period button', el).forEach((b) => b.addEventListener('click', () => { state.recUsePeriod = b.dataset.p; renderRecommendations(); }));
@@ -1400,6 +1423,7 @@ function renderAll(o = {}) {
   $('#btn-copy-link').addEventListener('click', async () => { syncStateToUrl(); try { await navigator.clipboard.writeText(location.href); showToast(t('linkCopied')); } catch (e) { showToast(t('copyFailed')); } });
 
   syncStateFromUrl();
+  qToHash(state.q).then((h) => { state.qHash = h; }).catch(() => {});
   booted = true;
   buildNav();
   // Role-aware nav: admins also see Admin → Users.

@@ -142,3 +142,26 @@ visibility / GEO). Writing, sending and tracking releases stays in 4G Press; the
   `auth.requireAdmin` on `/api/press` in `server.js` and add `adminOnly: true` to
   the `press` entry of `NAV` in `public/dashboard.js`.
 
+## Personal data (Oct 2026)
+
+Lead names, emails and phones **never leave the server in clear**: the in-memory
+ActiveCampaign cache keeps them (the dashboard needs them to compute), but every
+JSON response under `/api` goes through `lib/pii.js`.
+
+- **Hashed:** name, email, phone and deal title (usually the contact's name) become
+  SHA-256 of the normalized value — email lowercase, phone digits only — the same
+  rule as the 4Geeks CDP and as Google Ads / Meta customer match, so a lead has the
+  same fingerprint everywhere. Emails and phone numbers written inside free text
+  (feedback, notes) are hashed too; dates and amounts stay readable.
+- **Partial, to recognise the lead:** `namePartial` ("Juan P."), `emailPartial`
+  ("ju•••@gmail.com"), `phonePartial` ("+•••••• 456"), computed on the server. The
+  full hash shows on hover.
+- **Search** finds partial names as before, and an exact email or phone through its hash.
+- **The lead drawer** no longer has email / call / WhatsApp buttons: contact the
+  lead from **Open in ActiveCampaign**.
+- **AI insights, lead coach and recommendations** get hashes only (no partials):
+  templates carry `{first_name}`.
+- **Not touched:** login, `/api/users` (the dashboard's own users) and Proposal
+  Studio (B2B documents that must carry the client's contact).
+- Tests: `npm test` (`node --test`, no extra dependencies).
+

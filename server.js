@@ -3,6 +3,7 @@ const express = require('express');
 const path = require('path');
 const { ActiveCampaignClient } = require('./lib/ac-client');
 const { buildDataset } = require('./lib/analysis');
+const { redactPii, redactText, redactJsonResponses } = require('./lib/pii');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -348,6 +349,11 @@ if (client) {
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json({ limit: '2mb' }));
+// Personal data (lead names, emails, phones, deal titles...) never leaves the
+// server in clear: every JSON response under /api is redacted to SHA-256 (see
+// lib/pii.js). Excluded: login, the dashboard's own users and Proposal Studio
+// (B2B documents that must carry the client's contact).
+app.use('/api', redactJsonResponses({ exempt: /^\/api\/(login|me|users|proposals|proposal-library)(\/|$)/ }));
 
 // ---------------------------------------------------------------------------
 // Auth — one login per person, roles admin/editor (see lib/auth.js).
@@ -591,6 +597,8 @@ app.get('/api/schema', requireAuth, async (req, res) => {
 // Anthropic helper
 // ---------------------------------------------------------------------------
 async function callClaude({ system, messages, maxTokens = 1500 }) {
+    // Last line of defence: no email in clear reaches the AI provider, whatever the caller sent.
+    messages = (messages || []).map((m) => ({ ...m, content: typeof m.content === 'string' ? redactText(m.content, false) : redactPii(m.content) }));
     const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -648,15 +656,15 @@ app.post('/api/ask', requireAuth, async (req, res) => {
         if (Array.isArray(history)) {
             history.slice(-6).forEach((turn) => {
                 if (turn.question && turn.answer) {
-                    messages.push({ role: 'user', content: turn.question });
-                    messages.push({ role: 'assistant', content: turn.answer });
+                    messages.push({ role: 'user', content: redactText(turn.question) });
+                    messages.push({ role: 'assistant', content: redactText(turn.answer) });
                 }
             });
         }
-        let contentStr = `Question: ${question}`;
-        if (useLeads) contentStr += `\n\nLEADS data (JSON):\n${JSON.stringify(context || {})}`;
-        if (useAds) contentStr += `\n\nADS performance data (JSON):\n${JSON.stringify(adsContext)}`;
-        if (Object.keys(adsData).length > 0) contentStr += `\n\nManual ads uploads:\n${JSON.stringify(adsData).slice(0, 40000)}`;
+        let contentStr = `Question: ${redactText(question)}`;
+        if (useLeads) contentStr += `\n\nLEADS data (JSON):\n${JSON.stringify(redactPii(context || {}))}`;
+        if (useAds) contentStr += `\n\nADS performance data (JSON):\n${JSON.stringify(redactPii(adsContext))}`;
+        if (Object.keys(adsData).length > 0) contentStr += `\n\nManual ads uploads:\n${JSON.stringify(redactPii(adsData)).slice(0, 40000)}`;
         messages.push({ role: 'user', content: contentStr });
 
         const answer = await callClaude({ system: systemPrompt, messages, maxTokens: 1500 });
@@ -756,7 +764,6 @@ app.post('/api/lead-coach', requireAuth, async (req, res) => {
 
         const leadProfile = {
             id: rec.id,
-            name: rec.name || 'Unknown',
             course: rec.course,
             region: rec.region,
             dealValue: rec.dealValue,
@@ -810,7 +817,8 @@ Subject: [subject line]
 **SMS TEMPLATE:**
 [SMS text]`;
 
-        const userContent = `Lead Profile:\n${JSON.stringify(leadProfile, null, 2)}${question ? `\n\nRep question: ${question}` : ''}`;
+        // The lead's name, email and phone are not sent to the AI: templates carry {first_name}.
+        const userContent = `Lead Profile:\n${JSON.stringify(redactPii(leadProfile), null, 2)}${question ? `\n\nRep question: ${redactText(question)}` : ''}\n\nPrivacy: the lead's name and contact details are not shared. In the templates write {first_name} where the name goes, and never print hashes.`;
         const coachingText = await callClaude({ system: coachingSystem, messages: [{ role: 'user', content: userContent }], maxTokens: 1500 });
         res.json({ lead: leadProfile, aiCoaching: { fullAnalysis: coachingText } });
     } catch (e) {
@@ -966,7 +974,7 @@ app.post('/api/recommendations', requireAuth, async (req, res) => {
                             model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
                             max_tokens: 512,
                             system: 'You are an expert sales coach for 4Geeks Academy. Provide concise, actionable recommendations for admissions teams based on lead data. Be specific about next steps and priorities. Use at most 4 short bullet points. ' + (lang === 'es' ? 'Answer in Spanish.' : 'Answer in English.'),
-                            messages: [{ role: 'user', content: `${question}\n\nLead Group Data:\n${JSON.stringify(context, null, 2)}` }],
+                            messages: [{ role: 'user', content: `${question}\n\nLead Group Data (personal data hashed):\n${JSON.stringify(redactPii(context), null, 2)}` }],
                         }),
                     });
 

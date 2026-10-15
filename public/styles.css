@@ -438,3 +438,10 @@ a.sb-item:hover{text-decoration:none;}
 /* Press (4G Press) */
 .press-ctrls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
 .press-ctrls .seg{flex-wrap:wrap;}
+
+/* Hashed personal data (lib/pii.js) */
+.hash{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.92em;letter-spacing:-.01em;color:var(--muted);}
+.pii-partial{cursor:help;}
+.pii-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);padding:6px 10px;border:1px dashed var(--border);border-radius:999px;}
+.pii-chip .ico{width:14px;height:14px;}
+.pii-note{flex-basis:100%;margin:2px 0 0;font-size:12px;color:var(--muted);}
