@@ -351,6 +351,8 @@ tr.clickrow{cursor:pointer;}
 /* Ads */
 .ads-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;}
 .ads-status{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+.ads-ctrls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.ads-ctrls:empty{display:none;}
 .upload-zone{border:2px dashed var(--border-strong);border-radius:14px;padding:22px;text-align:center;color:var(--body);cursor:pointer;margin-top:10px;}
 .upload-zone.drag{border-color:var(--blue);background:var(--blue-tint);}
 .file-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12.5px;}
@@ -432,3 +434,14 @@ a.sb-item:hover{text-decoration:none;}
 .ps-preview{width:100%;height:calc(100vh - 150px);min-height:600px;border:1px solid var(--border);border-radius:var(--radius);background:#EEF1F6;}
 @media (max-width:1100px){.ps-cols{grid-template-columns:1fr;} .ps-right{position:static;}}
 @media (max-width:640px){.ps-grid2,.ps-grid3{grid-template-columns:1fr;} .ps-prow{grid-template-columns:1fr 1fr;}}
+
+/* Press (4G Press) */
+.press-ctrls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.press-ctrls .seg{flex-wrap:wrap;}
+
+/* Hashed personal data (lib/pii.js) */
+.hash{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.92em;letter-spacing:-.01em;color:var(--muted);}
+.pii-partial{cursor:help;}
+.pii-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);padding:6px 10px;border:1px dashed var(--border);border-radius:999px;}
+.pii-chip .ico{width:14px;height:14px;}
+.pii-note{flex-basis:100%;margin:2px 0 0;font-size:12px;color:var(--muted);}

@@ -13,6 +13,26 @@ const pctNum = (n, d) => (d ? n / d * 100 : null);
 const fmtInt = (n) => (n == null || isNaN(n) ? '—' : Number(n).toLocaleString(LANG === 'es' ? 'es-ES' : 'en-US'));
 const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const initials = (name) => String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
+// Lead names, emails and phones never reach the browser in clear (server
+// lib/pii.js): each comes as a SHA-256 hash plus a partial version to recognise
+// the lead ("Juan P.", "ju•••@gmail.com", "+•••••• 456"); the hash is on hover.
+const isHash = (v) => typeof v === 'string' && /^[0-9a-f]{64}$/i.test(v);
+const pii = (v) => (v == null || v === '' ? '—' : isHash(v) ? `<span class="hash" title="${esc(v)}">${esc(v.slice(0, 12))}…</span>` : esc(v));
+const leadField = (rec, key) => {
+  const partial = rec[`${key}Partial`]; const v = rec[key];
+  return partial ? `<span class="pii-partial" title="${esc(isHash(v) ? `SHA-256 ${v}` : '')}">${esc(partial)}</span>` : pii(v);
+};
+const leadInitials = (rec) => (rec.namePartial ? initials(rec.namePartial) : isHash(rec.name) ? '#' : initials(rec.name));
+// Search over hashed data: an exact email, phone or full name is hashed like the
+// server does (email lowercase, phone digits only, name lowercase) and matched.
+async function qToHash(q) {
+  const s = String(q || '').trim();
+  if (!s || !(window.crypto && window.crypto.subtle)) return '';
+  const digits = s.replace(/\D/g, '');
+  const v = s.includes('@') ? s.toLowerCase() : (/^[\d\s().+-]+$/.test(s) && digits.length >= 6 ? digits : s.toLowerCase());
+  const buf = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(v));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
 const isoLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const addDays = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return isoLocal(d); };
 const daysBetween = (a, b) => Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 86400000);
@@ -44,6 +64,7 @@ const I = { // inline icons (24px, stroke)
   individual: '<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M17 11h5M19.5 8.5v5"/>',
   ads: '<path d="M3 11v3a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M16 8a5 5 0 0 1 0 8M19 5a9 9 0 0 1 0 14"/>',
   ai: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
+  press: '<path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8M15 18h-5M10 6h8v4h-8z"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>',
   collapse: '<path d="m11 17-5-5 5-5M18 17l-5-5 5-5"/>',
   menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
@@ -175,7 +196,7 @@ const FILTER_BY_KEY = Object.fromEntries(FILTERS.map((f) => [f.key, f]));
 const fVals = (f, r) => (f.vals ? f.vals(r) : (r[f.key] != null && r[f.key] !== '' ? [String(r[f.key])] : []));
 const fLabel = (f, v) => (f.label ? f.label(v) : v);
 
-const VIEWS = ['overview', 'recommendations', 'regions', 'grouped', 'individual', 'ads', 'ai', 'events', 'social', 'proposals', 'users'];
+const VIEWS = ['overview', 'recommendations', 'regions', 'grouped', 'individual', 'ads', 'ai', 'press', 'events', 'social', 'proposals', 'users'];
 const state = { view: 'overview', region: 'all', q: '', dateFrom: '', dateTo: '', preset: '', gran: 'auto', page: 1, sort: { field: 'date', dir: 'desc' }, groupBy: 'assignTo', aiScope: 'both', adsRegion: 'US', recUsePeriod: '0' };
 FILTERS.forEach((f) => { state[f.key] = []; });
 
@@ -201,7 +222,7 @@ function syncStateFromUrl() {
   const p = new URLSearchParams(location.search);
   if (p.has('view') && VIEWS.includes(p.get('view'))) state.view = p.get('view');
   else if (p.has('tab') && VIEWS.includes(p.get('tab'))) state.view = p.get('tab');
-  ['region', 'q', 'dateFrom', 'dateTo', 'preset', 'gran', 'groupBy', 'aiScope'].forEach((k) => { if (p.has(k)) state[k] = p.get(k); });
+  ['region', 'q', 'dateFrom', 'dateTo', 'preset', 'gran', 'groupBy', 'aiScope', 'adsCur', 'adsSales'].forEach((k) => { if (p.has(k)) state[k] = p.get(k); });
   FILTERS.forEach((f) => { const v = p.getAll(f.key).filter((x) => x && x !== 'all'); if (v.length) state[f.key] = v; });
   // Relative presets stay relative: a link to "last 7 days" means last 7 days
   // when opened, not the 7 days it was copied on.
@@ -216,6 +237,8 @@ function syncStateToUrl() {
   if (state.preset && state.preset !== 'custom') p.set('preset', state.preset);
   else { if (state.dateFrom) p.set('dateFrom', state.dateFrom); if (state.dateTo) p.set('dateTo', state.dateTo); if (state.preset) p.set('preset', 'custom'); }
   if (state.gran !== 'auto') p.set('gran', state.gran);
+  if (ADS_CURS.includes(state.adsCur)) p.set('adsCur', state.adsCur);
+  if (state.adsSales === 'same') p.set('adsSales', 'same');
   FILTERS.forEach((f) => state[f.key].forEach((v) => p.append(f.key, v)));
   const qs = p.toString();
   history.replaceState(null, '', qs ? `${location.pathname}?${qs}` : location.pathname);
@@ -238,8 +261,9 @@ function match(r, o = {}) {
   }
   if (state.q) {
     const q = state.q.toLowerCase();
-    const hay = [r.name, r.email, r.phone, r.id, r.campaign, r.location, r.course, r.reason, r.assignTo].join(' ').toLowerCase();
-    if (!hay.includes(q)) return false;
+    const hay = [r.namePartial, r.emailPartial, r.phonePartial, r.name, r.email, r.phone, r.id, r.campaign, r.location, r.course, r.reason, r.assignTo].join(' ').toLowerCase();
+    const exact = state.qHash && (r.name === state.qHash || r.email === state.qHash || r.phone === state.qHash);
+    if (!exact && !hay.includes(q)) return false;
   }
   return true;
 }
@@ -315,6 +339,7 @@ const NAV = [
   { section: 'navSectionMarketing' },
   { view: 'ads', icon: 'ads' },
   { view: 'ai', icon: 'ai' },
+  { view: 'press', icon: 'press' },
   { section: 'navSectionContent' },
   { view: 'events', icon: 'calendar' },
   { view: 'social', icon: 'social' },
@@ -371,7 +396,7 @@ function buildFilterBar() {
   $$('#filterbar [data-filter]').forEach((b) => b.addEventListener('click', (e) => openFilterPopover(e.currentTarget, FILTER_BY_KEY[b.dataset.filter])));
   const more = $('#more-btn'); if (more) more.addEventListener('click', openFilterDrawer);
   const q = $('#f-q');
-  if (q) { let tmr; q.addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(() => { state.q = q.value.trim(); onFiltersChanged({ keepBar: true }); }, 200); }); }
+  if (q) { let tmr; q.addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(async () => { state.q = q.value.trim(); state.qHash = await qToHash(state.q); onFiltersChanged({ keepBar: true }); }, 200); }); }
   renderChips();
 }
 function renderChips() {
@@ -382,10 +407,10 @@ function renderChips() {
   if (state.q) chips.push(`<span class="chip">“<b>${esc(state.q)}</b>”<button data-rm="q" aria-label="remove">${icon('x')}</button></span>`);
   el.innerHTML = chips.length ? chips.join('') + `<button class="chip-clear" id="clear-all">${esc(t('clearAll'))}</button>` : '';
   $$('#active-chips [data-rm]').forEach((b) => b.addEventListener('click', () => {
-    if (b.dataset.rm === 'q') state.q = ''; else state[b.dataset.rm] = state[b.dataset.rm].filter((x) => x !== b.dataset.v);
+    if (b.dataset.rm === 'q') { state.q = ''; state.qHash = ''; } else state[b.dataset.rm] = state[b.dataset.rm].filter((x) => x !== b.dataset.v);
     onFiltersChanged();
   }));
-  const ca = $('#clear-all'); if (ca) ca.addEventListener('click', () => { FILTERS.forEach((f) => { state[f.key] = []; }); state.q = ''; onFiltersChanged(); });
+  const ca = $('#clear-all'); if (ca) ca.addEventListener('click', () => { FILTERS.forEach((f) => { state[f.key] = []; }); state.q = ''; state.qHash = ''; onFiltersChanged(); });
 }
 function onFiltersChanged(o = {}) {
   state.page = 1;
@@ -731,7 +756,7 @@ function renderIndividual(rows) {
       <button class="btn ghost sm" id="btn-export">${esc(t('exportCsv'))}</button></div>
     ${rows.length ? `<div class="tablewrap"><table><thead><tr>${LEAD_COLS.map(([f, l]) => `<th data-sort="${f}" class="${f === 'dealValue' ? 'num' : ''}">${esc(t(l))}${state.sort.field === f ? (state.sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr></thead>
     <tbody>${slice.map((r) => `<tr class="clickrow" data-id="${esc(r.id)}">
-      <td><div class="cell-lead"><span class="avatar">${esc(initials(r.name))}</span><div><div class="nm">${esc(r.name || '—')}</div><div class="em">${esc(r.email || '')}</div></div></div></td>
+      <td><div class="cell-lead"><span class="avatar">${esc(leadInitials(r))}</span><div><div class="nm">${leadField(r, 'name')}</div><div class="em">${r.email ? leadField(r, 'email') : ''}</div></div></div></td>
       <td>${fmtDate(r.date)}</td><td>${esc(r.region || '—')}</td><td class="truncate">${esc(r.course || '—')}</td><td>${esc(r.source || '—')}</td><td class="truncate" title="${esc(r.campaign || '')}">${esc(r.campaign || '—')}</td>
       <td>${r.assignTo ? esc(r.assignTo) : `<span class="muted">${esc(t('unassigned'))}</span>`}</td><td class="truncate">${esc(r.stage || '—')}</td>
       <td>${statusBadge(r.bucket)}</td><td class="truncate" title="${esc(r.reasons && r.reasons.length ? r.reasons.join(', ') : '')}">${r.reasons && r.reasons.length ? esc(r.reasons.join(', ')) : '<span class="muted">—</span>'}</td>
@@ -793,17 +818,19 @@ async function openLead(id) {
   const r = ALL.find((x) => String(x.id) === String(id));
   const d = $('#lead-drawer');
   if (!r) { d.innerHTML = `<div class="dr-head"><div class="dr-titles"><h2>#${esc(id)}</h2></div><button class="icon-btn" data-close>${icon('x')}</button></div><div class="dr-body"><p class="muted">${esc(t('notInWindow'))}</p></div>`; $('[data-close]', d).addEventListener('click', closeDrawers); openDrawer('#lead-drawer'); return; }
-  const phoneDigits = String(r.phone || '').replace(/[^\d+]/g, '');
+  const phoneDigits = isHash(r.phone) ? '' : String(r.phone || '').replace(/[^\d+]/g, '');
   const acLink = META.acAppUrl ? `${META.acAppUrl}/app/deals/${encodeURIComponent(r.id)}` : null;
   d.innerHTML = `
-    <div class="dr-head"><div class="dr-titles"><div class="lead-hero"><span class="avatar">${esc(initials(r.name))}</span><div style="min-width:0"><h2>${esc(r.name || '—')}</h2>
+    <div class="dr-head"><div class="dr-titles"><div class="lead-hero"><span class="avatar">${esc(leadInitials(r))}</span><div style="min-width:0"><h2>${leadField(r, 'name')}</h2>
       <div class="lead-meta">${statusBadge(r.bucket)}${r.region ? `<span class="badge plain b-neutral">${esc(regionLabel(r.region))}</span>` : ''}${r.admissionsScore ? scoreBadge(r.admissionsScore) : ''}<span class="badge plain b-neutral">#${esc(r.id)}</span></div></div></div></div>
       <button class="icon-btn" data-close aria-label="${esc(t('close'))}">${icon('x')}</button></div>
     <div class="dr-body">
       <div class="contact-actions">
-        ${r.email ? `<a class="btn ghost sm" href="mailto:${esc(r.email)}">${icon('mail')}${esc(r.email)}</a>` : ''}
+        ${r.email && !isHash(r.email) ? `<a class="btn ghost sm" href="mailto:${esc(r.email)}">${icon('mail')}${esc(r.email)}</a>` : ''}
         ${phoneDigits ? `<a class="btn ghost sm" href="tel:${esc(phoneDigits)}">${icon('phone')}${esc(r.phone)}</a><a class="btn ghost sm" target="_blank" rel="noopener" href="https://wa.me/${esc(phoneDigits.replace(/^\+/, ''))}">${icon('chat')}${esc(t('whatsapp'))}</a>` : ''}
         ${acLink ? `<a class="btn soft sm" target="_blank" rel="noopener" href="${esc(acLink)}">${icon('external')}${esc(t('openInAC'))}</a>` : ''}
+        ${isHash(r.email) ? `<span class="pii-chip">${icon('mail')}${leadField(r, 'email')}</span>` : ''}${isHash(r.phone) ? `<span class="pii-chip">${icon('phone')}${leadField(r, 'phone')}</span>` : ''}
+        ${isHash(r.name) || isHash(r.email) || isHash(r.phone) ? `<p class="pii-note">${esc(t('piiNote'))}</p>` : ''}
       </div>
       <div class="lsec"><h3>${icon('briefcase')}${esc(t('leadDeal'))}</h3><dl class="kv">
         ${kvRow(t('owner'), r.assignTo ? esc(r.assignTo) : esc(t('unassigned')))}${kvRow(t('stage'), esc(r.stage))}
@@ -959,7 +986,7 @@ function renderRecommendations() {
         ${list.length ? `<div class="rc-foot">
           <button class="btn ghost sm" data-toggle="${g.key}">${esc(t(recOpen.has(g.key) ? 'hideLeads' : 'viewLeads', { n: fmtInt(list.length) }))}</button>
           <button class="btn soft sm" data-ai="${g.key}" ${adv && adv.loading ? 'disabled' : ''}>${icon('sparkle')}${esc(t('recAskAI'))}</button></div>
-          ${recOpen.has(g.key) ? `<div class="rec-leads">${list.slice(0, 100).map((l) => `<div class="rec-lead" data-id="${esc(l.id)}"><span class="avatar">${esc(initials(l.name))}</span><div style="flex:1;min-width:0"><div style="font-weight:600">${esc(l.name || '—')}</div><div class="muted" style="font-size:11.5px">${esc([l.assignTo || t('unassigned'), l.course, fmtDate(l.date)].filter(Boolean).join(' · '))}</div></div>${scoreBadge(l.admissionsScore)}</div>`).join('')}${list.length > 100 ? `<div class="muted" style="font-size:12px;padding:6px 8px">+${fmtInt(list.length - 100)}</div>` : ''}</div>` : ''}` : `<p class="muted" style="font-size:12.5px;margin-top:auto">${esc(t('recNone'))}</p>`}
+          ${recOpen.has(g.key) ? `<div class="rec-leads">${list.slice(0, 100).map((l) => `<div class="rec-lead" data-id="${esc(l.id)}"><span class="avatar">${esc(leadInitials(l))}</span><div style="flex:1;min-width:0"><div style="font-weight:600">${leadField(l, 'name')}</div><div class="muted" style="font-size:11.5px">${esc([l.assignTo || t('unassigned'), l.course, fmtDate(l.date)].filter(Boolean).join(' · '))}</div></div>${scoreBadge(l.admissionsScore)}</div>`).join('')}${list.length > 100 ? `<div class="muted" style="font-size:12px;padding:6px 8px">+${fmtInt(list.length - 100)}</div>` : ''}</div>` : ''}` : `<p class="muted" style="font-size:12.5px;margin-top:auto">${esc(t('recNone'))}</p>`}
       </div>`;
     }).join('')}</div>`;
   $$('#rec-period button', el).forEach((b) => b.addEventListener('click', () => { state.recUsePeriod = b.dataset.p; renderRecommendations(); }));
@@ -989,15 +1016,42 @@ const REGION_TO_CENTER = { USA: 'US', Spain: 'ES', LATAM: 'LATAM', all: 'US' };
 const CENTER_LABEL = { US: 'USA', ES: 'España', LATAM: 'LATAM', CL: 'Chile' };
 const adsCache = new Map();
 const adsRegion = () => (state.region !== 'all' ? REGION_TO_CENTER[state.region] : state.adsRegion);
-async function fetchAds(region, from, to) {
-  const k = `${region}|${from}|${to}`;
+// Ads view prefs (URL-synced). adsSales = Center's sales attribution: 'close' (default,
+// sale on its won date) or 'same' (lead generated AND won in the period = "Gen+Close").
+// adsCur = display currency: '' = the region's native one, or EUR/USD converted below.
+state.adsSales = 'close'; state.adsCur = '';
+const ADS_CURS = ['EUR', 'USD'];
+const ADS_EUR_USD = 1.08; // approx. rate, display only: Center data stays in the native currency
+const adsSalesMode = () => (state.adsSales === 'same' ? 'same' : 'close');
+async function fetchAds(region, from, to, salesMode = 'close') {
+  const k = `${region}|${from}|${to}|${salesMode}`;
   if (adsCache.has(k) && Date.now() - adsCache.get(k).at < 5 * 60 * 1000) return adsCache.get(k).res;
-  const params = new URLSearchParams({ region }); if (from) params.set('start_date', from); if (to) params.set('end_date', to);
+  const params = new URLSearchParams({ region }); if (from) params.set('start_date', from); if (to) params.set('end_date', to); if (salesMode === 'same') params.set('sales_mode', 'same');
   const res = await api('/api/ads-performance?' + params.toString());
   const data = await res.json().catch(() => ({}));
   const out = { ok: res.ok, data };
   if (res.ok) adsCache.set(k, { at: Date.now(), res: out });
   return out;
+}
+// Copy of an ads payload with every money field converted EUR⇄USD (ratios, counts and
+// the cached original are untouched). Returns the payload as-is when no conversion applies.
+function adsDisplay(data, want) {
+  const from = data.currency || 'USD';
+  if (!ADS_CURS.includes(want) || !ADS_CURS.includes(from) || want === from) return data;
+  const f = from === 'EUR' ? ADS_EUR_USD : 1 / ADS_EUR_USD;
+  const conv = (o, keys) => { if (!o) return o; const c = { ...o }; keys.forEach((k) => { if (c[k] != null && c[k] !== '' && !isNaN(c[k])) c[k] = Number(c[k]) * f; }); return c; };
+  const MONEY = ['spend', 'cpl', 'cpa', 'cpc', 'revenue', 'revenueTotal'];
+  const cp = data.campaignsPerf;
+  const ef = data.emailFunnels;
+  return {
+    ...data, currency: want, nativeCurrency: from,
+    summary: conv(data.summary, MONEY),
+    channels: (data.channels || []).map((x) => conv(x, MONEY)),
+    campaigns: (data.campaigns || []).map((x) => conv(x, MONEY)),
+    campaignsPerf: cp ? { ...cp, campaigns: (cp.campaigns || []).map((x) => conv(x, MONEY)), totals: conv(cp.totals, MONEY) } : cp,
+    daily: (data.daily || []).map((x) => conv(x, ['spend'])),
+    emailFunnels: ef ? { ...ef, automations: (ef.automations || []).map((x) => conv(x, ['revenue_atribuido'])) } : ef,
+  };
 }
 const aNum = (n) => (n == null || isNaN(n) ? '—' : fmtInt(n));
 const aRoas = (n) => (n == null || isNaN(n) ? '—' : Number(n).toFixed(2) + '×');
@@ -1046,18 +1100,26 @@ async function renderAds() {
   const region = adsRegion();
   el.innerHTML = `<div class="panel"><div class="ads-bar">
       <div class="ads-status" id="ads-status"><span class="dots"><span></span><span></span><span></span></span></div>
+      <div class="ads-ctrls" id="ads-ctrls"></div>
       ${state.region === 'all' ? `<div style="display:flex;gap:8px;align-items:center"><span class="muted" style="font-size:12px">${esc(t('adsRegionNote'))}</span><div class="seg" id="ads-rg">${['US', 'ES', 'LATAM'].map((rg) => `<button data-rg="${rg}" class="${rg === region ? 'active' : ''}">${CENTER_LABEL[rg]}</button>`).join('')}</div></div>` : ''}
     </div></div><div id="ads-body"><div class="panel"><div class="skeleton" style="height:90px"></div><div class="skeleton" style="height:220px"></div></div></div>`;
   $$('#ads-rg button').forEach((b) => b.addEventListener('click', () => { state.adsRegion = b.dataset.rg; renderAds(); }));
   let out;
-  try { out = await fetchAds(region, state.dateFrom, state.dateTo); } catch (e) { $('#ads-body').innerHTML = `<div class="panel state-card"><p>${esc(t('networkError'))}</p><p class="muted">${esc(e.message)}</p></div>`; return; }
+  try { out = await fetchAds(region, state.dateFrom, state.dateTo, adsSalesMode()); } catch (e) { $('#ads-body').innerHTML = `<div class="panel state-card"><p>${esc(t('networkError'))}</p><p class="muted">${esc(e.message)}</p></div>`; return; }
   if (state.view !== 'ads') return;
   const body = $('#ads-body'); const st = $('#ads-status');
-  const data = out.data;
+  const data = out.ok ? adsDisplay(out.data, state.adsCur) : out.data;
   if (!out.ok) { st.innerHTML = ''; body.innerHTML = `<div class="panel state-card">${icon('alert')}<p style="font-weight:700">${esc(data.needsKey ? t('adsNeedsKey') : t('adsError'))}</p><p class="muted">${esc(data.error || '')}</p></div>` + uploadHtml(); wireUpload(); return; }
   const cur = data.currency || 'USD'; const c = data._cache || {};
   const dot = c.demo ? `<span class="badge plain b-lostu">${esc(t('adsDemo'))}</span>` : c.stale ? `<span class="badge plain b-lostu">${esc(t('adsStale'))}</span>` : `<span class="badge b-won">${esc(t('adsLive'))}</span>`;
-  st.innerHTML = `${dot}<b>${esc(CENTER_LABEL[data.region] || data.region)}</b> · ${esc(t('adsCurrency', { c: cur }))}${data.period ? ` · ${esc(t('adsPeriod', { a: data.period.start_date || '…', b: data.period.end_date || '…' }))}` : ''}`;
+  const sm = data.salesMode || adsSalesMode(); // the attribution Center echoes back
+  const convTag = data.nativeCurrency ? ` <span title="${esc(t('adsConvHint', { r: String(ADS_EUR_USD) }))}" style="cursor:help;text-decoration:underline dotted">(${esc(t('adsConverted'))})</span>` : '';
+  st.innerHTML = `${dot}<b>${esc(CENTER_LABEL[data.region] || data.region)}</b> · ${esc(t('adsCurrency', { c: cur }))}${convTag} · ${esc(t('adsAttribution'))}: <b title="${esc(t('smHint'))}" style="cursor:help">${esc(t(sm === 'same' ? 'smSame' : 'smClose'))}</b>${data.period ? ` · ${esc(t('adsPeriod', { a: data.period.start_date || '…', b: data.period.end_date || '…' }))}` : ''}`;
+  const native = data.nativeCurrency || cur;
+  $('#ads-ctrls').innerHTML = `<div class="seg" id="ads-sm" title="${esc(t('smHint'))}">${['close', 'same'].map((m) => `<button data-sm="${m}" class="${m === adsSalesMode() ? 'active' : ''}">${esc(t(m === 'same' ? 'smSame' : 'smClose'))}</button>`).join('')}</div>`
+    + (ADS_CURS.includes(native) ? `<div class="seg" id="ads-cur">${ADS_CURS.map((c2) => `<button data-cur="${c2}" class="${c2 === cur ? 'active' : ''}">${c2}</button>`).join('')}</div>` : '');
+  $$('#ads-sm button').forEach((b) => b.addEventListener('click', () => { state.adsSales = b.dataset.sm; syncStateToUrl(); renderAds(); }));
+  $$('#ads-cur button').forEach((b) => b.addEventListener('click', () => { state.adsCur = b.dataset.cur === native ? '' : b.dataset.cur; syncStateToUrl(); renderAds(); }));
   const s = data.summary || {};
   const cps = (data.campaignsPerf && data.campaignsPerf.campaigns) || [];
   const chs = data.channels || [];
@@ -1221,6 +1283,86 @@ async function askAI(rows) {
   entry.loading = false; drawThread();
 }
 
+// ───────────────────────── press (4G Press) ─────────────────────────
+// Read-only view of the press-release campaign run in 4G Press: releases, where
+// they got picked up, mentions, per-country KPIs and AI visibility (GEO). The
+// workflow itself (writing, sending, tracking) stays in 4G Press.
+const pressCache = new Map();
+state.pressCountry = ''; // ISO code ('' = all countries)
+async function fetchPress(country) {
+  const k = country || 'all';
+  if (pressCache.has(k) && Date.now() - pressCache.get(k).at < 5 * 60 * 1000) return pressCache.get(k).res;
+  const res = await api('/api/press' + (country ? '?pais=' + encodeURIComponent(country) : ''));
+  const data = await res.json().catch(() => ({}));
+  const out = { ok: res.ok, data };
+  if (res.ok) pressCache.set(k, { at: Date.now(), res: out });
+  return out;
+}
+// 4G Press sends canonical country names in Spanish plus a flag emoji: the flag
+// gives the ISO code, and Intl names the country in the dashboard's language.
+function flagIso(flag) {
+  const cps = [...String(flag || '')].map((c) => c.codePointAt(0) - 0x1F1E6);
+  return cps.length === 2 && cps.every((n) => n >= 0 && n < 26) ? String.fromCharCode(65 + cps[0], 65 + cps[1]) : '';
+}
+function pressCountryName(name, flag) {
+  const iso = flagIso(flag);
+  if (iso) { try { return new Intl.DisplayNames([LANG], { type: 'region' }).of(iso) || name || iso; } catch (e) { /* older browsers: keep 4G Press' name */ } }
+  return name || '—';
+}
+const PRESS_STATUS = { Idea: ['ps_idea', 'b-neutral'], Borrador: ['ps_draft', 'b-neutral'], 'En revisión': ['ps_review', 'b-neutral'], Aprobada: ['ps_approved', 'b-other'], Enviada: ['ps_sent', 'b-other'], Publicada: ['ps_published', 'b-won'], Pendiente: ['pk_pending', 'b-neutral'], Activa: ['pk_live', 'b-won'], 'Sin mención': ['pk_nomention', 'b-lostu'], 'Caída': ['pk_down', 'b-lostc'] };
+const pressStatusLabel = (s) => (PRESS_STATUS[s] ? t(PRESS_STATUS[s][0]) : String(s || '—'));
+const pressBadge = (s) => `<span class="badge ${PRESS_STATUS[s] ? PRESS_STATUS[s][1] : 'b-neutral'}">${esc(pressStatusLabel(s))}</span>`;
+const pressPct = (x) => (x == null || isNaN(x) ? '—' : Math.round(Number(x) * 100) + '%');
+const pressUrl = (u) => (/^https?:\/\//i.test(String(u || '')) ? String(u) : '');
+async function renderPress(el) {
+  el.innerHTML = `<div class="panel"><div class="ads-bar">
+      <div class="ads-status" id="press-status"><span class="dots"><span></span><span></span><span></span></span></div>
+      <div class="press-ctrls" id="press-ctrls"></div>
+    </div></div><div id="press-body"><div class="panel"><div class="skeleton" style="height:90px"></div><div class="skeleton" style="height:220px"></div></div></div>`;
+  let out;
+  try { out = await fetchPress(state.pressCountry); } catch (e) { if (state.view === 'press') $('#press-body').innerHTML = `<div class="panel state-card">${icon('alert')}<p>${esc(t('networkError'))}</p><p class="muted">${esc(e.message)}</p></div>`; return; }
+  if (state.view !== 'press') return;
+  const body = $('#press-body'); const st = $('#press-status'); const d = out.data || {};
+  if (!out.ok) { st.innerHTML = ''; body.innerHTML = `<div class="panel state-card">${icon('alert')}<p style="font-weight:700">${esc(d.needsKey ? t('pressNeedsKey') : t('pressError'))}</p><p class="muted">${esc(d.error || '')}</p></div>`; return; }
+  const s = d.stats || {}; const geo = d.geo || s.geo || {}; const by = d.byCountry || []; const rel = d.releases || []; const pk = d.pickups || [];
+  const app = (pressUrl(d.appUrl) || 'https://4gpress.duckdns.org').replace(/\/$/, '');
+  const cur = by.find((r) => flagIso(r.flag) === state.pressCountry);
+  const c = d._cache || {};
+  st.innerHTML = `${c.stale ? `<span class="badge plain b-lostu">${esc(t('pressStale'))}</span>` : `<span class="badge b-won">${esc(t('adsLive'))}</span>`}<b>${esc(state.pressCountry ? `${cur ? cur.flag + ' ' : ''}${pressCountryName(d.country, cur && cur.flag)}` : t('pressAll'))}</b>${d.generatedAt ? ` · ${esc(t('pressUpdated', { d: new Date(d.generatedAt).toLocaleString(LANG === 'es' ? 'es-ES' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' }) }))}` : ''}`;
+  $('#press-ctrls').innerHTML = (by.length ? `<div class="seg" id="press-ct"><button data-c="" class="${state.pressCountry ? '' : 'active'}">${esc(t('pressAll'))}</button>${by.map((r) => { const iso = flagIso(r.flag); return iso ? `<button data-c="${esc(iso)}" class="${iso === state.pressCountry ? 'active' : ''}">${esc(r.flag)} ${esc(pressCountryName(r.country, r.flag))}</button>` : ''; }).join('')}</div>` : '')
+    + `<a class="btn ghost sm" href="${esc(app)}/app${state.pressCountry ? '?pais=' + encodeURIComponent(state.pressCountry) : ''}" target="_blank" rel="noopener">${icon('external')}${esc(t('pressOpen'))}</a>`;
+  $$('#press-ct button').forEach((b) => b.addEventListener('click', () => { state.pressCountry = b.dataset.c; renderPress(el); }));
+
+  const k = (lbl, val, cls = '', title = '') => `<div class="kpi ${cls}"><div class="k-lbl">${esc(lbl)}</div><div class="k-val" ${title ? `title="${esc(title)}" style="font-size:15px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"` : ''}>${val}</div></div>`;
+  const bs = s.byStatus || {};
+  const sent = (bs.Enviada || 0) + (bs.Publicada || 0);
+  const next = s.nextRelease;
+  const kpis = `<div class="kpis">${k(t('pressReleases'), aNum(s.releases), 'hl-blue')}${k(t('pressSent'), aNum(sent))}${k(t('pressAppearances'), aNum(s.appearances), 'hl-good')}${k(t('pressOutlets'), aNum(s.outlets))}${k(t('pressMentions'), aNum(s.mentionsTotal))}${k(t('pressSpent'), fmtMoney(s.spent, 'USD'))}${k(t('pressCpa'), fmtMoney(s.costPerAppearance, 'USD'))}</div>
+    <div class="kpis k8">${k(t('pressLinks'), aNum(s.links))}${k(t('pressDofollow'), aNum(s.dofollow))}${k(t('pressLost'), aNum(s.lostLinks))}${k(t('pressDomains'), aNum(s.referringDomains))}${k(t('pressGeoPrompts'), aNum(geo.prompts))}${k(t('pressGeoMention'), pressPct(geo.mentionRate))}${k(t('pressGeoCitation'), pressPct(geo.citationRate))}${k(t('pressNext'), next ? esc(next.headline || '—') : '—', '', next ? `${next.headline || ''} · ${next.target_date || ''}` : '')}</div>`;
+
+  const statuses = Array.isArray(d.statuses) && d.statuses.length ? d.statuses : Object.keys(bs);
+  const maxSt = Math.max(1, ...statuses.map((x) => bs[x] || 0));
+  const pipeline = `<div class="panel"><div class="panel-head"><h2>${esc(t('pressPipeline'))}</h2></div><div class="blist">${statuses.map((x) => `<div class="brow" style="cursor:default"><div class="lab">${esc(pressStatusLabel(x))}</div><div class="track"><i style="width:${((bs[x] || 0) / maxSt * 100).toFixed(1)}%;background:${x === 'Publicada' ? 'var(--s-won)' : 'var(--s-active)'}"></i></div><div class="num"><b>${aNum(bs[x] || 0)}</b></div></div>`).join('')}</div></div>`;
+  const geoCard = `<div class="panel"><div class="panel-head"><h2>${esc(t('pressGeo'))}</h2><a class="btn ghost sm" href="${esc(app)}/app/geo" target="_blank" rel="noopener">${icon('external')}${esc(t('pressOpen'))}</a></div>
+    <dl class="kv"><div><dt>${esc(t('pressGeoPrompts'))}</dt><dd>${aNum(geo.prompts)}</dd></div><div><dt>${esc(t('pressGeoChecks'))}</dt><dd>${aNum(geo.checks)}</dd></div><div><dt>${esc(t('pressGeoMention'))}</dt><dd>${pressPct(geo.mentionRate)}</dd></div><div><dt>${esc(t('pressGeoCitation'))}</dt><dd>${pressPct(geo.citationRate)}</dd></div>
+    <div class="wide"><dt>${esc(t('pressGeoLast'))}</dt><dd>${geo.lastCheckedAt ? esc(String(geo.lastCheckedAt).slice(0, 16).replace('T', ' ')) : esc(t('pressGeoNone'))}</dd></div></dl></div>`;
+
+  const byTable = by.length ? `<div class="panel"><div class="panel-head"><h2>${esc(t('pressByCountry'))} <span class="count-tag">${by.length}</span></h2></div><div class="tablewrap"><table class="sortable">
+    <thead><tr><th>${esc(t('pr_country'))}</th><th class="num">${esc(t('pressReleases'))}</th><th class="num">${esc(t('pressSent'))}</th><th class="num">${esc(t('pressAppearances'))}</th><th class="num">${esc(t('pressOutlets'))}</th><th class="num">${esc(t('pressMentions'))}</th><th class="num">${esc(t('pressLinks'))}</th><th class="num">${esc(t('pressSpent'))}</th><th class="num">${esc(t('pressCpa'))}</th></tr></thead>
+    <tbody>${by.map((r) => `<tr><td>${esc(r.flag || '')} ${esc(pressCountryName(r.country, r.flag))}</td><td class="num">${aNum(r.releases)}</td><td class="num">${aNum(r.sent)}</td><td class="num">${aNum(r.appearances)}</td><td class="num">${aNum(r.outlets)}</td><td class="num">${aNum(r.mentions)}</td><td class="num">${aNum(r.links)}</td><td class="num">${fmtMoney(r.spent, 'USD')}</td><td class="num">${fmtMoney(r.costPerAppearance, 'USD')}</td></tr>`).join('')}</tbody></table></div></div>` : '';
+
+  const relTable = `<div class="panel"><div class="panel-head"><h2>${esc(t('pressReleasesT'))} <span class="count-tag">${rel.length}</span></h2></div>${rel.length ? `<div class="tablewrap"><table class="sortable">
+    <thead><tr><th>${esc(t('pr_headline'))}</th><th>${esc(t('pr_country'))}</th><th>${esc(t('pr_status'))}</th><th>${esc(t('pr_target'))}</th><th>${esc(t('pr_platform'))}</th><th class="num">${esc(t('pr_cost'))}</th><th class="num">${esc(t('pressAppearances'))}</th></tr></thead>
+    <tbody>${rel.map((r) => { const u = pressUrl(r.url); return `<tr><td class="truncate" title="${esc(r.headline)}">${u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(r.headline || '—')}</a>` : esc(r.headline || '—')}</td><td>${esc(r.flag || '')} ${esc(pressCountryName(r.country, r.flag))}</td><td>${pressBadge(r.status)}</td><td>${esc(r.target_date || '—')}</td><td>${esc(r.platform || '—')}</td><td class="num">${fmtMoney(r.cost, 'USD')}</td><td class="num">${aNum(r.appearances)}</td></tr>`; }).join('')}</tbody></table></div>` : `<div class="empty">${esc(t('pressNoReleases'))}</div>`}</div>`;
+
+  const pkTable = `<div class="panel"><div class="panel-head"><h2>${esc(t('pressPickups'))} <span class="count-tag">${pk.length}</span></h2></div>${pk.length ? `<div class="tablewrap"><table class="sortable">
+    <thead><tr><th>${esc(t('pr_outlet'))}</th><th>${esc(t('pr_release'))}</th><th>${esc(t('pr_kind'))}</th><th>${esc(t('pr_status'))}</th><th class="num">${esc(t('pressMentions'))}</th><th>${esc(t('pr_published'))}</th></tr></thead>
+    <tbody>${pk.map((p) => { const u = pressUrl(p.url); return `<tr><td class="truncate" title="${esc(p.outlet)}">${u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(p.outlet || u)}</a>` : esc(p.outlet || '—')}</td><td class="truncate" title="${esc(p.release_headline)}">${esc(p.release_headline || '—')}</td><td>${esc(p.kind || '—')}</td><td>${pressBadge(p.status)}</td><td class="num">${aNum(p.mentions)}</td><td>${esc(String(p.published_at || '').slice(0, 10) || '—')}</td></tr>`; }).join('')}</tbody></table></div>` : `<div class="empty">${esc(t('pressNoPickups'))}</div>`}</div>`;
+
+  body.innerHTML = kpis + `<div class="grid2">${pipeline}${geoCard}</div>` + byTable + relTable + pkTable + `<p class="muted" style="font-size:12px">${esc(t('pressDefs'))}</p>`;
+  makeSortable(body);
+}
+
 // ───────────────────────── render orchestration ─────────────────────────
 function renderAll(o = {}) {
   syncStateToUrl();
@@ -1232,6 +1374,8 @@ function renderAll(o = {}) {
   const el = $('#tab-' + state.view);
   // Proposal Studio has its own UI and doesn't use the lead filters or AC data.
   if (state.view === 'users') { $('#filterbar').hidden = true; $('#active-chips').hidden = true; window.renderUsers(el); return; }
+  // Press is campaign-wide: it doesn't use the lead filters or ActiveCampaign data.
+  if (state.view === 'press') { $('#filterbar').hidden = true; $('#active-chips').hidden = true; renderPress(el); return; }
   const isProposals = state.view === 'proposals';
   $('#filterbar').hidden = isProposals; $('#active-chips').hidden = isProposals;
   // Events and Social have their own toolbars; they don't use the lead filters or AC data.
@@ -1283,13 +1427,14 @@ function renderAll(o = {}) {
   $('#btn-refresh').addEventListener('click', async () => {
     const b = $('#btn-refresh'); b.disabled = true;
     await api('/api/refresh', { method: 'POST' }).catch(() => {});
-    adsCache.clear(); recAdvice.clear();
+    adsCache.clear(); recAdvice.clear(); pressCache.clear();
     try { await loadData(); } catch (e) { META.error = e.message; }
     b.disabled = false; renderAll();
   });
   $('#btn-copy-link').addEventListener('click', async () => { syncStateToUrl(); try { await navigator.clipboard.writeText(location.href); showToast(t('linkCopied')); } catch (e) { showToast(t('copyFailed')); } });
 
   syncStateFromUrl();
+  qToHash(state.q).then((h) => { state.qHash = h; }).catch(() => {});
   booted = true;
   buildNav();
   // Role-aware nav: admins also see Admin → Users.
