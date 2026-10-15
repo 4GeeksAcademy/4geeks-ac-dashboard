@@ -147,3 +147,61 @@ The app is now the **4Geeks Marketing Hub**. Two new sections under *Content & e
 
 Storage: `hub_items` table in the same Postgres (`DATABASE_URL`). Optional env:
 `LUMA_API_KEY`, `HUB_SEED=0` to skip the metrics seed. Claude uses the existing `ANTHROPIC_API_KEY`.
+
+## Press (Oct 2026)
+
+Sidebar → **Marketing & AI → Press**: a read-only view of the press-release campaign
+run in [4G Press](https://4gpress.duckdns.org) (releases in 19 countries, where they
+got picked up, mentions of 4Geeks, links, spend and cost per appearance, and AI
+visibility / GEO). Writing, sending and tracking releases stays in 4G Press; the
+**Open 4G Press** button goes there (it has its own login).
+
+- **Data.** `GET /api/press?pais=<ISO>` proxies 4G Press' public, read-only
+  endpoint `/api/public/press-summary` with the `X-Api-Key` header. It never
+  returns release bodies, internal notes or users. Cached 10 min; if 4G Press is
+  down it serves the last good payload, marked as cached.
+- **Config.** `PRESS_API_KEY` in Railway → Variables (optional: `PRESS_API_URL`,
+  `PRESS_TTL_SECONDS`). Without the key the view shows "4G Press is not connected".
+- **Who sees it.** Every signed-in user. To restrict it to admins, use
+  `auth.requireAdmin` on `/api/press` in `server.js` and add `adminOnly: true` to
+  the `press` entry of `NAV` in `public/dashboard.js`.
+
+## Personal data (Oct 2026)
+
+Lead names, emails and phones **never leave the server in clear**: the in-memory
+ActiveCampaign cache keeps them (the dashboard needs them to compute), but every
+JSON response under `/api` goes through `lib/pii.js`.
+
+- **Hashed:** name, email, phone and deal title (usually the contact's name) become
+  SHA-256 of the normalized value — email lowercase, phone digits only — the same
+  rule as the 4Geeks CDP and as Google Ads / Meta customer match, so a lead has the
+  same fingerprint everywhere. Emails and phone numbers written inside free text
+  (feedback, notes) are hashed too; dates and amounts stay readable.
+- **Partial, to recognise the lead:** `namePartial` ("Juan P."), `emailPartial`
+  ("ju•••@gmail.com"), `phonePartial` ("+•••••• 456"), computed on the server. The
+  full hash shows on hover.
+- **Search** finds partial names as before, and an exact email or phone through its hash.
+- **The lead drawer** no longer has email / call / WhatsApp buttons: contact the
+  lead from **Open in ActiveCampaign**.
+- **AI insights, lead coach and recommendations** get hashes only (no partials):
+  templates carry `{first_name}`.
+- **Not touched:** login, `/api/users` (the dashboard's own users) and Proposal
+  Studio (B2B documents that must carry the client's contact).
+- Tests: `npm test` (`node --test`, no extra dependencies).
+
+
+## Brand redesign + Compare (Oct 2026)
+
+- **Look:** same system as the 4Geeks decks, guides and Campaign Studio graphics —
+  white surfaces, one dominant blue `#2381FF`, headline key word in italic blue,
+  yellow section numbers / badges / CTA on blue, navy dark mode, pastel KPI cards,
+  hairline borders, no gradients and no edge stripes. Tokens in `public/styles.css`,
+  brand layer in `public/brand.css` (loaded last). Current logo pack in `public/brand/`.
+  Chart colors follow the tokens: won = blue, open = slate, lost = red, lost without reason = amber.
+- **Compare** replaces *Compare regions* and *Pivot / Group by* (removed; old links redirect).
+  Pick a dimension — region, campaign, source, medium, location, course, admissions rep,
+  test score, lost reason, stage or **period** (date ranges) — and up to 4 sets (A–D),
+  each one or more values. You get a scorecard (best value highlighted, delta vs A),
+  leads and win rate over time, outcome mix, a side-by-side breakdown by a second
+  dimension, quick comparisons, a shareable URL (`cmp=` param) and "Explain the
+  difference with AI". It respects every filter in the bar except the one being compared.

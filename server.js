@@ -3,6 +3,7 @@ const express = require('express');
 const path = require('path');
 const { ActiveCampaignClient } = require('./lib/ac-client');
 const { buildDataset } = require('./lib/analysis');
+const { redactPii, redactText, redactJsonResponses } = require('./lib/pii');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -348,6 +349,12 @@ if (client) {
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json({ limit: '2mb' }));
+// Personal data (lead names, emails, phones, deal titles...) never leaves the
+// server in clear: every JSON response under /api is redacted to SHA-256 (see
+// lib/pii.js). Excluded: login, the dashboard's own users and Proposal Studio
+// (B2B documents that must carry the client's contact) and the Marketing Hub
+// (events + social content, no lead data).
+app.use('/api', redactJsonResponses({ exempt: /^\/api\/(login|me|users|proposals|proposal-library|hub)(\/|$)/ }));
 
 // ---------------------------------------------------------------------------
 // Auth — one login per person, roles admin/editor (see lib/auth.js).
@@ -594,6 +601,8 @@ app.get('/api/schema', requireAuth, async (req, res) => {
 // Anthropic helper
 // ---------------------------------------------------------------------------
 async function callClaude({ system, messages, maxTokens = 1500 }) {
+    // Last line of defence: no email in clear reaches the AI provider, whatever the caller sent.
+    messages = (messages || []).map((m) => ({ ...m, content: typeof m.content === 'string' ? redactText(m.content, false) : redactPii(m.content) }));
     const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -651,15 +660,15 @@ app.post('/api/ask', requireAuth, async (req, res) => {
         if (Array.isArray(history)) {
             history.slice(-6).forEach((turn) => {
                 if (turn.question && turn.answer) {
-                    messages.push({ role: 'user', content: turn.question });
-                    messages.push({ role: 'assistant', content: turn.answer });
+                    messages.push({ role: 'user', content: redactText(turn.question) });
+                    messages.push({ role: 'assistant', content: redactText(turn.answer) });
                 }
             });
         }
-        let contentStr = `Question: ${question}`;
-        if (useLeads) contentStr += `\n\nLEADS data (JSON):\n${JSON.stringify(context || {})}`;
-        if (useAds) contentStr += `\n\nADS performance data (JSON):\n${JSON.stringify(adsContext)}`;
-        if (Object.keys(adsData).length > 0) contentStr += `\n\nManual ads uploads:\n${JSON.stringify(adsData).slice(0, 40000)}`;
+        let contentStr = `Question: ${redactText(question)}`;
+        if (useLeads) contentStr += `\n\nLEADS data (JSON):\n${JSON.stringify(redactPii(context || {}))}`;
+        if (useAds) contentStr += `\n\nADS performance data (JSON):\n${JSON.stringify(redactPii(adsContext))}`;
+        if (Object.keys(adsData).length > 0) contentStr += `\n\nManual ads uploads:\n${JSON.stringify(redactPii(adsData)).slice(0, 40000)}`;
         messages.push({ role: 'user', content: contentStr });
 
         const answer = await callClaude({ system: systemPrompt, messages, maxTokens: 1500 });
@@ -759,7 +768,6 @@ app.post('/api/lead-coach', requireAuth, async (req, res) => {
 
         const leadProfile = {
             id: rec.id,
-            name: rec.name || 'Unknown',
             course: rec.course,
             region: rec.region,
             dealValue: rec.dealValue,
@@ -813,7 +821,8 @@ Subject: [subject line]
 **SMS TEMPLATE:**
 [SMS text]`;
 
-        const userContent = `Lead Profile:\n${JSON.stringify(leadProfile, null, 2)}${question ? `\n\nRep question: ${question}` : ''}`;
+        // The lead's name, email and phone are not sent to the AI: templates carry {first_name}.
+        const userContent = `Lead Profile:\n${JSON.stringify(redactPii(leadProfile), null, 2)}${question ? `\n\nRep question: ${redactText(question)}` : ''}\n\nPrivacy: the lead's name and contact details are not shared. In the templates write {first_name} where the name goes, and never print hashes.`;
         const coachingText = await callClaude({ system: coachingSystem, messages: [{ role: 'user', content: userContent }], maxTokens: 1500 });
         res.json({ lead: leadProfile, aiCoaching: { fullAnalysis: coachingText } });
     } catch (e) {
@@ -969,7 +978,7 @@ app.post('/api/recommendations', requireAuth, async (req, res) => {
                             model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
                             max_tokens: 512,
                             system: 'You are an expert sales coach for 4Geeks Academy. Provide concise, actionable recommendations for admissions teams based on lead data. Be specific about next steps and priorities. Use at most 4 short bullet points. ' + (lang === 'es' ? 'Answer in Spanish.' : 'Answer in English.'),
-                            messages: [{ role: 'user', content: `${question}\n\nLead Group Data:\n${JSON.stringify(context, null, 2)}` }],
+                            messages: [{ role: 'user', content: `${question}\n\nLead Group Data (personal data hashed):\n${JSON.stringify(redactPii(context), null, 2)}` }],
                         }),
                     });
 
@@ -1135,7 +1144,9 @@ function normalizeCenterAds(data, region) {
     ctr: _pickNum(s, ['avg_ctr', 'ctr']),
     cpc: _pickNum(s, ['avg_cpc', 'cpc']),
     conversions: _pickNum(s, ['conversions']),
-    wonPaid: _pickNum(s, ['won_paid']),
+    // Paid sales follow the attribution: in 'same' (Gen+Close) Center sends them as
+    // won_paid_same; won_paid is always by close date, whatever the mode.
+    wonPaid: _pickNum(s, data.sales_mode === 'same' ? ['won_paid_same', 'won_paid'] : ['won_paid']),
     activeCampaigns: _pickNum(s, ['active_campaigns']),
   };
   const channels = (Array.isArray(data.channels) ? data.channels : []).map((c) => ({
@@ -1178,6 +1189,7 @@ function normalizeCenterAds(data, region) {
   return {
     region,
     currency,
+    salesMode: data.sales_mode || null, // attribution Center actually applied (echo)
     summary,
     channels,
     campaigns,
@@ -1235,7 +1247,10 @@ app.get('/api/ads-performance', requireAuth, async (req, res) => {
     endDate = now.toISOString().slice(0, 10);
     startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   }
-  const cacheKey = `${region}|${startDate}|${endDate}`;
+  // Sales attribution, as Center's own toggle: 'same' = lead generated AND won in
+  // the period (Gen+Close); anything else = Center's default 'close' (by won date).
+  const salesMode = req.query.sales_mode === 'same' ? 'same' : 'close';
+  const cacheKey = `${region}|${startDate}|${endDate}|${salesMode}`;
 
   // No key configured: show the layout with sample data locally, or 503 in prod.
   if (!CENTER_ADS_API_KEY) {
@@ -1257,6 +1272,7 @@ app.get('/api/ads-performance', requireAuth, async (req, res) => {
   url.searchParams.set('region', region);
   if (startDate) url.searchParams.set('start_date', startDate);
   if (endDate) url.searchParams.set('end_date', endDate);
+  if (salesMode === 'same') url.searchParams.set('sales_mode', 'same'); // 'close' = Center's default, sent as before
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 20000);
@@ -1286,6 +1302,68 @@ app.get('/api/ads-performance', requireAuth, async (req, res) => {
     const stale = _adsLastGood.get(cacheKey);
     if (stale) return res.json({ ...stale, _cache: { demo: false, stale: true, error: e.message } });
     res.status(504).json({ error: `No se pudo contactar con 4Geeks Center: ${e.message}` });
+  }
+});
+
+// ───────────────────────── 4G Press (press releases) ─────────────────────────
+// Read-only summary of the press-release campaign that lives in 4G Press
+// (https://4gpress.duckdns.org): KPIs, releases, pickups, per-country table and
+// AI visibility. Server-to-server with a dedicated READ-ONLY key (4G Press env
+// PRESS_PUBLIC_API_KEY), cached 10 min, last good payload served if 4G Press is
+// down. Every signed-in user can see it; use auth.requireAdmin to restrict it.
+const PRESS_API_URL = process.env.PRESS_API_URL || 'https://4gpress.duckdns.org/api/public/press-summary';
+const PRESS_API_KEY = process.env.PRESS_API_KEY || '';
+const PRESS_TTL_MS = Number(process.env.PRESS_TTL_SECONDS || 600) * 1000;
+// Only these top-level fields are passed to the browser (4G Press already
+// strips release bodies, notes and users; this keeps it that way).
+const PRESS_FIELDS = ['generatedAt', 'appUrl', 'country', 'statuses', 'stats', 'byCountry', 'geo', 'radar', 'releases', 'pickups'];
+const PRESS_RELEASE_FIELDS = ['id', 'headline', 'country', 'flag', 'lang', 'status', 'theme', 'platform', 'cost', 'target_date', 'sent_date', 'published_date', 'pickups', 'appearances', 'url'];
+const PRESS_PICKUP_FIELDS = ['id', 'release_id', 'release_headline', 'outlet', 'url', 'kind', 'status', 'mentions', 'published_at', 'last_checked_at'];
+const _pressPick = (o, keys) => Object.fromEntries(keys.map((k) => [k, o && o[k] !== undefined ? o[k] : null]));
+const _pressCache = new Map();     // country -> { at, data }
+const _pressLastGood = new Map();  // country -> data
+
+app.get('/api/press', requireAuth, async (req, res) => {
+  const country = String(req.query.pais || '').trim().slice(0, 40);
+  const cacheKey = country.toLowerCase();
+  if (!PRESS_API_KEY) {
+    return res.status(503).json({ error: 'PRESS_API_KEY is not set. Add it as an environment variable (in Railway) to show 4G Press live.', needsKey: true });
+  }
+  const cached = _pressCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < PRESS_TTL_MS) {
+    return res.json({ ...cached.data, _cache: { stale: false, ageSeconds: Math.round((Date.now() - cached.at) / 1000) } });
+  }
+  const url = new URL(PRESS_API_URL);
+  if (country) url.searchParams.set('pais', country);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  const fallback = (error) => {
+    const stale = _pressLastGood.get(cacheKey);
+    return stale ? res.json({ ...stale, _cache: { stale: true, error } }) : null;
+  };
+  try {
+    const r = await fetch(url.toString(), { headers: { 'X-Api-Key': PRESS_API_KEY, Accept: 'application/json' }, signal: controller.signal });
+    clearTimeout(timer);
+    if (!r.ok) {
+      if (fallback(`4G Press ${r.status}`)) return;
+      return res.status(r.status === 401 ? 502 : r.status).json({
+        error: r.status === 401 ? 'PRESS_API_KEY was rejected by 4G Press (401).' : `4G Press returned ${r.status}.`,
+      });
+    }
+    const raw = await r.json();
+    if (!raw || typeof raw !== 'object' || !raw.stats || typeof raw.stats !== 'object' || !Array.isArray(raw.releases)) {
+      throw new Error('unexpected response shape from 4G Press');
+    }
+    const data = Object.fromEntries(PRESS_FIELDS.map((f) => [f, raw[f] ?? null]));
+    data.releases = raw.releases.map((x) => _pressPick(x, PRESS_RELEASE_FIELDS));
+    data.pickups = (Array.isArray(raw.pickups) ? raw.pickups : []).map((x) => _pressPick(x, PRESS_PICKUP_FIELDS));
+    _pressCache.set(cacheKey, { at: Date.now(), data });
+    _pressLastGood.set(cacheKey, data);
+    res.json({ ...data, _cache: { stale: false, ageSeconds: 0 } });
+  } catch (e) {
+    clearTimeout(timer);
+    if (fallback(e.message)) return;
+    res.status(504).json({ error: `Could not reach 4G Press: ${e.message}` });
   }
 });
 

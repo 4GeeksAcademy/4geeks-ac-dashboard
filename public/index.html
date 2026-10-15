@@ -8,17 +8,19 @@
   // Apply theme before first paint so dark mode never flashes white.
   (function(){ try{ var t=localStorage.getItem('dashTheme')||'system'; if(t!=='system') document.documentElement.setAttribute('data-theme', t); }catch(e){} })();
 </script>
+<link rel="icon" type="image/png" href="/brand/4geeks-head-dark.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="/styles.css">
 <link rel="stylesheet" href="/hub.css">
+<link rel="stylesheet" href="/brand.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 </head>
 <body>
 
 <div id="login-screen" class="login-screen" hidden>
   <div class="login-box">
-    <img src="https://storage.googleapis.com/4geeks-academy-website/media/4geeks-devs-logo_1763162063433.png" alt="4Geeks" class="login-logo">
+    <div class="login-top"><span class="logo-swap login-logo"><img src="/brand/4geeks-logo-dark.png" alt="4Geeks" class="on-light"><img src="/brand/4geeks-logo-white.png" alt="4Geeks" class="on-dark"></span><span class="ybadge">Marketing Hub</span></div>
     <h1 data-i18n="appName">Leads & Deals</h1>
     <p class="login-subtitle" data-i18n="signInSub"></p>
     <form id="login-form">
@@ -36,7 +38,7 @@
 <div id="app" class="app" hidden>
   <aside class="sidebar" id="sidebar">
     <div class="sb-brand">
-      <img src="https://storage.googleapis.com/4geeks-academy-website/media/4geeks-devs-logo_1763162063433.png" alt="4Geeks" class="sb-logo">
+      <span class="logo-swap sb-logo"><img src="/brand/4geeks-logo-dark.png" alt="4Geeks" class="on-light full"><img src="/brand/4geeks-logo-white.png" alt="4Geeks" class="on-dark full"><img src="/brand/4geeks-head-dark.png" alt="4Geeks" class="on-light head"><img src="/brand/4geeks-head-white.png" alt="4Geeks" class="on-dark head"></span>
       <div class="sb-brand-text"><div class="sb-title" data-i18n="appName"></div><div class="sb-sub" data-i18n="appSub"></div></div>
     </div>
     <nav class="sb-nav" id="nav"></nav>
@@ -63,6 +65,7 @@
     <header class="topbar">
       <button class="icon-btn only-mobile" id="btn-menu" aria-label="Menu"><span class="ico" data-icon="menu"></span></button>
       <div class="tb-titles">
+        <div class="tb-eyebrow" id="page-eyebrow"></div>
         <h1 id="page-title"></h1>
         <p id="page-sub" class="tb-sub"></p>
       </div>
@@ -79,11 +82,11 @@
     <div class="views">
       <div id="tab-overview" class="view"></div>
       <div id="tab-recommendations" class="view"></div>
-      <div id="tab-regions" class="view"></div>
-      <div id="tab-grouped" class="view"></div>
+      <div id="tab-compare" class="view"></div>
       <div id="tab-individual" class="view"></div>
       <div id="tab-ads" class="view"></div>
       <div id="tab-ai" class="view"></div>
+      <div id="tab-press" class="view"></div>
       <div id="tab-events" class="view"></div>
       <div id="tab-social" class="view"></div>
       <div id="tab-proposals" class="view"></div>
@@ -100,6 +103,7 @@
 
 <script src="/i18n.js"></script>
 <script src="/proposals.js"></script>
+<script src="/compare.js"></script>
 <script src="/hub-common.js"></script>
 <script src="/hub-events.js"></script>
 <script src="/hub-social.js"></script>
