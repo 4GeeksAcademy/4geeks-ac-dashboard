@@ -75,6 +75,7 @@ const I = { // inline icons (24px, stroke)
   alert: '<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
   trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>',
   inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z"/>',
+  social: '<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><path d="M17.5 6.5h.01"/>',
   sparkle: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>',
 };
 const icon = (name) => `<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${I[name] || ''}</svg></span>`;
@@ -93,7 +94,7 @@ function applyStaticI18n() {
   $$('[data-i18n-title]').forEach((el) => { el.title = t(el.dataset.i18nTitle); el.setAttribute('aria-label', el.title); });
   $$('#lang-seg button, .lang-mini').forEach((b) => b.classList.toggle('active', (b.dataset.lang || b.dataset.setlang) === LANG));
 }
-function setLang(l) { LANG = l; try { localStorage.setItem('dashLang', l); } catch (e) {} applyStaticI18n(); if (booted) { buildNav(); buildFilterBar(); renderAll(); } }
+function setLang(l) { LANG = l; try { localStorage.setItem('dashLang', l); } catch (e) {} applyStaticI18n(); if (booted) { ['events', 'social'].forEach((v) => { const t = document.getElementById('tab-' + v); if (t) delete t.dataset.ready; }); buildNav(); buildFilterBar(); renderAll(); } }
 
 let THEME = (() => { try { return localStorage.getItem('dashTheme') || 'system'; } catch (e) { return 'system'; } })();
 function setTheme(th) {
@@ -174,7 +175,7 @@ const FILTER_BY_KEY = Object.fromEntries(FILTERS.map((f) => [f.key, f]));
 const fVals = (f, r) => (f.vals ? f.vals(r) : (r[f.key] != null && r[f.key] !== '' ? [String(r[f.key])] : []));
 const fLabel = (f, v) => (f.label ? f.label(v) : v);
 
-const VIEWS = ['overview', 'recommendations', 'regions', 'grouped', 'individual', 'ads', 'ai', 'proposals', 'users'];
+const VIEWS = ['overview', 'recommendations', 'regions', 'grouped', 'individual', 'ads', 'ai', 'events', 'social', 'proposals', 'users'];
 const state = { view: 'overview', region: 'all', q: '', dateFrom: '', dateTo: '', preset: '', gran: 'auto', page: 1, sort: { field: 'date', dir: 'desc' }, groupBy: 'assignTo', aiScope: 'both', adsRegion: 'US', recUsePeriod: '0' };
 FILTERS.forEach((f) => { state[f.key] = []; });
 
@@ -314,6 +315,9 @@ const NAV = [
   { section: 'navSectionMarketing' },
   { view: 'ads', icon: 'ads' },
   { view: 'ai', icon: 'ai' },
+  { section: 'navSectionContent' },
+  { view: 'events', icon: 'calendar' },
+  { view: 'social', icon: 'social' },
   { section: 'navSectionB2B' },
   { view: 'proposals', icon: 'doc' },
   { section: 'navSectionAdmin', adminOnly: true },
@@ -329,6 +333,7 @@ function buildNav() {
 }
 function go(view) {
   if (view === 'proposals') { delete $('#tab-proposals').dataset.ready; if (window.resetProposals) window.resetProposals(); }
+  if (view === 'events' || view === 'social') delete $('#tab-' + view).dataset.ready;
   state.view = view; state.page = 1;
   $$('#nav .sb-item').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   buildFilterBar();
@@ -1229,6 +1234,12 @@ function renderAll(o = {}) {
   if (state.view === 'users') { $('#filterbar').hidden = true; $('#active-chips').hidden = true; window.renderUsers(el); return; }
   const isProposals = state.view === 'proposals';
   $('#filterbar').hidden = isProposals; $('#active-chips').hidden = isProposals;
+  // Events and Social have their own toolbars; they don't use the lead filters or AC data.
+  if (state.view === 'events' || state.view === 'social') {
+    $('#filterbar').hidden = true; $('#active-chips').hidden = true;
+    if (!el.dataset.ready) { el.dataset.ready = '1'; (state.view === 'events' ? window.renderEvents : window.renderSocial)(el); }
+    return;
+  }
   // Render it once per visit: background lead refreshes must not wipe a half-filled intake.
   if (isProposals) { if (!el.dataset.ready) { el.dataset.ready = '1'; window.renderProposals(el); } return; }
   const needsLeads = !['ads'].includes(state.view);
