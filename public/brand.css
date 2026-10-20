@@ -241,3 +241,29 @@ td.hub-ok{color:var(--blue-ink);}
   .topbar h1{font-size:23px;}
   .cmp-ctl select{min-width:0;width:100%;} .cmp-ctl{flex:1 1 100%;}
 }
+
+/* ---------- Enrollments ---------- */
+.enr-toolbar input[type=date]{height:34px;}
+.enr-months{display:flex;flex-wrap:wrap;gap:6px;margin:-4px 0 14px;}
+.enr-month{border:1px solid var(--border);background:var(--surface);color:var(--body);border-radius:999px;padding:5px 11px;font:700 12px inherit;font-family:inherit;cursor:pointer;text-transform:capitalize;}
+.enr-month:hover{border-color:var(--blue);color:var(--blue-ink);}
+.enr-month.active{background:var(--amber);border-color:var(--amber);color:#0B0B0F;}
+.enr-kpi{cursor:pointer;}
+.enr-kpi:hover{box-shadow:inset 0 0 0 1.5px var(--blue);}
+.kpi .k-val.enr-small{font-size:20px;line-height:1.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.enr-split{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;font-size:11.5px;font-weight:700;color:var(--ink);}
+.enr-split span{display:inline-flex;align-items:center;gap:5px;}
+.enr-split i{width:8px;height:8px;border-radius:50%;display:inline-block;}
+.enr-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 14px;}
+.enr-chips .cmp-chip b{margin-left:3px;}
+.enr-hint{font-size:12px;margin:-6px 0 10px;}
+.brow.enr-sel{background:var(--blue-tint);}
+.brow.enr-sel .lab{font-weight:800;color:var(--blue-ink);}
+.enr-table td{white-space:nowrap;}
+.enr-table a{color:var(--ink);font-weight:600;}
+.enr-table a:hover{color:var(--blue);}
+.enr-source{font-size:11.5px;margin:12px 0 0;}
+.enr-kpis{grid-template-columns:repeat(6,minmax(0,1fr));}
+@media (max-width:1180px){ .enr-kpis{grid-template-columns:repeat(3,minmax(0,1fr));} }
+@media (max-width:640px){ .enr-kpis{grid-template-columns:repeat(2,minmax(0,1fr));} }
+.enr-kpis .kpi .k-val{font-size:clamp(20px,2vw,28px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}

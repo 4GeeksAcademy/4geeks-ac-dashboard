@@ -342,9 +342,25 @@ async function refreshCache() {
     }
 }
 
+// Enrollments (won deals by conversion date, all regions incl. Spain) --
+// its own small pull, see lib/enrollments.js.
+const { createEnrollments } = require('./lib/enrollments');
+const enrollments = createEnrollments({
+  client,
+  getLookups: () => lookups,
+  getMainRecords: () => cache.records,
+  getContactCaches: () => {
+    const contactsById = new Map(((lastEntities && lastEntities.contactsRaw) || []).map((c) => [String(c.id), c]));
+    return { contactsById, fieldValuesById: contactFieldCache };
+  },
+});
+async function refreshEnrollments() { await refreshLookups(); await enrollments.refresh(); }
+
 if (client) {
   refreshCache();
   setInterval(refreshCache, CACHE_TTL_MS);
+  // Start after the main pull has had a head start, then on the same cadence.
+  setTimeout(() => { refreshEnrollments(); setInterval(refreshEnrollments, CACHE_TTL_MS); }, 45000);
 }
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -579,7 +595,18 @@ app.get('/api/summary', requireAuth, (req, res) => {
 
 app.post('/api/refresh', requireAuth, (req, res) => {
   refreshCache();
+  refreshEnrollments();
   res.json({ started: true, refreshing: true });
+});
+
+// Enrollments: won deals in the enrollment pipelines, by conversion date.
+app.get('/api/enrollments', requireAuth, (req, res) => {
+  const st = enrollments.get();
+  res.json({ meta: enrollments.meta(), rows: st.rows, acAppUrl: AC_APP_URL });
+});
+app.post('/api/enrollments/refresh', requireAuth, (req, res) => {
+  refreshEnrollments();
+  res.json({ started: true });
 });
 
 app.get('/api/schema', requireAuth, async (req, res) => {

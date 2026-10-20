@@ -205,3 +205,31 @@ JSON response under `/api` goes through `lib/pii.js`.
   leads and win rate over time, outcome mix, a side-by-side breakdown by a second
   dimension, quick comparisons, a shareable URL (`cmp=` param) and "Explain the
   difference with AI". It respects every filter in the bar except the one being compared.
+
+## Enrollments inside the Hub (Oct 2026)
+
+Sidebar → **Pipeline → Enrollments** replaces the separate Enrollment Dashboard
+(LATAM Google Sheet + USA Notion snapshot, no Spain). Everything now comes from
+ActiveCampaign, for **USA, Spain and LATAM**:
+
+- **What counts:** deals with status **Won** in the enrollment pipelines
+  (`ENROLL_PIPELINES`, default `5:USA,16:Spain,75:Spain,67:LATAM` — USA Programs,
+  Madrid PT, B2B España, Latinoamérica), counted by **won date** (deal field
+  `won_date`), for deals created since `ENROLL_SINCE` (default `2025-01-01`).
+  Pulled separately from the 6-month lead window, so a lead created in 2025 and
+  won this month still counts.
+- **Dropped:** won, then lost (won date set, status Lost) or parked in a
+  "BAJA" stage (Spain stage 1083).
+- **Per enrollment:** location, admissions rep, source, medium, campaign
+  (contact fields, falling back to the deal's own utm fields), program
+  (deal course, or the won stage name), cohort (from Spain's won stage names),
+  lead created date, converted date, days to convert, ticket price (deal
+  "Final price", else deal value) in EUR/USD, financing partner, status.
+- **View:** region and period (by conversion date, month chips), KPIs
+  (enrollments vs previous period, tuition sold, avg ticket, drops, days to
+  convert, top source), stacked trend by week/month with drops, breakdowns by
+  program, source, location, rep and campaign (click to filter), sortable
+  table with links to the AC deal, CSV export. EUR → USD at `USD_PER_EUR` (1.08).
+- **API:** `GET /api/enrollments`, `POST /api/enrollments/refresh`; refreshed on
+  the same cadence as the main pull. Names, emails and phones are hashed like
+  everywhere else. Tests: `test/enrollments.test.js`.
