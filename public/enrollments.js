@@ -13,9 +13,9 @@ const EN_STR = {
     k_enrollments: 'Enrollments', k_tuition: 'Tuition sold', k_avg: 'Avg ticket', k_dropped: 'Dropped', k_dropRate: 'drop rate', k_days: 'Days to convert', k_daysSub: 'median, lead created → won', k_topSource: 'Top source', k_vsPrev: 'vs previous period', k_net: 'net of drops',
     trend: 'Enrollments over time', trendSub: 'By conversion date — click a bar to filter the table', byProgram: 'By program', bySource: 'By source', byLocation: 'By location', byRep: 'By admissions rep', byCampaign: 'By campaign', byRegion: 'By region',
     clickHint: 'Click any bar or row to filter everything below.', table: 'Enrollments', tableSub: '{n} shown · newest first', csv: 'Download CSV', openAC: 'Open in ActiveCampaign',
-    c_converted: 'Converted', c_created: 'Lead created', c_student: 'Student', c_region: 'Region', c_program: 'Program', c_cohort: 'Cohort / stage', c_location: 'Location', c_rep: 'Rep', c_source: 'Source', c_campaign: 'Campaign', c_price: 'Ticket price', c_days: 'Days', c_status: 'Status',
+    c_converted: 'Converted', c_created: 'Lead created', c_student: 'Student', c_region: 'Region', c_program: 'Program', c_cohort: 'Cohort / plan', c_location: 'Location', c_rep: 'Rep', c_source: 'Source', c_campaign: 'Campaign', c_price: 'Ticket price', c_days: 'Days', c_status: 'Status',
     enrolled: 'Enrolled', dropped: 'Dropped', b2b: 'B2B', notSet: 'Not set', loading: 'Loading enrollments from ActiveCampaign… the first pull takes about a minute after a deploy.', empty: 'No enrollments match these filters.',
-    source: 'Source: ActiveCampaign — won deals in {p}, counted by won date (deals created since {s}). Dropped = won, then lost or moved to a "BAJA" stage. EUR → USD at {r}.', updated: 'updated {t}', clear: 'Clear filters', status: 'Status',
+    usaSheet: 'USA: "2026 USA DATA" sheet, Attribution Report tab (rep matched from the ActiveCampaign deal by email; the sheet has no drops).', usaErr: 'Could not refresh the USA sheet ({e}) — showing the last copy.', source: 'Spain and LATAM: ActiveCampaign won deals in pipelines {p}, counted by won date (deals created since {s}). Dropped = won, then lost or moved to a "BAJA" stage. EUR → USD at {r}.', updated: 'updated {t}', clear: 'Clear filters', status: 'Status',
   },
   es: {
     region: 'Región', all: 'Todas', period: 'Convertido', p_thisMonth: 'Este mes', p_lastMonth: 'Mes pasado', p_30d: 'Últimos 30 días', p_90d: 'Últimos 90 días', p_ytd: 'Este año', p_all: 'Todo', from: 'Desde', to: 'Hasta',
@@ -23,9 +23,9 @@ const EN_STR = {
     k_enrollments: 'Matrículas', k_tuition: 'Matrícula vendida', k_avg: 'Ticket medio', k_dropped: 'Bajas', k_dropRate: 'tasa de baja', k_days: 'Días para convertir', k_daysSub: 'mediana, lead creado → ganado', k_topSource: 'Fuente top', k_vsPrev: 'vs periodo anterior', k_net: 'sin contar bajas',
     trend: 'Matrículas en el tiempo', trendSub: 'Por fecha de conversión — haz clic en una barra para filtrar la tabla', byProgram: 'Por programa', bySource: 'Por fuente', byLocation: 'Por ubicación', byRep: 'Por asesor', byCampaign: 'Por campaña', byRegion: 'Por región',
     clickHint: 'Haz clic en cualquier barra o fila para filtrar todo lo de abajo.', table: 'Matrículas', tableSub: '{n} mostradas · más recientes primero', csv: 'Descargar CSV', openAC: 'Abrir en ActiveCampaign',
-    c_converted: 'Convertido', c_created: 'Lead creado', c_student: 'Alumno', c_region: 'Región', c_program: 'Programa', c_cohort: 'Cohorte / etapa', c_location: 'Ubicación', c_rep: 'Asesor', c_source: 'Fuente', c_campaign: 'Campaña', c_price: 'Precio', c_days: 'Días', c_status: 'Estado',
+    c_converted: 'Convertido', c_created: 'Lead creado', c_student: 'Alumno', c_region: 'Región', c_program: 'Programa', c_cohort: 'Cohorte / plan', c_location: 'Ubicación', c_rep: 'Asesor', c_source: 'Fuente', c_campaign: 'Campaña', c_price: 'Precio', c_days: 'Días', c_status: 'Estado',
     enrolled: 'Matriculado', dropped: 'Baja', b2b: 'B2B', notSet: 'Sin dato', loading: 'Cargando matrículas desde ActiveCampaign… la primera carga tarda cerca de un minuto tras un despliegue.', empty: 'No hay matrículas con estos filtros.',
-    source: 'Fuente: ActiveCampaign — deals ganados en {p}, contados por fecha de ganado (deals creados desde {s}). Baja = ganado y luego perdido o movido a una etapa "BAJA". EUR → USD a {r}.', updated: 'actualizado {t}', clear: 'Quitar filtros', status: 'Estado',
+    usaSheet: 'USA: hoja "2026 USA DATA", pestaña Attribution Report (asesor tomado del deal de ActiveCampaign por email; la hoja no registra bajas).', usaErr: 'No se pudo actualizar la hoja de USA ({e}) — se muestra la última copia.', source: 'España y LATAM: deals ganados en ActiveCampaign, pipelines {p}, contados por fecha de ganado (deals creados desde {s}). Baja = ganado y luego perdido o movido a una etapa "BAJA". EUR → USD a {r}.', updated: 'actualizado {t}', clear: 'Quitar filtros', status: 'Estado',
   },
 };
 const et = (k, v) => { let s = (EN_STR[LANG] || EN_STR.en)[k] ?? EN_STR.en[k] ?? k; if (v) Object.entries(v).forEach(([a, b]) => { s = s.split(`{${a}}`).join(b); }); return s; };
@@ -174,10 +174,10 @@ function renderEnrollments(loadingOnly) {
         ${shown.map((r) => `<tr>
           <td>${esc(fmtDate(r.converted, { day: 'numeric', month: 'short', year: '2-digit' }))}</td>
           <td class="muted">${esc(r.created ? fmtDate(r.created, { day: 'numeric', month: 'short', year: '2-digit' }) : '—')}</td>
-          <td>${acUrl ? `<a href="${esc(acUrl)}/app/deals/${esc(r.id)}" target="_blank" rel="noopener" title="${esc(et('openAC'))}">` : ''}<span class="pii-partial" title="${esc(r.name || '')}">${esc(r.namePartial || r.emailPartial || '#' + r.id)}</span>${acUrl ? '</a>' : ''}</td>
-          <td><span class="hub-mk ${MARKET_CLASS[r.region] || ''}">${esc(regionLabel(r.region))}</span>${r.b2b ? ` <span class="badge plain b-other">${esc(et('b2b'))}</span>` : ''}</td>
+          <td>${acUrl && !/^usa-/.test(r.id) ? `<a href="${esc(acUrl)}/app/deals/${esc(r.id)}" target="_blank" rel="noopener" title="${esc(et('openAC'))}">` : ''}<span class="pii-partial" title="${esc(r.name || r.email || '')}">${esc(r.namePartial || r.emailPartial || '#' + r.id)}</span>${acUrl && !/^usa-/.test(r.id) ? '</a>' : ''}</td>
+          <td><span class="hub-mk ${MARKET_CLASS[r.region] || ''}">${esc(regionLabel(r.region))}</span></td>
           <td>${esc(r.program || '—')}</td>
-          <td class="truncate" title="${esc(r.stage || '')}">${esc(r.cohort || r.stage || '—')}</td>
+          <td class="truncate" title="${esc(r.stage || r.plan || '')}">${esc(r.cohort || r.plan || r.stage || '—')}</td>
           <td>${esc(r.location || '—')}</td>
           <td>${esc(r.assignTo || '—')}</td>
           <td>${esc(r.source || '—')}</td>
@@ -188,7 +188,8 @@ function renderEnrollments(loadingOnly) {
         </tr>`).join('')}</tbody></table></div>
         ${shown.length < sorted.length ? `<div class="pager"><span>${fmtInt(shown.length)} / ${fmtInt(sorted.length)}</span><button class="btn ghost sm" id="enr-more">+${Math.min(PAGE, sorted.length - shown.length)}</button></div>` : ''}`
       : `<div class="empty">${esc(et('empty'))}</div>`}
-      <p class="muted enr-source">${esc(et('source', { p: meta.pipelines.map((p) => `${p.id} (${regionLabel(p.region)})`).join(', '), s: meta.since, r: meta.usdPerEur }))}${meta.at ? ' · ' + esc(et('updated', { t: new Date(meta.at).toLocaleString(LANG === 'es' ? 'es-ES' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) })) : ''}</p>
+      ${meta.usaError ? `<div class="ps-warn">${icon('alert')}<span>${esc(et('usaErr', { e: meta.usaError }))}</span></div>` : ''}
+      <p class="muted enr-source">${esc(meta.sources && meta.sources.USA === 'sheet' ? et('usaSheet') + ' ' : '')}${esc(et('source', { p: meta.pipelines.map((p) => `${p.id} (${regionLabel(p.region)})`).join(', '), s: meta.since, r: meta.usdPerEur }))}${meta.at ? ' · ' + esc(et('updated', { t: new Date(meta.at).toLocaleString(LANG === 'es' ? 'es-ES' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) })) : ''}</p>
     </div>`;
 
   // ---- wiring ----

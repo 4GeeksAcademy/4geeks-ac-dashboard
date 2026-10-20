@@ -2,7 +2,7 @@
 // t('key', {n: 3}) interpolates {n}.
 window.I18N = {
   en: {
-    nav_enrollments: 'Enrollments', sub_enrollments: 'Won deals for USA, Spain and LATAM, live from ActiveCampaign, by the date they converted', emailsOpened: 'Emails opened', emailsClicked: 'Emails clicked', lastOn: 'last {d}', lastActivity: 'Last email activity', mppNote: 'This contact uses Apple Mail privacy protection, so some opens may be automatic. Clicks are the reliable signal.',
+    nav_enrollments: 'Enrollments', sub_enrollments: 'USA from the attribution sheet, Spain and LATAM from ActiveCampaign — by the date they enrolled', emailsOpened: 'Emails opened', emailsClicked: 'Emails clicked', lastOn: 'last {d}', lastActivity: 'Last email activity', mppNote: 'This contact uses Apple Mail privacy protection, so some opens may be automatic. Clicks are the reliable signal.',
     appName: 'Marketing Hub', appSub: '4Geeks · leads, content & events',
     signIn: 'Sign in', signInSub: 'Access your live lead & deal pipeline', username: 'Username', password: 'Password', invalidCreds: 'Invalid credentials',
     nav_overview: 'Overview', nav_recommendations: 'Recommendations', nav_compare: 'Compare', sub_compare: 'Put campaigns, sources, locations, reps, regions or periods side by side', nav_individual: 'Leads', nav_ads: 'Ads performance', nav_ai: 'AI insights',
@@ -65,7 +65,7 @@ window.I18N = {
     uploadTitle: 'Upload manual exports (optional — feeds AI insights)', uploadNote: 'Upload Meta or Google Ads exports (CSV or images). They are considered in AI insights questions.', uploadDrop: 'Drop CSV or images here, or click to choose', noFiles: 'No files uploaded.', remove: 'Remove', uploaded: 'Loaded {n} ads file(s) — use them in AI insights',
   },
   es: {
-    nav_enrollments: 'Matrículas', sub_enrollments: 'Deals ganados de USA, España y LATAM, en vivo desde ActiveCampaign, por fecha de conversión', emailsOpened: 'Emails abiertos', emailsClicked: 'Emails con clic', lastOn: 'último {d}', lastActivity: 'Última actividad de email', mppNote: 'Este contacto usa la protección de privacidad de Apple Mail, así que algunas aperturas pueden ser automáticas. Los clics son la señal fiable.',
+    nav_enrollments: 'Matrículas', sub_enrollments: 'USA desde la hoja de atribución, España y LATAM desde ActiveCampaign — por fecha de matrícula', emailsOpened: 'Emails abiertos', emailsClicked: 'Emails con clic', lastOn: 'último {d}', lastActivity: 'Última actividad de email', mppNote: 'Este contacto usa la protección de privacidad de Apple Mail, así que algunas aperturas pueden ser automáticas. Los clics son la señal fiable.',
     appName: 'Marketing Hub', appSub: '4Geeks · leads, contenido y eventos',
     signIn: 'Entrar', signInSub: 'Accede a tu pipeline de leads y deals en vivo', username: 'Usuario', password: 'Contraseña', invalidCreds: 'Credenciales inválidas',
     nav_overview: 'Resumen', nav_recommendations: 'Recomendaciones', nav_compare: 'Comparar', sub_compare: 'Pon campañas, fuentes, ubicaciones, asesores, regiones o periodos lado a lado', nav_individual: 'Leads', nav_ads: 'Rendimiento de Ads', nav_ai: 'IA Insights',

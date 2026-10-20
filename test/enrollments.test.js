@@ -90,3 +90,51 @@ test('money / program / cohort parsing', () => {
   assert.equal(programFrom('AI Fluency', null), 'AI Fluency');
   assert.equal(cohortFrom('WON CS TARDES (01 JUN - 18 SEPT) - fecha 2026/06/01'), '01 JUN - 18 SEPT');
 });
+
+const { fetchUsaSheet, program, location } = require('../lib/usa-sheet');
+
+test('USA from the sheet, matched to the AC deal by email for the rep', async () => {
+  const client = stubClient();
+  const enr = createEnrollments({
+    client,
+    usaFromSheet: true,
+    usaFeed: async () => [
+      { sheetRow: 2, email: 'A@B.com', source: 'google', campaign: '136', created: '2026-09-01', converted: '2026-10-07', location: 'New York', courseRaw: 'ai-engineering', program: 'AI Engineering', daysToConvert: 36, plan: 'Regular Program', price: 15940 },
+      { sheetRow: 3, email: 'nobody@x.com', source: null, created: null, converted: '2026-10-14', location: 'Miami', courseRaw: 'CS', program: 'Cybersecurity', daysToConvert: null, plan: 'Job Guarantee USA', price: 12999 },
+    ],
+    getLookups: () => ({ usersById: users, stagesById: stages }),
+    getMainRecords: () => [],
+    getContactCaches: () => ({ contactsById: new Map([['11', { id: '11', email: 'a@b.com', firstName: 'Ann' }], ['12', { id: '12' }]]), fieldValuesById: new Map([['11', []], ['12', []]]) }),
+  });
+  await enr.refresh();
+  const { rows } = enr.get();
+  const usa = rows.filter((r) => r.region === 'USA');
+  assert.equal(usa.length, 2);
+  const a = usa.find((r) => r.email === 'A@B.com');
+  assert.equal(a.assignTo, 'Marcia R.');      // owner of AC deal 1 (contact 11)
+  assert.equal(a.id, '1');
+  assert.equal(a.price, 15940);
+  assert.equal(a.sourceSystem, 'sheet');
+  const b = usa.find((r) => r.email === 'nobody@x.com');
+  assert.equal(b.assignTo, null);
+  assert.match(b.id, /^usa-/);
+  // USA comes from the sheet only: AC pipeline 5 is a lookup, not counted twice
+  assert.equal(rows.filter((r) => r.region === 'USA' && r.sourceSystem === 'activecampaign').length, 0);
+  assert.deepEqual(enr.meta().sources, { USA: 'sheet', Spain: 'activecampaign', LATAM: 'activecampaign' });
+});
+
+test('USA sheet feed parsing', async () => {
+  const body = JSON.stringify({ rows: [
+    { row_number: 2, col_1: '10/7/2026', EMAIL: 'x@y.com', SOURCE: 'fb', CAMPAIGN: '', CREATED: '10/1/2026', LOCATION: 'newyork-usa', PROGRAM: 'ai-engineering\r\n', 'CONV TIME': '6', 'ENR PLAN': 'Regular Program', 'TICKET AMT': '$15,940.00' },
+    { row_number: 3, col_1: '1/4/2026', EMAIL: 'z@y.com', SOURCE: 'google', CREATED: '', LOCATION: 'atlanta', PROGRAM: 'FS - ES', 'CONV TIME': '46026', 'TICKET AMT': '$8,249.25' },
+    { row_number: 4, col_1: '', EMAIL: '' },
+  ] });
+  const rows = await fetchUsaSheet({ url: 'http://feed', key: 'k', fetchImpl: async (u, o) => { assert.equal(o.headers['x-hub-key'], 'k'); return { ok: true, text: async () => body }; } });
+  assert.equal(rows.length, 2);
+  assert.deepEqual([rows[0].converted, rows[0].created, rows[0].daysToConvert, rows[0].source, rows[0].location, rows[0].program, rows[0].price], ['2026-10-07', '2026-10-01', 6, 'facebook', 'New York', 'AI Engineering', 15940]);
+  assert.equal(rows[1].daysToConvert, null); // 46026 is a typed date serial, not days
+  assert.equal(rows[1].program, 'Full-Stack (Spanish)');
+  assert.equal(location('downtown-miami'), 'Miami');
+  assert.equal(program('AIE'), 'AI Engineering');
+  await assert.rejects(fetchUsaSheet({ url: 'http://feed', key: 'bad', fetchImpl: async () => ({ ok: true, text: async () => '' }) }), /empty body/);
+});
