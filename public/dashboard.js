@@ -196,7 +196,7 @@ const FILTER_BY_KEY = Object.fromEntries(FILTERS.map((f) => [f.key, f]));
 const fVals = (f, r) => (f.vals ? f.vals(r) : (r[f.key] != null && r[f.key] !== '' ? [String(r[f.key])] : []));
 const fLabel = (f, v) => (f.label ? f.label(v) : v);
 
-const VIEWS = ['overview', 'recommendations', 'compare', 'individual', 'ads', 'ai', 'press', 'events', 'social', 'proposals', 'users'];
+const VIEWS = ['overview', 'enrollments', 'recommendations', 'compare', 'individual', 'ads', 'ai', 'press', 'events', 'social', 'proposals', 'users'];
 const state = { view: 'overview', region: 'all', q: '', dateFrom: '', dateTo: '', preset: '', gran: 'auto', page: 1, sort: { field: 'date', dir: 'desc' }, groupBy: 'assignTo', aiScope: 'both', adsRegion: 'US', recUsePeriod: '0' };
 FILTERS.forEach((f) => { state[f.key] = []; });
 
@@ -332,11 +332,10 @@ function renderFreshness() {
 // Enrollments (by enrollment date, all history) live in the 4Geeks
 // Enrollment Dashboard, which reads the LATAM Google Sheet and the USA
 // Notion tracker / marketing sheet through the viewer's claude.ai connectors.
-const ENROLLMENT_DASHBOARD_URL = 'https://claude.ai/artifact/MMejYb9nn2Ea3tkZwFFpL5';
 const NAV = [
   { section: 'navSectionPipeline' },
   { view: 'overview', icon: 'overview' },
-  { href: ENROLLMENT_DASHBOARD_URL, icon: 'trophy', label: 'nav_enrollments' },
+  { view: 'enrollments', icon: 'trophy' },
   { view: 'individual', icon: 'individual' },
   { view: 'recommendations', icon: 'recommendations' },
   { view: 'compare', icon: 'regions' },
@@ -1324,6 +1323,8 @@ function renderAll(o = {}) {
   const isProposals = state.view === 'proposals';
   $('#filterbar').hidden = isProposals; $('#active-chips').hidden = isProposals;
   // Events and Social have their own toolbars; they don't use the lead filters or AC data.
+  // Enrollments has its own toolbar (dates are conversion dates, not lead creation).
+  if (state.view === 'enrollments') { $('#filterbar').hidden = true; $('#active-chips').hidden = true; window.renderEnrollments(); return; }
   if (state.view === 'events' || state.view === 'social') {
     $('#filterbar').hidden = true; $('#active-chips').hidden = true;
     if (!el.dataset.ready) { el.dataset.ready = '1'; (state.view === 'events' ? window.renderEvents : window.renderSocial)(el); }
@@ -1372,6 +1373,7 @@ function renderAll(o = {}) {
     const b = $('#btn-refresh'); b.disabled = true;
     await api('/api/refresh', { method: 'POST' }).catch(() => {});
     adsCache.clear(); recAdvice.clear(); pressCache.clear();
+    if (window.enrReset && state.view === 'enrollments') window.enrReset();
     try { await loadData(); } catch (e) { META.error = e.message; }
     b.disabled = false; renderAll();
   });

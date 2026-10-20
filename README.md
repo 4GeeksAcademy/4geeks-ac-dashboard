@@ -205,3 +205,39 @@ JSON response under `/api` goes through `lib/pii.js`.
   leads and win rate over time, outcome mix, a side-by-side breakdown by a second
   dimension, quick comparisons, a shareable URL (`cmp=` param) and "Explain the
   difference with AI". It respects every filter in the bar except the one being compared.
+
+## Enrollments inside the Hub (Oct 2026)
+
+Sidebar → **Pipeline → Enrollments** replaces the separate Enrollment Dashboard.
+Sources per region:
+
+- **USA — the "2026 USA DATA" sheet, tab ATTRIBUTION REPORT** (the one the USA
+  team keeps and n8n "USA Won Sync" fills). Read through the n8n workflow
+  *Marketing Hub — USA enrollments feed* (folder USA), which uses the existing
+  Google Sheets credential and answers only with header `x-hub-key`.
+  Env: `USA_ENROLL_FEED_URL`, `USA_ENROLL_FEED_KEY`. Each row is matched by
+  email to the ActiveCampaign deal (pipeline 5) to add the admissions rep, name
+  and the AC link. The sheet has no drops. Without the feed URL, USA falls back
+  to AC pipeline 5.
+- **Spain — ActiveCampaign pipeline 16 "4Geeks Madrid PT"**. B2B España is not counted.
+- **LATAM — ActiveCampaign pipeline 67 "4Geeks Latinoamérica"**.
+  (`ENROLL_PIPELINES`, default `16:Spain,67:LATAM`.)
+
+For AC regions: deals with status **Won**, counted by **won date**, for deals
+created since `ENROLL_SINCE` (default `2025-01-01`), pulled separately from the
+6-month lead window. **Dropped** = won, then lost (won date set, status Lost) or
+parked in a "BAJA" stage (Spain stage 1083).
+
+Per enrollment: location, admissions rep, source, campaign, program, cohort
+(Spain won stages) or plan (USA "ENR PLAN"), lead created date, converted date,
+days to convert, ticket price in EUR/USD, status.
+
+View: region and period (by enrollment date, month chips), KPIs vs previous
+period (enrollments, tuition sold, avg ticket, drops, days to convert, top
+source), stacked trend by week/month with drops, breakdowns by program, source,
+location, rep and campaign (click to filter), sortable table with AC links,
+CSV export. EUR → USD at `USD_PER_EUR` (1.08).
+
+API: `GET /api/enrollments`, `POST /api/enrollments/refresh`; refreshed with the
+main pull. Names, emails and phones are hashed like everywhere else.
+Tests: `test/enrollments.test.js`.
