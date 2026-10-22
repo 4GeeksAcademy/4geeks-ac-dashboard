@@ -370,7 +370,7 @@ app.use(express.json({ limit: '2mb' }));
 // lib/pii.js). Excluded: login, the dashboard's own users and Proposal Studio
 // (B2B documents that must carry the client's contact) and the Marketing Hub
 // (events + social content, no lead data).
-app.use('/api', redactJsonResponses({ exempt: /^\/api\/(login|me|users|proposals|proposal-library|hub)(\/|$)/ }));
+app.use('/api', redactJsonResponses({ exempt: /^\/api\/(login|me|users|proposals|proposal-library|proposal-archive|proposal-references|proposal-playbook|hub)(\/|$)/ }));
 
 // ---------------------------------------------------------------------------
 // Auth — one login per person, roles admin/editor (see lib/auth.js).
