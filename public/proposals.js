@@ -6,6 +6,22 @@
 
 const PS_STR = {
   en: {
+    tabProposals: 'Proposals', tabArchive: 'Past proposals', tabPlaybook: 'Playbook',
+    archiveSub: 'Upload proposals sent before. Claude reads each one and every new draft learns from them — prices, structure, the lines that won and what was missing in the ones we lost.',
+    drop: 'Drop PDFs, Word or PowerPoint files here, or click to choose', dropHint: 'Google Docs / Slides: File → Download → PDF. Up to 20 MB each.',
+    batchClient: 'Client (optional, else Claude reads it)', batchOutcome: 'Outcome', batchNotes: 'Notes for Claude (optional): why it was won or lost, context',
+    pasteToggle: 'Or paste the text of a proposal', pasteSave: 'Add pasted proposal', uploading: 'Uploading', uploaded: 'Uploaded — Claude is reading it',
+    o_won: 'Won', o_lost: 'Lost', o_sent: 'Sent', o_unknown: 'Unknown',
+    st_processing: 'Reading…', st_ready: 'Learned', st_error: 'Failed',
+    archiveEmpty: 'No past proposals yet. Upload the ones you have sent — won and lost both teach something.',
+    file: 'File', year: 'Year', outcome: 'Outcome', total: 'Total', learned: 'Learned',
+    summary: 'Summary', pricing: 'Pricing', programsLbl: 'Programs', hooks: 'Lines that work', angles: 'Angles', strengths: 'Strengths', weaknesses: 'Weaknesses / gaps', structure: 'Structure', condensed: 'Condensed version', proof: 'Proof used', terms: 'Terms',
+    useBase: 'Start a new client from this', usePrompt: 'Client name for the new proposal:', importIt: 'Import as editable proposal', importing: 'Claude is converting it into an editable proposal… (about a minute)',
+    openImported: 'Open the imported proposal', download: 'Original file', reanalyze: 'Read again', del: 'Delete', confirmDel: 'Delete this past proposal?', errorLbl: 'Error',
+    playbookSub: 'What the team has learned from every past proposal, won and lost. Every new draft reads it.', rebuild: 'Rebuild from all proposals', rebuilding: 'Claude is reading every past proposal… (about a minute)',
+    builtFrom: 'Built from', archived: 'uploaded', studioN: 'in the Studio', on: 'on', noPlaybook: 'No playbook yet. Upload past proposals, then press "Rebuild".', edit: 'Edit', savePb: 'Save playbook',
+    refs: 'Reference proposals (Claude follows these most closely)', refsNone: 'No past proposals yet — upload some in "Past proposals".', refsAuto: 'If you pin none, Claude picks the most similar (won ones first).',
+    learnedFromToast: 'Learned from', src_import: 'Imported', saveArch: 'Save changes',
     newProposal: 'New proposal', proposals: 'Proposals', client: 'Client', title: 'Title', owner: 'Owner', status: 'Status', version: 'Version', updated: 'Updated',
     empty: 'No proposals yet. Start one from a client conversation.', storageFile: 'Storage: local file (set DATABASE_URL on Railway to keep proposals across deploys).',
     intake: 'Deal intake', intakeSub: 'Everything Claude needs. Prices you type here win over the library.', country: 'Country', language: 'Language', currency: 'Currency',
@@ -25,6 +41,22 @@ const PS_STR = {
     users: 'Users', addUser: 'Add or update user', username: 'Username', role: 'Role', password: 'Password', newPassword: 'New password (10+ characters)', setPassword: 'Set password', remove: 'Remove', noPassword: 'No password yet — set one so they can sign in', fromEnv: 'Set in Railway variables', fromApp: 'Created in the app', role_admin: 'Admin · everything, including approvals, library and users', role_editor: 'Editor · leads + proposals; cannot approve, close, delete or manage users', confirmRemove: 'Remove this user?', saveUser: 'Save user',
   },
   es: {
+    tabProposals: 'Propuestas', tabArchive: 'Propuestas anteriores', tabPlaybook: 'Playbook',
+    archiveSub: 'Sube las propuestas enviadas antes. Claude lee cada una y cada borrador nuevo aprende de ellas: precios, estructura, las frases que ganaron y lo que faltó en las que perdimos.',
+    drop: 'Arrastra aquí PDFs, Word o PowerPoint, o haz clic para elegir', dropHint: 'Google Docs / Slides: Archivo → Descargar → PDF. Hasta 20 MB cada uno.',
+    batchClient: 'Cliente (opcional, si no Claude lo lee)', batchOutcome: 'Resultado', batchNotes: 'Notas para Claude (opcional): por qué se ganó o se perdió, contexto',
+    pasteToggle: 'O pega el texto de una propuesta', pasteSave: 'Añadir propuesta pegada', uploading: 'Subiendo', uploaded: 'Subida: Claude la está leyendo',
+    o_won: 'Ganada', o_lost: 'Perdida', o_sent: 'Enviada', o_unknown: 'Sin dato',
+    st_processing: 'Leyendo…', st_ready: 'Aprendida', st_error: 'Error',
+    archiveEmpty: 'Aún no hay propuestas anteriores. Sube las que habéis enviado: las ganadas y las perdidas enseñan algo.',
+    file: 'Archivo', year: 'Año', outcome: 'Resultado', total: 'Total', learned: 'Aprendida',
+    summary: 'Resumen', pricing: 'Precio', programsLbl: 'Programas', hooks: 'Frases que funcionan', angles: 'Ángulos', strengths: 'Fortalezas', weaknesses: 'Debilidades / lo que falta', structure: 'Estructura', condensed: 'Versión condensada', proof: 'Pruebas usadas', terms: 'Condiciones',
+    useBase: 'Usar como base para un cliente nuevo', usePrompt: 'Nombre del cliente de la nueva propuesta:', importIt: 'Importar como propuesta editable', importing: 'Claude la está convirtiendo en una propuesta editable… (cerca de un minuto)',
+    openImported: 'Abrir la propuesta importada', download: 'Archivo original', reanalyze: 'Volver a leer', del: 'Eliminar', confirmDel: '¿Eliminar esta propuesta anterior?', errorLbl: 'Error',
+    playbookSub: 'Lo que el equipo ha aprendido de todas las propuestas, ganadas y perdidas. Cada borrador nuevo lo lee.', rebuild: 'Rehacer con todas las propuestas', rebuilding: 'Claude está leyendo todas las propuestas… (cerca de un minuto)',
+    builtFrom: 'Hecho con', archived: 'subidas', studioN: 'del Studio', on: 'el', noPlaybook: 'Aún no hay playbook. Sube propuestas anteriores y pulsa "Rehacer".', edit: 'Editar', savePb: 'Guardar playbook',
+    refs: 'Propuestas de referencia (Claude las sigue más de cerca)', refsNone: 'Aún no hay propuestas anteriores: súbelas en "Propuestas anteriores".', refsAuto: 'Si no fijas ninguna, Claude elige las más parecidas (primero las ganadas).',
+    learnedFromToast: 'Aprendió de', src_import: 'Importada', saveArch: 'Guardar cambios',
     newProposal: 'Nueva propuesta', proposals: 'Propuestas', client: 'Cliente', title: 'Título', owner: 'Responsable', status: 'Estado', version: 'Versión', updated: 'Actualizada',
     empty: 'Aún no hay propuestas. Crea una a partir de una conversación con un cliente.', storageFile: 'Almacenamiento: archivo local (configura DATABASE_URL en Railway para conservar las propuestas entre despliegues).',
     intake: 'Datos del deal', intakeSub: 'Todo lo que Claude necesita. Los precios que pongas aquí mandan sobre la biblioteca.', country: 'País', language: 'Idioma', currency: 'Moneda',
@@ -47,7 +79,10 @@ const PS_STR = {
 const ps = (k) => (PS_STR[LANG] || PS_STR.en)[k] || PS_STR.en[k] || k;
 const PS_STATUSES = ['draft', 'in_review', 'approved', 'sent', 'won', 'lost'];
 const PS_STATUS_CLASS = { draft: 'b-neutral', in_review: 'b-lostu', approved: 'b-other', sent: 'b-other', won: 'b-won', lost: 'b-lostc' };
-const psState = { route: 'list', id: null, version: 'latest', busy: null, me: null };
+const psState = { route: 'list', id: null, archiveId: null, version: 'latest', busy: null, me: null, poll: null };
+const PS_OUTCOMES = ['won', 'lost', 'sent', 'unknown'];
+const PS_OUTCOME_CLASS = { won: 'b-won', lost: 'b-lostc', sent: 'b-other', unknown: 'b-neutral' };
+const psOutcome = (o) => `<span class="badge ${PS_OUTCOME_CLASS[o] || 'b-neutral'}">${esc(ps('o_' + (o || 'unknown')))}</span>`;
 const psDate = (iso) => (iso ? new Date(iso).toLocaleDateString(LANG === 'es' ? 'es-ES' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
 const psBadge = (s) => `<span class="badge ${PS_STATUS_CLASS[s] || 'b-neutral'}">${esc(ps('s_' + s))}</span>`;
 
@@ -62,7 +97,11 @@ async function renderProposals(el) {
   el.innerHTML = '<div class="panel"><div class="skeleton" style="height:180px"></div></div>';
   if (!psState.me) psState.me = await psJson('/api/me').catch(() => ({}));
   try {
+    clearTimeout(psState.poll);
     if (psState.route === 'new') return psRenderNew(el);
+    if (psState.route === 'archive') return await psRenderArchive(el);
+    if (psState.route === 'archiveItem' && psState.archiveId) return await psRenderArchiveItem(el);
+    if (psState.route === 'playbook') return await psRenderPlaybook(el);
     if (psState.route === 'detail' && psState.id) return await psRenderDetail(el);
     return await psRenderList(el);
   } catch (e) {
@@ -73,7 +112,7 @@ async function renderProposals(el) {
 // ---------------- list ----------------
 async function psRenderList(el) {
   const { proposals, storage } = await psJson('/api/proposals');
-  el.innerHTML = `
+  el.innerHTML = `${psTabs('list')}
     <div class="ps-head">
       <div class="ps-brandnote">${icon('sparkle')}<span>${esc(ps('brandNote'))}</span></div>
       <button class="btn primary" id="ps-new">${icon('plus')}${esc(ps('newProposal'))}</button>
@@ -88,6 +127,7 @@ async function psRenderList(el) {
           <td class="num">${p.latest_version ? 'v' + p.latest_version : '—'}</td><td>${esc(psDate(p.updated_at))}</td></tr>`).join('')}</tbody></table>`
       : `<div class="state-card">${icon('doc')}<p>${esc(ps('empty'))}</p></div>`}
     </div>`;
+  psWireTabs(el);
   $('#ps-new').addEventListener('click', () => { psState.route = 'new'; renderProposals(el); });
   $$('.ps-row', el).forEach((r) => r.addEventListener('click', () => { psState.route = 'detail'; psState.id = r.dataset.id; psState.version = 'latest'; renderProposals(el); }));
 }
@@ -110,12 +150,25 @@ function psIntakeForm(i = {}) {
       <button type="button" class="btn ghost sm" id="ps-addrow">${icon('plus')}${esc(ps('addRow'))}</button></div>
     <div class="ps-grid2">${f('budget', 'budget', '', 2)}${f('competitors', 'competitors', '', 2)}</div>
     ${f('notes', 'notes', '', 6)}
+    <div class="ps-f"><span>${esc(ps('refs'))}</span><div class="ps-refs" id="ps-refs" data-sel="${esc(JSON.stringify(i.references || []))}"><div class="skeleton" style="height:34px"></div></div><div class="muted ps-hint">${esc(ps('refsAuto'))}</div></div>
   </form>`;
 }
 function psProgRow(r = {}) {
   return `<div class="ps-prow"><input data-k="program" placeholder="${esc(ps('program'))}" value="${esc(r.program || '')}"><input data-k="seats" placeholder="${esc(ps('seats'))}" value="${esc(r.seats || '')}"><input data-k="price" placeholder="${esc(ps('price'))}" value="${esc(r.price || '')}"><button type="button" class="icon-btn ps-del" aria-label="remove">×</button></div>`;
 }
-function psWireIntake(root) {
+async function psLoadRefs(root, excludeId) {
+  const box = $('#ps-refs', root); if (!box) return;
+  let sel = []; try { sel = JSON.parse(box.dataset.sel || '[]'); } catch (e) { /* none */ }
+  let refs = [];
+  try { refs = (await psJson(`/api/proposal-references${excludeId ? `?exclude=${encodeURIComponent(excludeId)}` : ''}`)).references; } catch (e) { /* keep empty */ }
+  if (!refs.length) { box.innerHTML = `<div class="muted">${esc(ps('refsNone'))}</div>`; return; }
+  refs.sort((a, b) => (sel.includes(b.ref) - sel.includes(a.ref)) || ((b.outcome === 'won') - (a.outcome === 'won')) || ((b.year || 0) - (a.year || 0)));
+  box.innerHTML = refs.map((r) => `<label class="ps-ref ${sel.includes(r.ref) ? 'on' : ''}"><input type="checkbox" value="${esc(r.ref)}" ${sel.includes(r.ref) ? 'checked' : ''}>
+    <strong>${esc(r.client || '—')}</strong><span class="muted">${esc([r.year, r.kind === 'archive' ? ps('tabArchive') : 'Studio'].filter(Boolean).join(' · '))}</span>${PS_OUTCOMES.includes(r.outcome) ? psOutcome(r.outcome) : psBadge(r.outcome)}</label>`).join('');
+  $$('.ps-ref input', box).forEach((c) => c.addEventListener('change', () => c.closest('.ps-ref').classList.toggle('on', c.checked)));
+}
+function psWireIntake(root, excludeId) {
+  psLoadRefs(root, excludeId);
   $('#ps-addrow', root).addEventListener('click', () => { $('#ps-prog', root).insertAdjacentHTML('beforeend', psProgRow()); psWireDel(root); });
   psWireDel(root);
 }
@@ -123,6 +176,9 @@ function psWireDel(root) { $$('.ps-del', root).forEach((b) => { b.onclick = () =
 function psReadIntake(root) {
   const form = $('#ps-intake', root); const out = {};
   $$('input[name],textarea[name],select[name]', form).forEach((x) => { out[x.name] = x.value.trim(); });
+  const refBox = $('#ps-refs', form);
+  if (refBox && $$('.ps-ref', refBox).length) out.references = $$('.ps-ref input:checked', refBox).map((c) => c.value);
+  else { try { out.references = JSON.parse((refBox && refBox.dataset.sel) || '[]'); } catch (e) { out.references = []; } }
   out.programs = $$('.ps-prow', form).map((r) => Object.fromEntries($$('input', r).map((x) => [x.dataset.k, x.value.trim()]))).filter((r) => r.program || r.price);
   return out;
 }
@@ -185,7 +241,7 @@ async function psRenderDetail(el) {
       <div class="ps-right">${cur ? `<iframe class="ps-preview" src="${viewUrl}" title="preview"></iframe>` : `<div class="panel state-card">${icon('doc')}<p>${esc(ps('noVersion'))}</p></div>`}</div>
     </div>`;
 
-  psWireIntake(el);
+  psWireIntake(el, p.id);
   $('#ps-back').addEventListener('click', () => { psState.route = 'list'; renderProposals(el); });
   $$('.ps-versions li', el).forEach((li) => li.addEventListener('click', () => { psState.version = li.dataset.v; renderProposals(el); }));
   $('#ps-status').addEventListener('change', async (e) => {
@@ -203,7 +259,11 @@ async function psRenderDetail(el) {
     const intake = psReadIntake(el);
     await psJson(`/api/proposals/${p.id}`, { method: 'PATCH', body: { intake } });
     busy(ps('drafting'));
-    try { const r = await psJson(`/api/proposals/${p.id}/draft`, { method: 'POST', body: { instructions: $('#ps-instr').value } }); psState.version = r.version; renderProposals(el); }
+    try {
+      const r = await psJson(`/api/proposals/${p.id}/draft`, { method: 'POST', body: { instructions: $('#ps-instr').value } });
+      if (r.learnedFrom && r.learnedFrom.length) showToast(`${ps('learnedFromToast')}: ${r.learnedFrom.join(', ')}${r.playbook ? ' + playbook' : ''}`);
+      psState.version = r.version; renderProposals(el);
+    }
     catch (err) { busy(null); showToast(err.message); }
   });
   if ($('#ps-revise')) $('#ps-revise').addEventListener('click', async () => {
@@ -225,6 +285,187 @@ async function psRenderDetail(el) {
     const name = window.prompt(ps('clonePrompt')); if (!name) return;
     const c = await psJson(`/api/proposals/${p.id}/clone`, { method: 'POST', body: { client: name } });
     psState.id = c.id; psState.version = 'latest'; renderProposals(el);
+  });
+}
+
+// ---------------- tabs: Proposals · Past proposals · Playbook ----------------
+function psTabs(active) {
+  const t = [['list', 'tabProposals'], ['archive', 'tabArchive'], ['playbook', 'tabPlaybook']];
+  return `<div class="seg ps-tabs" role="tablist">${t.map(([r, k]) => `<button class="${r === active ? 'active' : ''}" data-r="${r}" role="tab">${esc(ps(k))}</button>`).join('')}</div>`;
+}
+function psWireTabs(el) {
+  $$('.ps-tabs button', el).forEach((b) => b.addEventListener('click', () => { psState.route = b.dataset.r; renderProposals(el); }));
+}
+const psSize = (n) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round((n || 0) / 1024))} KB`);
+const psList = (arr) => (arr && arr.length ? `<ul class="ps-ul">${arr.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '<p class="muted">—</p>');
+
+// ---------------- past proposals (archive) ----------------
+async function psRenderArchive(el) {
+  const { items } = await psJson('/api/proposal-archive');
+  const outcomeOpts = (v) => PS_OUTCOMES.map((o) => `<option value="${o}" ${o === v ? 'selected' : ''}>${esc(ps('o_' + o))}</option>`).join('');
+  el.innerHTML = `${psTabs('archive')}
+    <div class="panel ps-upload">
+      <p class="ps-lead">${esc(ps('archiveSub'))}</p>
+      <label class="ps-drop" id="ps-drop">
+        <input type="file" id="ps-files" multiple accept=".pdf,.docx,.pptx,.txt,.md,.html,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden>
+        ${icon('download')}<strong>${esc(ps('drop'))}</strong><span class="muted">${esc(ps('dropHint'))}</span>
+      </label>
+      <div class="ps-form"><div class="ps-grid3">
+        <label class="ps-f"><span>${esc(ps('batchClient'))}</span><input id="ps-b-client" placeholder="Deporvillage"></label>
+        <label class="ps-f"><span>${esc(ps('batchOutcome'))}</span><select id="ps-b-outcome">${outcomeOpts('unknown')}</select></label>
+        <label class="ps-f"><span>${esc(ps('batchNotes'))}</span><input id="ps-b-notes"></label>
+      </div>
+      <details class="ps-paste"><summary>${esc(ps('pasteToggle'))}</summary>
+        <textarea id="ps-paste-ta" rows="8"></textarea>
+        <button class="btn soft sm" id="ps-paste-save">${icon('plus')}${esc(ps('pasteSave'))}</button></details>
+      </div>
+      <div id="ps-up-status" class="ps-up-status"></div>
+    </div>
+    <div class="panel ps-list">
+      ${items.length ? `<table class="tbl ps-tbl"><thead><tr><th>${esc(ps('client'))}</th><th>${esc(ps('file'))}</th><th class="num">${esc(ps('year'))}</th><th>${esc(ps('outcome'))}</th><th>${esc(ps('total'))}</th><th>${esc(ps('status'))}</th></tr></thead>
+        <tbody>${items.map((a) => `<tr class="ps-row" data-a="${esc(a.id)}">
+          <td><strong>${esc(a.client || (a.digest || {}).client || '—')}</strong><div class="muted">${esc(((a.digest || {}).title) || a.industry || '')}</div></td>
+          <td>${esc(a.filename || '—')}<div class="muted">${esc([a.size ? psSize(a.size) : '', a.uploaded_by].filter(Boolean).join(' · '))}</div></td>
+          <td class="num">${esc(a.year || '—')}</td><td>${psOutcome(a.outcome)}</td><td>${esc(a.total || '—')}</td>
+          <td>${a.status === 'processing' ? `<span class="ps-st"><span class="spinner"></span>${esc(ps('st_processing'))}</span>` : a.status === 'error' ? `<span class="badge b-lostc" title="${esc(a.error || '')}">${esc(ps('st_error'))}</span>` : `<span class="ps-st ok">${icon('sparkle')}${esc(ps('st_ready'))}</span>`}</td></tr>`).join('')}</tbody></table>`
+      : `<div class="state-card">${icon('doc')}<p>${esc(ps('archiveEmpty'))}</p></div>`}
+    </div>`;
+  psWireTabs(el);
+  $$('tr[data-a]', el).forEach((r) => r.addEventListener('click', () => { psState.route = 'archiveItem'; psState.archiveId = r.dataset.a; renderProposals(el); }));
+
+  const status = $('#ps-up-status', el);
+  const batch = () => ({ client: $('#ps-b-client', el).value.trim(), outcome: $('#ps-b-outcome', el).value, notes: $('#ps-b-notes', el).value.trim() });
+  async function upload(files) {
+    const b = batch();
+    for (const f of files) {
+      status.insertAdjacentHTML('beforeend', `<div class="ps-up-line"><span class="spinner"></span>${esc(ps('uploading'))} ${esc(f.name)}…</div>`);
+      const line = status.lastElementChild;
+      try {
+        const qs = new URLSearchParams({ filename: f.name, outcome: b.outcome, ...(b.client ? { client: b.client } : {}), ...(b.notes ? { notes: b.notes } : {}) });
+        const r = await fetch(`/api/proposal-archive?${qs}`, { method: 'POST', headers: { 'x-dashboard-token': authToken || '', 'content-type': f.type || 'application/octet-stream' }, body: f });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+        line.innerHTML = `${icon('sparkle')}${esc(f.name)} — ${esc(ps('uploaded'))}`;
+      } catch (e) { line.classList.add('err'); line.textContent = `${f.name}: ${e.message}`; }
+    }
+    setTimeout(() => { if (psState.route === 'archive') renderProposals(el); }, 1200);
+  }
+  const input = $('#ps-files', el); const drop = $('#ps-drop', el);
+  input.addEventListener('change', () => input.files.length && upload([...input.files]));
+  ['dragenter', 'dragover'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', (e) => e.dataTransfer.files.length && upload([...e.dataTransfer.files]));
+  $('#ps-paste-save', el).addEventListener('click', async () => {
+    const text = $('#ps-paste-ta', el).value.trim(); if (!text) return $('#ps-paste-ta', el).focus();
+    try { await psJson('/api/proposal-archive/text', { method: 'POST', body: { text, ...batch() } }); renderProposals(el); } catch (e) { showToast(e.message); }
+  });
+  // Keep the "Reading…" rows fresh while Claude works.
+  if (items.some((a) => a.status === 'processing')) psState.poll = setTimeout(() => { if (psState.route === 'archive' && !status.children.length) renderProposals(el); }, 6000);
+}
+
+async function psRenderArchiveItem(el) {
+  const a = await psJson(`/api/proposal-archive/${psState.archiveId}`);
+  const d = a.digest || {};
+  const admin = psState.me && psState.me.admin;
+  const fileUrl = `/api/proposal-archive/${a.id}/file?token=${encodeURIComponent(authToken)}`;
+  el.innerHTML = `
+    <button class="btn ghost sm ps-back" id="ps-back">← ${esc(ps('tabArchive'))}</button>
+    <div class="ps-top">
+      <div><h2 class="ps-h2">${esc(a.client || d.client || '—')}${d.title ? ` <span class="muted">· ${esc(d.title)}</span>` : ''}</h2>
+        <div class="muted">${esc([a.year, a.country || d.country, a.industry || d.industry, a.filename].filter(Boolean).join(' · '))}</div></div>
+      <div class="ps-top-actions">
+        <select id="ps-a-outcome" class="ps-select">${PS_OUTCOMES.map((o) => `<option value="${o}" ${o === a.outcome ? 'selected' : ''}>${esc(ps('o_' + o))}</option>`).join('')}</select>
+        <a class="btn ghost" href="${fileUrl}" target="_blank" rel="noopener">${icon('download')}${esc(ps('download'))}</a>
+        ${a.status === 'ready' ? `${a.proposal_id ? `<button class="btn soft" id="ps-a-open">${icon('external')}${esc(ps('openImported'))}</button>` : `<button class="btn soft" id="ps-a-import">${icon('doc')}${esc(ps('importIt'))}</button>`}
+        <button class="btn primary" id="ps-a-use">${icon('sparkle')}${esc(ps('useBase'))}</button>` : ''}
+      </div>
+    </div>
+    <div id="ps-busy" class="ps-busy" hidden></div>
+    ${a.status === 'processing' ? `<div class="panel ps-busy"><span class="spinner"></span>${esc(ps('st_processing'))}</div>` : ''}
+    ${a.status === 'error' ? `<div class="ps-warn">${icon('alert')}<span>${esc(ps('errorLbl'))}: ${esc(a.error || '')}</span></div>` : ''}
+    ${a.status === 'ready' ? `<div class="ps-arch">
+      <div class="panel ps-arch-main">
+        <h3 class="ps-h3">${esc(ps('summary'))}</h3><p>${esc(d.summary || '—')}</p>
+        <h3 class="ps-h3">${esc(ps('programsLbl'))}</h3>
+        ${(d.programs || []).length ? `<table class="tbl ps-tbl"><thead><tr><th>${esc(ps('program'))}</th><th>${esc(ps('seats'))}</th><th>${esc(ps('price'))}</th></tr></thead><tbody>
+          ${d.programs.map((x) => `<tr><td><strong>${esc(x.program || '—')}</strong>${x.format ? `<div class="muted">${esc(x.format)}</div>` : ''}</td><td>${esc(x.seats || '—')}</td><td>${esc(x.price || '—')}</td></tr>`).join('')}
+          ${d.total ? `<tr class="ps-total"><td colspan="2"><strong>${esc(ps('total'))}</strong></td><td><strong>${esc(d.total)}</strong></td></tr>` : ''}</tbody></table>` : '<p class="muted">—</p>'}
+        <div class="ps-grid2"><div><h3 class="ps-h3">${esc(ps('pricing'))}</h3><p>${esc(d.pricing_model || '—')}</p></div><div><h3 class="ps-h3">${esc(ps('terms'))}</h3><p>${esc(d.terms || '—')}</p></div></div>
+        <h3 class="ps-h3">${esc(ps('hooks'))}</h3>${(d.hooks || []).length ? d.hooks.map((h) => `<blockquote class="ps-quote">${esc(h)}</blockquote>`).join('') : '<p class="muted">—</p>'}
+        <details class="ps-condensed"><summary><h3 class="ps-h3">${esc(ps('condensed'))}</h3></summary><div class="ps-pre">${esc(d.condensed || '')}</div></details>
+      </div>
+      <div class="ps-arch-side">
+        <div class="panel"><h3 class="ps-h3">${esc(ps('strengths'))}</h3>${psList(d.strengths)}<h3 class="ps-h3">${esc(ps('weaknesses'))}</h3>${psList(d.weaknesses)}</div>
+        <div class="panel"><h3 class="ps-h3">${esc(ps('angles'))}</h3>${psList(d.angles)}<h3 class="ps-h3">${esc(ps('proof'))}</h3>${psList(d.proof_used)}<h3 class="ps-h3">${esc(ps('structure'))}</h3>${psList(d.structure)}</div>
+      </div></div>` : ''}
+    <div class="panel"><div class="ps-form">
+      <div class="ps-grid3">
+        <label class="ps-f"><span>${esc(ps('client'))}</span><input id="ps-a-client" value="${esc(a.client || '')}"></label>
+        <label class="ps-f"><span>${esc(ps('year'))}</span><input id="ps-a-year" value="${esc(a.year || '')}" inputmode="numeric"></label>
+        <label class="ps-f"><span>${esc(ps('country'))}</span><input id="ps-a-country" value="${esc(a.country || '')}"></label>
+      </div>
+      <label class="ps-f"><span>${esc(ps('batchNotes'))}</span><textarea id="ps-a-notes" rows="2">${esc(a.notes || '')}</textarea></label>
+      <div class="ps-actions"><button class="btn soft sm" id="ps-a-save">${esc(ps('saveArch'))}</button>
+        <button class="btn ghost sm" id="ps-a-re">${esc(ps('reanalyze'))}</button>
+        ${admin ? `<button class="btn ghost sm" id="ps-a-del">${esc(ps('del'))}</button>` : ''}</div>
+    </div></div>`;
+
+  $('#ps-back', el).addEventListener('click', () => { psState.route = 'archive'; renderProposals(el); });
+  const patch = async (body) => { try { await psJson(`/api/proposal-archive/${a.id}`, { method: 'PATCH', body }); showToast(ps('saved')); } catch (e) { showToast(e.message); } };
+  $('#ps-a-outcome', el).addEventListener('change', (e) => patch({ outcome: e.target.value }));
+  $('#ps-a-save', el).addEventListener('click', () => patch({ client: $('#ps-a-client', el).value.trim(), year: $('#ps-a-year', el).value.trim(), country: $('#ps-a-country', el).value.trim(), notes: $('#ps-a-notes', el).value.trim() }));
+  $('#ps-a-re', el).addEventListener('click', async () => { await psJson(`/api/proposal-archive/${a.id}/reanalyze`, { method: 'POST' }); renderProposals(el); });
+  if ($('#ps-a-del', el)) $('#ps-a-del', el).addEventListener('click', async () => {
+    if (!window.confirm(ps('confirmDel'))) return;
+    await psJson(`/api/proposal-archive/${a.id}`, { method: 'DELETE' }); psState.route = 'archive'; renderProposals(el);
+  });
+  const goProposal = (id) => { psState.route = 'detail'; psState.id = id; psState.version = 'latest'; renderProposals(el); };
+  if ($('#ps-a-open', el)) $('#ps-a-open', el).addEventListener('click', () => goProposal(a.proposal_id));
+  if ($('#ps-a-use', el)) $('#ps-a-use', el).addEventListener('click', async () => {
+    const client = window.prompt(ps('usePrompt')); if (!client) return;
+    try { const p = await psJson(`/api/proposal-archive/${a.id}/use`, { method: 'POST', body: { client } }); goProposal(p.id); } catch (e) { showToast(e.message); }
+  });
+  if ($('#ps-a-import', el)) $('#ps-a-import', el).addEventListener('click', async (ev) => {
+    const b = $('#ps-busy', el); b.hidden = false; b.innerHTML = `<span class="spinner"></span>${esc(ps('importing'))}`; ev.target.disabled = true;
+    try { const p = await psJson(`/api/proposal-archive/${a.id}/import`, { method: 'POST' }); goProposal(p.id); }
+    catch (e) { b.hidden = true; ev.target.disabled = false; showToast(e.message); }
+  });
+  if (a.status === 'processing') psState.poll = setTimeout(() => { if (psState.route === 'archiveItem') renderProposals(el); }, 6000);
+}
+
+// ---------------- playbook ----------------
+function psMarkdown(text) {
+  const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>');
+  let html = ''; let inList = false;
+  String(text || '').split('\n').forEach((line) => {
+    const l = line.trim();
+    if (/^[-*•]\s+/.test(l)) { if (!inList) { html += '<ul class="ps-ul">'; inList = true; } html += `<li>${inline(l.replace(/^[-*•]\s+/, ''))}</li>`; return; }
+    if (inList) { html += '</ul>'; inList = false; }
+    if (/^#{1,4}\s+/.test(l)) html += `<h3 class="ps-pb-h">${inline(l.replace(/^#+\s+/, ''))}</h3>`;
+    else if (l) html += `<p>${inline(l)}</p>`;
+  });
+  return html + (inList ? '</ul>' : '');
+}
+async function psRenderPlaybook(el) {
+  const pb = await psJson('/api/proposal-playbook');
+  const admin = psState.me && psState.me.admin;
+  const from = pb.built_from ? `${ps('builtFrom')} ${pb.built_from.archive} ${ps('archived')} + ${pb.built_from.studio} ${ps('studioN')} · ${pb.built_by || ''} ${ps('on')} ${psDate(pb.built_at)}` : '';
+  el.innerHTML = `${psTabs('playbook')}
+    <div class="ps-head"><p class="ps-lead" style="margin:0">${esc(ps('playbookSub'))}</p>
+      <div class="ps-top-actions">${admin && pb.text ? `<button class="btn ghost" id="ps-pb-edit">${esc(ps('edit'))}</button>` : ''}<button class="btn primary" id="ps-pb-build">${icon('sparkle')}${esc(ps('rebuild'))}</button></div></div>
+    <div id="ps-busy" class="ps-busy" hidden></div>
+    <div class="panel ps-playbook">${pb.text ? `<div class="muted ps-pb-meta">${esc(from)}</div>${psMarkdown(pb.text)}` : `<div class="state-card">${icon('sparkle')}<p>${esc(ps('noPlaybook'))}</p></div>`}
+      <div id="ps-pb-editbox" hidden><textarea id="ps-pb-ta" class="ps-json" spellcheck="false"></textarea><button class="btn primary sm" id="ps-pb-save">${esc(ps('savePb'))}</button></div></div>`;
+  psWireTabs(el);
+  $('#ps-pb-build', el).addEventListener('click', async (ev) => {
+    const b = $('#ps-busy', el); b.hidden = false; b.innerHTML = `<span class="spinner"></span>${esc(ps('rebuilding'))}`; ev.target.disabled = true;
+    try { await psJson('/api/proposal-playbook/rebuild', { method: 'POST', body: { language: LANG === 'en' ? 'en' : 'es' } }); renderProposals(el); }
+    catch (e) { b.hidden = true; ev.target.disabled = false; showToast(e.message); }
+  });
+  if ($('#ps-pb-edit', el)) $('#ps-pb-edit', el).addEventListener('click', () => { const box = $('#ps-pb-editbox', el); box.hidden = !box.hidden; $('#ps-pb-ta', el).value = pb.text || ''; });
+  if ($('#ps-pb-save', el)) $('#ps-pb-save', el).addEventListener('click', async () => {
+    const value = { ...pb, text: $('#ps-pb-ta', el).value, edited_at: new Date().toISOString() }; delete value.archiveReady;
+    try { await psJson('/api/proposal-library/playbook', { method: 'PUT', body: { value } }); renderProposals(el); } catch (e) { showToast(e.message); }
   });
 }
 

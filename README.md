@@ -241,3 +241,15 @@ CSV export. EUR → USD at `USD_PER_EUR` (1.08).
 API: `GET /api/enrollments`, `POST /api/enrollments/refresh`; refreshed with the
 main pull. Names, emails and phones are hashed like everywhere else.
 Tests: `test/enrollments.test.js`.
+
+## Proposal Studio — past proposals and the playbook
+
+**Proposal Studio → Past proposals** takes the proposals sent before the Studio existed (PDF, Word .docx, PowerPoint .pptx, text; Google Docs/Slides via File → Download → PDF; up to 20 MB each). Each upload is stored (original file in Postgres), and Claude reads it once in the background and saves a digest: client, programs and prices, total, pricing model, terms, structure, the strongest lines, angles, strengths and weaknesses, and a condensed version. The team marks each one **won / lost / sent**.
+
+Every new draft learns from them:
+
+- **References**: the intake has a "Reference proposals" picker (uploaded and Studio proposals). Pinned ones are followed most closely; with none pinned, Claude gets the 3 most similar uploaded proposals (same language and words, won ones first).
+- **Playbook**: Proposal Studio → Playbook → *Rebuild* has Claude read every past proposal (uploaded + Studio, with outcomes) and write the team's playbook: prices by program, what wins, what loses, lines that work, recommended structure, a pre-send checklist. Every draft reads it; admins can edit it.
+- **Start from one**: on a past proposal, *Start a new client from this* creates a proposal whose intake carries its programs and prices and pins it as the reference; *Import as editable proposal* converts the original into an editable Studio proposal (versions, revisions, PDF, Google Docs).
+
+The draft's version note says which past proposals it learned from. Needs `ANTHROPIC_API_KEY` (already used for drafting).
