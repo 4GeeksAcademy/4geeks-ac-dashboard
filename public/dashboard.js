@@ -75,6 +75,7 @@ const I = { // inline icons (24px, stroke)
   caret: '<path d="m6 9 6 6 6-6"/>',
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   filter: '<path d="M3 5h18l-7 8v6l-4 2v-8z"/>',
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   status: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
@@ -423,7 +424,7 @@ function onFiltersChanged(o = {}) {
 
 let popEl = null;
 function closePopover() { if (popEl) { popEl.remove(); popEl = null; document.removeEventListener('mousedown', outsidePop, true); } }
-function outsidePop(e) { if (popEl && !popEl.contains(e.target) && !e.target.closest('.fbtn')) closePopover(); }
+function outsidePop(e) { if (popEl && !popEl.contains(e.target) && !e.target.closest('.fbtn, [data-act], [data-bulk]')) closePopover(); }
 function placePopover(anchor, el) {
   document.getElementById('popover-root').appendChild(el);
   const r = anchor.getBoundingClientRect();
@@ -766,6 +767,7 @@ async function openLead(id) {
         ${isHash(r.email) ? `<span class="pii-chip">${icon('mail')}${leadField(r, 'email')}</span>` : ''}${isHash(r.phone) ? `<span class="pii-chip">${icon('phone')}${leadField(r, 'phone')}</span>` : ''}
         ${isHash(r.name) || isHash(r.email) || isHash(r.phone) ? `<p class="pii-note">${esc(t('piiNote'))}</p>` : ''}
       </div>
+      <div class="lsec" id="ld-intel"><h3>${icon('sparkle')}${esc(t('pi_leadTitle'))}</h3><div class="skeleton" style="width:70%"></div><div class="skeleton" style="width:90%"></div><div class="muted" style="font-size:12px">${esc(t('pi_reading'))}</div></div>
       <div class="lsec"><h3>${icon('briefcase')}${esc(t('leadDeal'))}</h3><dl class="kv">
         ${kvRow(t('owner'), r.assignTo ? esc(r.assignTo) : esc(t('unassigned')))}${kvRow(t('stage'), esc(r.stage))}
         ${kvRow(t('created'), fmtDate(r.date, { day: 'numeric', month: 'short', year: 'numeric' }))}${kvRow(t('value'), r.dealValue ? fmtMoney(r.dealValue) : null)}
@@ -780,11 +782,6 @@ async function openLead(id) {
         ${kvRow(t('offerSent'), r.offerSentDate ? fmtDate(r.offerSentDate, { day: 'numeric', month: 'short', year: 'numeric' }) : null)}${kvRow(r.bucket === 'Won' ? t('wonDate') : t('lostDate'), r.bucket === 'Won' ? (r.wonDate ? fmtDate(r.wonDate, { day: 'numeric', month: 'short', year: 'numeric' }) : null) : (r.lostDate ? fmtDate(r.lostDate, { day: 'numeric', month: 'short', year: 'numeric' }) : null))}
         ${kvRow(t('feedback'), r.feedback ? esc(r.feedback) : null, true)}</dl></div>
       <div class="lsec" id="ld-eng"><h3>${icon('mail')}${esc(t('leadEngagement'))}</h3><div class="skeleton" style="width:60%"></div><div class="skeleton" style="width:85%"></div><div class="muted" style="font-size:12px">${esc(t('loadingEngagement'))}</div></div>
-      <div class="lsec" id="ld-coach"><h3>${icon('sparkle')}${esc(t('leadCoach'))}</h3><p class="muted" style="margin:0 0 10px;font-size:13px">${esc(t('coachIntro'))}</p><button class="btn primary sm" id="ld-coach-btn">${icon('sparkle')}${esc(t('coachGenerate'))}</button><div id="ld-coach-out"></div></div>
-      <div class="lsec"><h3>${icon('note')}${esc(t('leadNotes'))}</h3>
-        <textarea id="ld-notes" rows="3" style="width:100%" placeholder="${esc(t('notesPlaceholder'))}"></textarea>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:10px;flex-wrap:wrap"><label style="display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" id="ld-email-sent">${esc(t('emailSent'))}</label><button class="btn ghost sm" id="ld-save">${esc(t('saveNotes'))}</button></div>
-        <div class="muted" style="font-size:11px;margin-top:6px">${esc(t('notesSession'))}</div></div>
     </div>`;
   $('[data-close]', d).addEventListener('click', closeDrawers);
   openDrawer('#lead-drawer');
@@ -799,13 +796,8 @@ async function openLead(id) {
     box.innerHTML = `<h3>${icon('mail')}${esc(t('leadEngagement'))} <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500;margin-left:auto">${esc(t('loadedIn', { s: ((performance.now() - t0) / 1000).toFixed(1) }))}</span></h3>` + engagementHtml(data);
   }).catch((e) => { const box = $('#ld-eng'); if (box) box.innerHTML = `<h3>${icon('mail')}${esc(t('leadEngagement'))}</h3><p class="muted">${esc(t('engagementFailed', { e: e.message }))}</p>`; });
 
-  // Notes.
-  api(`/api/lead-notes/${encodeURIComponent(r.contactId)}`).then((res) => (res.ok ? res.json() : null)).then((n) => { if (!n) return; const ta = $('#ld-notes'); if (ta) ta.value = n.notes || ''; const cb = $('#ld-email-sent'); if (cb) cb.checked = !!n.emailSent; }).catch(() => {});
-  $('#ld-save').addEventListener('click', async () => {
-    const res = await api('/api/lead-notes', { method: 'POST', body: { leadId: r.id, contactId: r.contactId, notes: $('#ld-notes').value, emailSent: $('#ld-email-sent').checked } }).catch(() => null);
-    if (res && res.ok) { showToast(t('saved')); }
-  });
-  $('#ld-coach-btn').addEventListener('click', () => runCoach(r));
+  // Conversation, AI diagnosis and actions (public/pipeline.js).
+  loadLeadIntel(r);
 }
 function engagementHtml(e) {
   if (!e.trackingAvailable) return `<p class="muted">${esc(t('trackingNA'))}</p>`;
@@ -844,106 +836,7 @@ async function runCoach(r) {
 }
 
 // ───────────────────────── recommendations ─────────────────────────
-// Rule-based action lists computed in the browser from fields we really have
-// (status, age, Admission Code Test Score, offer sent, rep, lost reasons).
-// Instant, never empty because of a cold server cache, and every open deal
-// lands in exactly one list. AI advice per list is optional (one click).
-const DAY_MS = 86400000;
-const ageDays = (iso) => (iso ? Math.floor((Date.now() - new Date(String(iso).slice(0, 10) + 'T12:00:00')) / DAY_MS) : null);
-const RE_ENGAGE_REASONS = /timing|not now|later|price|precio|financ|money|dinero|schedule|horario|busy|tiempo|no response|no contesta|sin respuesta/i;
-const REC_GROUPS = [
-  { key: 'readyToClose', icon: 'target', col: '--s-won', kind: 'open' },
-  { key: 'unassigned', icon: 'user', col: '--s-2', kind: 'open' },
-  { key: 'newToContact', icon: 'phone', col: '--s-active', kind: 'open' },
-  { key: 'qualifiedNoOffer', icon: 'star', col: '--s-won', kind: 'open' },
-  { key: 'goingCold', icon: 'alert', col: '--s-lostu', kind: 'open' },
-  { key: 'needsQualification', icon: 'inbox', col: '--s-active', kind: 'open' },
-  { key: 'cleanUp', icon: 'xcircle', col: '--s-lostc', kind: 'open' },
-  { key: 'reEngage', icon: 'refresh', col: '--s-2', kind: 'lost' },
-  { key: 'lostNoReason', icon: 'flag', col: '--s-lostu', kind: 'lost' },
-  { key: 'wonRecently', icon: 'trophy', col: '--s-won', kind: 'won' },
-];
-function classifyRec(r) {
-  const age = ageDays(r.date);
-  const score = r.admissionsScore || '';
-  if (isActive(r)) {
-    if (JUNK_SCORES.includes(score) || /^bad$|very bad/i.test(score)) return 'cleanUp';
-    if (r.offerSentDate) return 'readyToClose';
-    if (!r.assignTo) return 'unassigned';
-    if (age != null && age <= 7) return 'newToContact';
-    if (GOOD_SCORES.includes(score)) return 'qualifiedNoOffer';
-    if (age != null && age > 21) return 'goingCold';
-    return 'needsQualification';
-  }
-  if (isWon(r)) return ageDays(r.wonDate || r.date) <= 14 ? 'wonRecently' : null;
-  if (r.bucket === 'Lost - Unclassified') return ageDays(r.lostDate || r.date) <= 60 ? 'lostNoReason' : null;
-  if (r.bucket === 'Lost - Classified') {
-    const recent = ageDays(r.lostDate || r.date) <= 90;
-    const promising = !JUNK_SCORES.includes(score) && !/bad/i.test(score);
-    return recent && promising && (r.reasons || []).some((x) => RE_ENGAGE_REASONS.test(x)) ? 'reEngage' : null;
-  }
-  return null;
-}
-// Most urgent first inside each list.
-function recSort(key) {
-  if (key === 'readyToClose') return (a, b) => String(a.offerSentDate).localeCompare(String(b.offerSentDate));
-  if (key === 'newToContact' || key === 'unassigned') return (a, b) => String(b.date).localeCompare(String(a.date));
-  if (key === 'goingCold') return (a, b) => String(b.date).localeCompare(String(a.date));
-  const rank = (r) => { const i = SCORE_ORDER.indexOf(r.admissionsScore); return i < 0 ? 50 : i; };
-  return (a, b) => rank(a) - rank(b) || String(b.date).localeCompare(String(a.date));
-}
-const recAdvice = new Map();
-const recOpen = new Set();
-function renderRecommendations() {
-  const el = $('#tab-recommendations');
-  // Pipeline actions look at the whole open pipeline: the period filter
-  // would hide exactly the older deals that are going cold.
-  const usePeriod = state.recUsePeriod === '1';
-  const rows = ALL.filter((r) => match(r, { skipDate: !usePeriod }));
-  const groups = Object.fromEntries(REC_GROUPS.map((g) => [g.key, []]));
-  rows.forEach((r) => { const k = classifyRec(r); if (k) groups[k].push(r); });
-  const openCount = rows.filter(isActive).length;
-  el.innerHTML = `
-    <div class="panel"><div class="panel-head" style="margin:0"><div><h2>${esc(t('recTitle'))}</h2><div class="panel-sub">${esc(t('recSub', { n: fmtInt(openCount) }))}</div></div>
-      <div class="seg" id="rec-period"><button data-p="0" class="${usePeriod ? '' : 'active'}">${esc(t('recWholePipeline'))}</button><button data-p="1" class="${usePeriod ? 'active' : ''}">${esc(t('recOnlyPeriod', { p: dateLabel() }))}</button></div></div></div>
-    <div class="rec-grid">${REC_GROUPS.map((g) => {
-      const list = groups[g.key].sort(recSort(g.key));
-      const reps = {}; list.forEach((r) => { const k = r.assignTo || t('unassigned'); reps[k] = (reps[k] || 0) + 1; });
-      const topReps = Object.entries(reps).sort((a, b) => b[1] - a[1]).slice(0, 4);
-      const adv = recAdvice.get(g.key + LANG);
-      return `<div class="rec-card ${list.length ? '' : 'empty-card'}" data-g="${g.key}">
-        <div class="rc-head"><span class="rc-ico" style="background:color-mix(in srgb, var(${g.col}) 16%, transparent);color:var(${g.col})">${icon(g.icon)}</span><h3>${esc(t('g_' + g.key))}</h3><span class="rc-n">${fmtInt(list.length)}</span></div>
-        <p class="rc-why">${esc(t('why_' + g.key))}</p>
-        <p class="rc-do"><b>${esc(t('recAction'))}:</b> ${esc(t('do_' + g.key))}</p>
-        ${topReps.length ? `<div class="rc-reps">${topReps.map(([k, v]) => `<span class="count-tag">${esc(k)} · ${v}</span>`).join('')}</div>` : ''}
-        ${adv ? `<div class="rc-ai md">${adv.loading ? `<span class="dots"><span></span><span></span><span></span></span> ${esc(t('thinking'))}` : adv.error ? `<span style="color:var(--bad-ink)">${esc(adv.error)}</span>` : mdToHtml(adv.text)}</div>` : ''}
-        ${list.length ? `<div class="rc-foot">
-          <button class="btn ghost sm" data-toggle="${g.key}">${esc(t(recOpen.has(g.key) ? 'hideLeads' : 'viewLeads', { n: fmtInt(list.length) }))}</button>
-          <button class="btn soft sm" data-ai="${g.key}" ${adv && adv.loading ? 'disabled' : ''}>${icon('sparkle')}${esc(t('recAskAI'))}</button></div>
-          ${recOpen.has(g.key) ? `<div class="rec-leads">${list.slice(0, 100).map((l) => `<div class="rec-lead" data-id="${esc(l.id)}"><span class="avatar">${esc(leadInitials(l))}</span><div style="flex:1;min-width:0"><div style="font-weight:600">${leadField(l, 'name')}</div><div class="muted" style="font-size:11.5px">${esc([l.assignTo || t('unassigned'), l.course, fmtDate(l.date)].filter(Boolean).join(' · '))}</div></div>${scoreBadge(l.admissionsScore)}</div>`).join('')}${list.length > 100 ? `<div class="muted" style="font-size:12px;padding:6px 8px">+${fmtInt(list.length - 100)}</div>` : ''}</div>` : ''}` : `<p class="muted" style="font-size:12.5px;margin-top:auto">${esc(t('recNone'))}</p>`}
-      </div>`;
-    }).join('')}</div>`;
-  $$('#rec-period button', el).forEach((b) => b.addEventListener('click', () => { state.recUsePeriod = b.dataset.p; renderRecommendations(); }));
-  $$('[data-toggle]', el).forEach((b) => b.addEventListener('click', () => { const k = b.dataset.toggle; if (recOpen.has(k)) recOpen.delete(k); else recOpen.add(k); renderRecommendations(); }));
-  $$('.rec-lead', el).forEach((x) => x.addEventListener('click', () => openLead(x.dataset.id)));
-  $$('[data-ai]', el).forEach((b) => b.addEventListener('click', () => askRecAI(b.dataset.ai, groups[b.dataset.ai])));
-}
-async function askRecAI(key, list) {
-  const id = key + LANG;
-  recAdvice.set(id, { loading: true });
-  renderRecommendations();
-  try {
-    const ctx = buildLeadContext(list);
-    ctx.actionList = { name: t('g_' + key), rule: t('why_' + key), defaultAction: t('do_' + key) };
-    ctx.sampleDeals = list.slice(0, 30).map((r) => ({ created: r.date, ageDays: ageDays(r.date), rep: r.assignTo, course: r.course, source: r.source, campaign: r.campaign, stage: r.stage, admissionCodeTestScore: r.admissionsScore, offerSent: r.offerSentDate, reasons: r.reasons, feedback: r.feedback }));
-    const question = t('recAIQuestion', { g: t('g_' + key), n: list.length });
-    const res = await api('/api/ask', { method: 'POST', body: { question, scope: 'leads', lang: LANG, context: ctx } });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || res.statusText);
-    recAdvice.set(id, { text: data.answer });
-  } catch (e) { recAdvice.set(id, { error: e.message }); }
-  if (state.view === 'recommendations') renderRecommendations();
-}
+// Lives in public/pipeline.js (action lists, pipeline intelligence, work queue).
 
 // ───────────────────────── ads (4Geeks Center) ─────────────────────────
 const REGION_TO_CENTER = { USA: 'US', Spain: 'ES', LATAM: 'LATAM', all: 'US' };
@@ -1372,7 +1265,7 @@ function renderAll(o = {}) {
   $('#btn-refresh').addEventListener('click', async () => {
     const b = $('#btn-refresh'); b.disabled = true;
     await api('/api/refresh', { method: 'POST' }).catch(() => {});
-    adsCache.clear(); recAdvice.clear(); pressCache.clear();
+    adsCache.clear(); pipeClearCache(); pressCache.clear();
     if (window.enrReset && state.view === 'enrollments') window.enrReset();
     try { await loadData(); } catch (e) { META.error = e.message; }
     b.disabled = false; renderAll();

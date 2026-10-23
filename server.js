@@ -384,6 +384,40 @@ const requireAuth = auth.requireAuth;
 // sets their passwords in Admin → Users before they can sign in.
 auth.ensureUsers([{ name: 'victor', role: 'editor' }, { name: 'alejandro', role: 'admin' }]).catch((e) => console.error('[auth]', e.message));
 
+// ---------------------------------------------------------------------------
+// Pipeline intelligence: reads the real conversation (AC notes + activities)
+// behind each qualified lead, diagnoses where it's stuck, and powers the
+// interactive Recommendations queue (actions write back to ActiveCampaign).
+// See lib/pipeline/.
+// ---------------------------------------------------------------------------
+const { createPipelineStore } = require('./lib/pipeline/store');
+const { createIntel } = require('./lib/pipeline/intel');
+const { mountPipelineRoutes } = require('./lib/pipeline/routes');
+const pipelineIntel = createIntel({
+    client,
+    store: createPipelineStore(),
+    getRecords: () => cache.records,
+    getLookups: () => lookups,
+    callClaude: (args) => callClaude(args),
+});
+// Apply a change we just wrote to AC to the cached record, so the page shows
+// it right away instead of after the next refresh.
+function patchRecord(dealId, patch) {
+    const rec = (cache.records || []).find((r) => String(r.id) === String(dealId));
+    if (rec) Object.assign(rec, patch, { dealUpdatedAt: new Date().toISOString() });
+    return rec;
+}
+mountPipelineRoutes(app, {
+    requireAuth, requireAdmin: auth.requireAdmin, intel: pipelineIntel, client,
+    getRecords: () => cache.records, getLookups: () => lookups, patchRecord, acAppUrl: AC_APP_URL,
+});
+if (client) pipelineIntel.start();
+// Good / Very Good leads -> Google Ads (via the n8n workflow), see lib/pipeline/ads-sync.js.
+const { createAdsSync } = require('./lib/pipeline/ads-sync');
+const adsSync = createAdsSync({ store: createPipelineStore(), getRecords: () => cache.records });
+app.get('/api/pipeline/ads-sync', requireAuth, (req, res) => res.json(adsSync.status()));
+if (client) adsSync.start();
+
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body || {};
   const r = await auth.login(username, password).catch(() => null);
@@ -627,10 +661,10 @@ app.get('/api/schema', requireAuth, async (req, res) => {
 // ---------------------------------------------------------------------------
 // Anthropic helper
 // ---------------------------------------------------------------------------
-async function callClaude({ system, messages, maxTokens = 1500 }) {
+async function callClaude({ system, messages, maxTokens = 1500, model }) {
     // Last line of defence: no email in clear reaches the AI provider, whatever the caller sent.
     messages = (messages || []).map((m) => ({ ...m, content: typeof m.content === 'string' ? redactText(m.content, false) : redactPii(m.content) }));
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
+    const r = await fetch(`${(process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com').replace(/\/+$/, '')}/v1/messages`, {
         method: 'POST',
         headers: {
             'content-type': 'application/json',
@@ -638,7 +672,7 @@ async function callClaude({ system, messages, maxTokens = 1500 }) {
             'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
-            model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
+            model: model || process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
             max_tokens: maxTokens,
             system,
             messages,
@@ -994,7 +1028,7 @@ app.post('/api/recommendations', requireAuth, async (req, res) => {
 
                     const question = prompts[groupName] || 'What recommendations do you have for this group of leads?';
 
-                    const r = await fetch('https://api.anthropic.com/v1/messages', {
+                    const r = await fetch(`${(process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com').replace(/\/+$/, '')}/v1/messages`, {
                         method: 'POST',
                         headers: {
                             'content-type': 'application/json',
@@ -1002,7 +1036,7 @@ app.post('/api/recommendations', requireAuth, async (req, res) => {
                             'anthropic-version': '2023-06-01',
                         },
                         body: JSON.stringify({
-                            model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
+                            model: model || process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
                             max_tokens: 512,
                             system: 'You are an expert sales coach for 4Geeks Academy. Provide concise, actionable recommendations for admissions teams based on lead data. Be specific about next steps and priorities. Use at most 4 short bullet points. ' + (lang === 'es' ? 'Answer in Spanish.' : 'Answer in English.'),
                             messages: [{ role: 'user', content: `${question}\n\nLead Group Data (personal data hashed):\n${JSON.stringify(redactPii(context), null, 2)}` }],
