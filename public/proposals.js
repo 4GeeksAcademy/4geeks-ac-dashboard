@@ -6,6 +6,11 @@
 
 const PS_STR = {
   en: {
+    tabBrand: 'Brand kit', styleLbl: 'Style', styleHint: 'How the document and presentation look. The current style is the default for every new proposal.',
+    deck: 'Presentation', deckHint: 'The same version as 16:9 slides (Save as PDF, landscape)', viewDoc: 'Document', viewDeck: 'Presentation',
+    checkTitle: 'Brand check', checkOk: 'On brand. Nothing to fix.', fixBrand: 'Fix with Claude', fixing: 'Claude is fixing the brand-check findings…', lv_error: 'Must fix', lv_warn: 'Should fix', lv_info: 'To fill in',
+    makeRule: 'Make it a rule for every future proposal', ruleSaved: 'Saved as a team rule', finalBadge: 'Final', finalSaved: 'Saved as the final version: future drafts and the playbook learn from it',
+    brandSub: 'What every proposal gets automatically: the 4Geeks brand skills, the yellow touches, the styles and the rules the team has added.', brandVersion: 'Brand kit', styles: 'Styles', current: 'current', colors: 'Colors', logos: 'Logos', yellow: 'Yellow touches', voice: 'Voice and exact phrasing', terms: 'Terminology', avoid: 'Avoid', useT: 'Use', checksT: 'Brand check rules', teamRules: 'Team rules', teamRulesSub: 'Instructions an admin made permanent from a revision. Every draft follows them.', noRules: 'None yet. When you ask Claude for a change that should apply to every proposal, tick "Make it a rule".',
     tabProposals: 'Proposals', tabArchive: 'Past proposals', tabPlaybook: 'Playbook',
     archiveSub: 'Upload proposals sent before. Claude reads each one and every new draft learns from them — prices, structure, the lines that won and what was missing in the ones we lost.',
     drop: 'Drop PDFs, Word or PowerPoint files here, or click to choose', dropHint: 'Google Docs / Slides: File → Download → PDF. Up to 20 MB each.',
@@ -41,6 +46,11 @@ const PS_STR = {
     users: 'Users', addUser: 'Add or update user', username: 'Username', role: 'Role', password: 'Password', newPassword: 'New password (10+ characters)', setPassword: 'Set password', remove: 'Remove', noPassword: 'No password yet — set one so they can sign in', fromEnv: 'Set in Railway variables', fromApp: 'Created in the app', role_admin: 'Admin · everything, including approvals, library and users', role_editor: 'Editor · leads + proposals; cannot approve, close, delete or manage users', confirmRemove: 'Remove this user?', saveUser: 'Save user',
   },
   es: {
+    tabBrand: 'Kit de marca', styleLbl: 'Estilo', styleHint: 'Cómo se ven el documento y la presentación. El estilo actual es el predeterminado de cada propuesta nueva.',
+    deck: 'Presentación', deckHint: 'La misma versión en diapositivas 16:9 (Guardar como PDF, horizontal)', viewDoc: 'Documento', viewDeck: 'Presentación',
+    checkTitle: 'Brand check', checkOk: 'Todo en marca. Nada que arreglar.', fixBrand: 'Arreglar con Claude', fixing: 'Claude está arreglando lo que marcó el brand check…', lv_error: 'Obligatorio', lv_warn: 'Recomendado', lv_info: 'Por completar',
+    makeRule: 'Convertir en regla para todas las propuestas', ruleSaved: 'Guardada como regla del equipo', finalBadge: 'Final', finalSaved: 'Guardada como versión final: los próximos borradores y el playbook aprenden de ella',
+    brandSub: 'Lo que cada propuesta recibe automáticamente: las skills de marca de 4Geeks, los toques amarillos, los estilos y las reglas que ha añadido el equipo.', brandVersion: 'Kit de marca', styles: 'Estilos', current: 'actual', colors: 'Colores', logos: 'Logos', yellow: 'Toques amarillos', voice: 'Voz y frases exactas', terms: 'Terminología', avoid: 'Evitar', useT: 'Usar', checksT: 'Reglas del brand check', teamRules: 'Reglas del equipo', teamRulesSub: 'Instrucciones que un admin convirtió en permanentes desde un cambio. Cada borrador las sigue.', noRules: 'Aún ninguna. Cuando pidas a Claude un cambio que deba valer para todas las propuestas, marca "Convertir en regla".',
     tabProposals: 'Propuestas', tabArchive: 'Propuestas anteriores', tabPlaybook: 'Playbook',
     archiveSub: 'Sube las propuestas enviadas antes. Claude lee cada una y cada borrador nuevo aprende de ellas: precios, estructura, las frases que ganaron y lo que faltó en las que perdimos.',
     drop: 'Arrastra aquí PDFs, Word o PowerPoint, o haz clic para elegir', dropHint: 'Google Docs / Slides: Archivo → Descargar → PDF. Hasta 20 MB cada uno.',
@@ -79,7 +89,7 @@ const PS_STR = {
 const ps = (k) => (PS_STR[LANG] || PS_STR.en)[k] || PS_STR.en[k] || k;
 const PS_STATUSES = ['draft', 'in_review', 'approved', 'sent', 'won', 'lost'];
 const PS_STATUS_CLASS = { draft: 'b-neutral', in_review: 'b-lostu', approved: 'b-other', sent: 'b-other', won: 'b-won', lost: 'b-lostc' };
-const psState = { route: 'list', id: null, archiveId: null, version: 'latest', busy: null, me: null, poll: null };
+const psState = { styles: null, view: 'doc', route: 'list', id: null, archiveId: null, version: 'latest', busy: null, me: null, poll: null };
 const PS_OUTCOMES = ['won', 'lost', 'sent', 'unknown'];
 const PS_OUTCOME_CLASS = { won: 'b-won', lost: 'b-lostc', sent: 'b-other', unknown: 'b-neutral' };
 const psOutcome = (o) => `<span class="badge ${PS_OUTCOME_CLASS[o] || 'b-neutral'}">${esc(ps('o_' + (o || 'unknown')))}</span>`;
@@ -93,15 +103,27 @@ async function psJson(url, opts) {
   return data;
 }
 
+async function psStyles() {
+  if (!psState.styles) psState.styles = await psJson(`/api/proposal-styles?lang=${LANG === 'en' ? 'en' : 'es'}`).catch(() => ({ styles: [], current: null }));
+  return psState.styles;
+}
+function psStyleSelect(id, sel) {
+  const { styles, current } = psState.styles || { styles: [] };
+  const v = sel || current;
+  return `<label class="ps-style"><span>${esc(ps('styleLbl'))}</span><select id="${id}" class="ps-select" title="${esc(ps('styleHint'))}">${styles.map((x) => `<option value="${esc(x.id)}" ${x.id === v ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>`;
+}
+const psStyleDesc = (id) => { const st = ((psState.styles || {}).styles || []).find((x) => x.id === (id || (psState.styles || {}).current)); return st ? st.description : ''; };
+
 async function renderProposals(el) {
   el.innerHTML = '<div class="panel"><div class="skeleton" style="height:180px"></div></div>';
   if (!psState.me) psState.me = await psJson('/api/me').catch(() => ({}));
   try {
     clearTimeout(psState.poll);
-    if (psState.route === 'new') return psRenderNew(el);
+    if (psState.route === 'new') return await psRenderNew(el);
     if (psState.route === 'archive') return await psRenderArchive(el);
     if (psState.route === 'archiveItem' && psState.archiveId) return await psRenderArchiveItem(el);
     if (psState.route === 'playbook') return await psRenderPlaybook(el);
+    if (psState.route === 'brand') return await psRenderBrand(el);
     if (psState.route === 'detail' && psState.id) return await psRenderDetail(el);
     return await psRenderList(el);
   } catch (e) {
@@ -183,36 +205,40 @@ function psReadIntake(root) {
   return out;
 }
 
-function psRenderNew(el) {
+async function psRenderNew(el) {
+  await psStyles();
   el.innerHTML = `<button class="btn ghost sm ps-back" id="ps-back">← ${esc(ps('back'))}</button>
     <div class="panel"><h2 class="ps-h2">${esc(ps('intake'))}</h2><p class="muted">${esc(ps('intakeSub'))}</p>${psIntakeForm({})}
-    <div class="ps-actions"><button class="btn primary" id="ps-create">${icon('plus')}${esc(ps('create'))}</button></div></div>`;
+    <div class="ps-actions ps-create-row">${psStyleSelect('ps-new-style')}<button class="btn primary" id="ps-create">${icon('plus')}${esc(ps('create'))}</button></div></div>`;
   psWireIntake(el);
   $('#ps-back').addEventListener('click', () => { psState.route = 'list'; renderProposals(el); });
   $('#ps-create').addEventListener('click', async () => {
     const intake = psReadIntake(el);
     if (!intake.client) { $('[name=client]', el).focus(); return; }
-    const p = await psJson('/api/proposals', { method: 'POST', body: { client: intake.client, country: intake.country, language: intake.language, currency: intake.currency, intake } });
+    const p = await psJson('/api/proposals', { method: 'POST', body: { client: intake.client, country: intake.country, language: intake.language, currency: intake.currency, intake, style: $('#ps-new-style') ? $('#ps-new-style').value : undefined } });
     psState.route = 'detail'; psState.id = p.id; psState.version = 'latest'; renderProposals(el);
   });
 }
 
 // ---------------- detail ----------------
 async function psRenderDetail(el) {
-  const p = await psJson(`/api/proposals/${psState.id}`);
+  const [p] = await Promise.all([psJson(`/api/proposals/${psState.id}`), psStyles()]);
   const versions = p.versions || [];
   const cur = psState.version === 'latest' ? (versions[0] && versions[0].version) : Number(psState.version);
   const viewUrl = cur ? `/proposals/${p.id}/v/${cur}?token=${encodeURIComponent(authToken)}` : null;
+  const deckUrl = cur ? `/proposals/${p.id}/v/${cur}/deck?token=${encodeURIComponent(authToken)}` : null;
   const admin = psState.me && psState.me.admin;
   el.innerHTML = `
     <button class="btn ghost sm ps-back" id="ps-back">← ${esc(ps('back'))}</button>
     <div class="ps-top">
       <div><h2 class="ps-h2">${esc(p.client)}${p.title ? ` <span class="muted">· ${esc(p.title)}</span>` : ''}</h2>
-        <div class="muted">${esc(ps('owner'))}: ${esc(p.owner || '—')} · ${esc(psDate(p.updated_at))}</div></div>
+        <div class="muted">${esc(ps('owner'))}: ${esc(p.owner || '—')} · ${esc(psDate(p.updated_at))}</div>
+        <div class="ps-style-row">${psStyleSelect('ps-style', p.style)}<span class="muted ps-style-desc" id="ps-style-desc">${esc(psStyleDesc(p.style))}</span></div></div>
       <div class="ps-top-actions">
         <select id="ps-status" class="ps-select">${PS_STATUSES.map((s) => `<option value="${s}" ${s === p.status ? 'selected' : ''} ${['approved', 'won', 'lost'].includes(s) && !admin ? 'disabled' : ''}>${esc(ps('s_' + s))}</option>`).join('')}</select>
         ${cur ? `<a class="btn ghost" href="/proposals/${p.id}/v/${cur}/gdoc?token=${encodeURIComponent(authToken)}" title="${esc(ps('gdocHint'))}">${icon('doc')}${esc(ps('gdoc'))}</a>
         <a class="btn soft" href="/proposals/${p.id}/v/${cur}/brief?token=${encodeURIComponent(authToken)}&print=1" target="_blank" rel="noopener" title="${esc(ps('briefHint'))}">${icon('doc')}${esc(ps('brief'))}</a>
+        <a class="btn soft" href="${deckUrl}&print=1" target="_blank" rel="noopener" title="${esc(ps('deckHint'))}">${icon('doc')}${esc(ps('deck'))}</a>
         <a class="btn primary" href="${viewUrl}&print=1" target="_blank" rel="noopener">${icon('download')}${esc(ps('pdf'))}</a>` : ''}
       </div>
     </div>
@@ -220,13 +246,16 @@ async function psRenderDetail(el) {
       <div class="ps-left">
         <div class="panel ps-ai">
           <div class="ps-ai-row"><textarea id="ps-instr" rows="2" placeholder="${esc(ps('instructions'))}"></textarea><button class="btn primary" id="ps-draft">${icon('sparkle')}${esc(ps('draft'))}</button></div>
-          ${cur ? `<div class="ps-ai-row"><textarea id="ps-rev" rows="2" placeholder="${esc(ps('revisePh'))}"></textarea><button class="btn soft" id="ps-revise">${icon('sparkle')}${esc(ps('revise'))}</button></div>` : ''}
+          ${cur ? `<div class="ps-ai-row"><textarea id="ps-rev" rows="2" placeholder="${esc(ps('revisePh'))}"></textarea>
+            ${admin ? `<label class="ps-rule"><input type="checkbox" id="ps-rule"> ${esc(ps('makeRule'))}</label>` : ''}
+            <button class="btn soft" id="ps-revise">${icon('sparkle')}${esc(ps('revise'))}</button></div>` : ''}
           <div id="ps-busy" class="ps-busy" hidden></div>
         </div>
+        ${cur ? `<div class="panel ps-check" id="ps-check"><div class="skeleton" style="height:60px"></div></div>` : ''}
         <div class="panel">
           <h3 class="ps-h3">${esc(ps('versions'))}</h3>
           ${versions.length ? `<ul class="ps-versions">${versions.map((v) => `<li class="${v.version === cur ? 'on' : ''}" data-v="${v.version}">
-            <strong>v${v.version}</strong><span class="ps-src">${esc(ps('src_' + v.source) || v.source || '')}</span>
+            <strong>v${v.version}</strong><span class="ps-src">${esc(ps('src_' + v.source) || v.source || '')}</span>${v.version === p.final_version ? `<span class="ps-final">${esc(ps('finalBadge'))}</span>` : ''}
             <span class="muted">${esc(ps('by'))} ${esc(v.author || '—')} · ${esc(psDate(v.created_at))}</span>
             ${v.note ? `<div class="ps-note">${esc(v.note)}</div>` : ''}</li>`).join('')}</ul>` : `<p class="muted">${esc(ps('noVersion'))}</p>`}
           <div class="ps-actions">${cur ? `<a class="btn ghost sm" href="${viewUrl}" target="_blank" rel="noopener">${icon('external')}${esc(ps('open'))}</a>
@@ -238,16 +267,28 @@ async function psRenderDetail(el) {
           ${psIntakeForm({ client: p.client, country: p.country, language: p.language, currency: p.currency, ...p.intake })}
           <div class="ps-actions"><button class="btn soft sm" id="ps-save">${esc(ps('save'))}</button></div></details>
       </div>
-      <div class="ps-right">${cur ? `<iframe class="ps-preview" src="${viewUrl}" title="preview"></iframe>` : `<div class="panel state-card">${icon('doc')}<p>${esc(ps('noVersion'))}</p></div>`}</div>
+      <div class="ps-right">${cur ? `<div class="seg ps-viewseg"><button data-v="doc" class="${psState.view !== 'deck' ? 'active' : ''}">${esc(ps('viewDoc'))}</button><button data-v="deck" class="${psState.view === 'deck' ? 'active' : ''}">${esc(ps('viewDeck'))}</button></div>
+        <iframe class="ps-preview" id="ps-preview" src="${psState.view === 'deck' ? deckUrl : viewUrl}" title="preview"></iframe>` : `<div class="panel state-card">${icon('doc')}<p>${esc(ps('noVersion'))}</p></div>`}</div>
     </div>`;
 
   psWireIntake(el, p.id);
   $('#ps-back').addEventListener('click', () => { psState.route = 'list'; renderProposals(el); });
   $$('.ps-versions li', el).forEach((li) => li.addEventListener('click', () => { psState.version = li.dataset.v; renderProposals(el); }));
   $('#ps-status').addEventListener('change', async (e) => {
-    try { await psJson(`/api/proposals/${p.id}`, { method: 'PATCH', body: { status: e.target.value } }); showToast(ps('saved')); }
-    catch (err) { showToast(err.message); e.target.value = p.status; }
+    try {
+      const r = await psJson(`/api/proposals/${p.id}`, { method: 'PATCH', body: { status: e.target.value } });
+      if (['sent', 'won'].includes(e.target.value) && r.final_version) { showToast(ps('finalSaved')); renderProposals(el); } else showToast(ps('saved'));
+    } catch (err) { showToast(err.message); e.target.value = p.status; }
   });
+  $('#ps-style').addEventListener('change', async (e) => {
+    try { await psJson(`/api/proposals/${p.id}`, { method: 'PATCH', body: { style: e.target.value } }); $('#ps-style-desc').textContent = psStyleDesc(e.target.value); const f = $('#ps-preview'); if (f) f.src = f.src; showToast(ps('saved')); }
+    catch (err) { showToast(err.message); }
+  });
+  $$('.ps-viewseg button', el).forEach((b) => b.addEventListener('click', () => {
+    psState.view = b.dataset.v; $$('.ps-viewseg button', el).forEach((x) => x.classList.toggle('active', x === b));
+    $('#ps-preview').src = b.dataset.v === 'deck' ? deckUrl : viewUrl;
+  }));
+  if (cur) psLoadCheck(el, p, cur);
   $('#ps-save').addEventListener('click', async () => {
     const intake = psReadIntake(el);
     await psJson(`/api/proposals/${p.id}`, { method: 'PATCH', body: { intake, client: intake.client || p.client, country: intake.country, language: intake.language, currency: intake.currency } });
@@ -269,7 +310,11 @@ async function psRenderDetail(el) {
   if ($('#ps-revise')) $('#ps-revise').addEventListener('click', async () => {
     const instruction = $('#ps-rev').value.trim(); if (!instruction) return $('#ps-rev').focus();
     busy(ps('revising'));
-    try { const r = await psJson(`/api/proposals/${p.id}/revise`, { method: 'POST', body: { instruction, fromVersion: cur } }); psState.version = r.version; renderProposals(el); }
+    try {
+      const r = await psJson(`/api/proposals/${p.id}/revise`, { method: 'POST', body: { instruction, fromVersion: cur, makeRule: !!($('#ps-rule') && $('#ps-rule').checked) } });
+      if (r.ruleSaved) showToast(ps('ruleSaved'));
+      psState.version = r.version; renderProposals(el);
+    }
     catch (err) { busy(null); showToast(err.message); }
   });
   if ($('#ps-json')) $('#ps-json').addEventListener('click', async () => {
@@ -288,9 +333,54 @@ async function psRenderDetail(el) {
   });
 }
 
+// ---------------- brand check (next to the preview) ----------------
+async function psLoadCheck(el, p, cur) {
+  const box = $('#ps-check', el); if (!box) return;
+  let r; try { r = await psJson(`/api/proposals/${p.id}/versions/${cur}/check`); } catch (e) { box.hidden = true; return; }
+  const fixable = r.issues.some((i) => i.level !== 'info' && i.fix);
+  const tone = r.errors ? 'bad' : r.warnings ? 'mid' : 'ok';
+  box.innerHTML = `<div class="ps-check-head"><h3 class="ps-h3">${esc(ps('checkTitle'))}</h3><span class="ps-score ${tone}">${r.score}/100</span></div>
+    ${r.issues.length ? `<ul class="ps-issues">${r.issues.map((i) => `<li class="lv-${i.level}"><span class="lv">${esc(ps('lv_' + i.level))}</span><span>${esc(i.text)}${i.where ? ` <span class="muted">· ${esc(i.where)}</span>` : ''}</span></li>`).join('')}</ul>` : `<p class="muted">${esc(ps('checkOk'))}</p>`}
+    ${fixable ? `<button class="btn soft sm" id="ps-fix">${icon('sparkle')}${esc(ps('fixBrand'))}</button>` : ''}`;
+  const fx = $('#ps-fix', box);
+  if (fx) fx.addEventListener('click', async () => {
+    fx.disabled = true; fx.innerHTML = `<span class="spinner"></span>${esc(ps('fixing'))}`;
+    try { const res = await psJson(`/api/proposals/${p.id}/fix-brand`, { method: 'POST', body: { fromVersion: cur } }); psState.version = res.version; renderProposals(el); }
+    catch (e) { showToast(e.message); fx.disabled = false; fx.textContent = ps('fixBrand'); }
+  });
+}
+
+// ---------------- Brand kit tab ----------------
+async function psRenderBrand(el) {
+  const b = await psJson(`/api/proposal-brand?lang=${LANG === 'en' ? 'en' : 'es'}`);
+  const admin = psState.me && psState.me.admin;
+  const list = (arr) => `<ul class="ps-ul">${arr.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`;
+  el.innerHTML = `${psTabs('brand')}
+    <p class="ps-lead">${esc(ps('brandSub'))}</p>
+    <div class="ps-brand">
+      <div class="panel"><h3 class="ps-h3">${esc(ps('styles'))}</h3>
+        ${b.styles.map((st) => `<div class="ps-st-card ${st.current ? 'cur' : ''}"><div class="ps-st-name">${esc(st.name)}${st.current ? ` <span class="ps-final">${esc(ps('current'))}</span>` : ''}</div><div class="muted">${esc(st.description)}</div></div>`).join('')}
+        <div class="muted ps-hint">${esc(ps('brandVersion'))}: ${esc(b.version)}</div></div>
+      <div class="panel"><h3 class="ps-h3">${esc(ps('colors'))}</h3>
+        <div class="ps-swatches">${Object.entries(b.tokens).map(([k, v]) => `<div class="ps-sw" title="${esc(b.tokenRoles[k] || '')}"><span style="background:${esc(v)}"></span><strong>${esc(k)}</strong><code>${esc(v)}</code></div>`).join('')}</div>
+        <h3 class="ps-h3">${esc(ps('logos'))}</h3>
+        <div class="ps-logos">${b.logos.filter((l) => /logo/.test(l.file)).map((l) => `<div class="ps-logo ${/allwhite/.test(l.file) ? 'on-blue' : /white/.test(l.file) ? 'on-navy' : ''}"><img src="/brand/${esc(l.file)}" alt=""><div class="muted">${esc(l.use)}</div></div>`).join('')}</div></div>
+      <div class="panel"><h3 class="ps-h3">${esc(ps('yellow'))}</h3>${list(b.yellowTouches)}</div>
+      <div class="panel"><h3 class="ps-h3">${esc(ps('voice'))}</h3>${list([...b.voice, ...b.phrasing.map((x) => x.text)])}
+        <h3 class="ps-h3">${esc(ps('terms'))}</h3><table class="tbl ps-tbl"><thead><tr><th>${esc(ps('avoid'))}</th><th>${esc(ps('useT'))}</th></tr></thead><tbody>${b.terms.map((t) => `<tr><td>${esc(t.avoid)}</td><td><strong>${esc(t.use)}</strong></td></tr>`).join('')}</tbody></table></div>
+      <div class="panel"><h3 class="ps-h3">${esc(ps('checksT'))}</h3>${list(b.checks.map((c) => c.text))}</div>
+      <div class="panel"><h3 class="ps-h3">${esc(ps('teamRules'))}</h3><p class="muted">${esc(ps('teamRulesSub'))}</p>
+        ${b.teamRules.length ? `<ul class="ps-rules">${b.teamRules.map((r, i) => `<li><span>${esc(r.text || r)}${r.by ? ` <span class="muted">· ${esc(r.by)}${r.from ? `, ${esc(r.from)}` : ''}</span>` : ''}</span>${admin ? `<button class="icon-btn ps-rule-del" data-i="${i}" aria-label="remove">×</button>` : ''}</li>`).join('')}</ul>` : `<p class="muted">${esc(ps('noRules'))}</p>`}</div>
+    </div>`;
+  psWireTabs(el);
+  $$('.ps-rule-del', el).forEach((x) => x.addEventListener('click', async () => {
+    try { await psJson(`/api/proposal-team-rules/${x.dataset.i}`, { method: 'DELETE' }); renderProposals(el); } catch (e) { showToast(e.message); }
+  }));
+}
+
 // ---------------- tabs: Proposals · Past proposals · Playbook ----------------
 function psTabs(active) {
-  const t = [['list', 'tabProposals'], ['archive', 'tabArchive'], ['playbook', 'tabPlaybook']];
+  const t = [['list', 'tabProposals'], ['archive', 'tabArchive'], ['playbook', 'tabPlaybook'], ['brand', 'tabBrand']];
   return `<div class="seg ps-tabs" role="tablist">${t.map(([r, k]) => `<button class="${r === active ? 'active' : ''}" data-r="${r}" role="tab">${esc(ps(k))}</button>`).join('')}</div>`;
 }
 function psWireTabs(el) {
