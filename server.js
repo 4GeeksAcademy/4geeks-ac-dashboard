@@ -412,6 +412,11 @@ mountPipelineRoutes(app, {
     getRecords: () => cache.records, getLookups: () => lookups, patchRecord, acAppUrl: AC_APP_URL,
 });
 if (client) pipelineIntel.start();
+// Good / Very Good leads -> Google Ads (via the n8n workflow), see lib/pipeline/ads-sync.js.
+const { createAdsSync } = require('./lib/pipeline/ads-sync');
+const adsSync = createAdsSync({ store: createPipelineStore(), getRecords: () => cache.records });
+app.get('/api/pipeline/ads-sync', requireAuth, (req, res) => res.json(adsSync.status()));
+if (client) adsSync.start();
 
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body || {};

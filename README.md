@@ -285,3 +285,19 @@ Env (all optional): `INTEL_BATCH` (deals per tick, 25), `INTEL_TICK_SECONDS` (60
 (program facts the scripts may use).
 Check progress at `/api/pipeline/status`; raw AC shapes for one deal at
 `/api/pipeline/diag/<dealId>` (admin).
+
+### Qualified leads → Google Ads
+
+`lib/pipeline/ads-sync.js` posts every USA deal that reaches **Good** or **Very
+Good** (created in the last `ADS_SYNC_LOOKBACK_DAYS`, default 30) to the n8n
+workflow *USA Qualified Leads → Google Ads (Marketing Hub)*, once per deal and
+tier. n8n uploads an offline click conversion to account 4759757599 (GCLID
+first, hashed email fallback) into its own action per tier:
+`USA Lead - Very Good (CRM, Marketing Hub)` (value $1,660) and
+`USA Lead - Good (CRM, Marketing Hub)` (value $90) — values = observed win rate
+× tuition. Both were created as **secondary** actions: they report but don't
+steer bidding until someone makes them primary in Google Ads.
+Env: `ADS_SYNC_WEBHOOK_URL`, `ADS_SYNC_KEY` (required to turn it on),
+`ADS_SYNC_REGIONS` (USA), `ADS_VALUE_VERY_GOOD`, `ADS_VALUE_GOOD`,
+`ADS_SYNC_DISABLED=true`. Status: `/api/pipeline/ads-sync`.
+GCLID stays server-side (non-enumerable on the record, never in JSON).

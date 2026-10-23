@@ -113,3 +113,30 @@ test('intel: reads conversations, diagnoses once per change, aggregates and hide
   assert.ok(intel.hiddenUntil('1'));
   assert.strictEqual(intel.hiddenUntil('2'), null);
 });
+
+test('ads-sync posts each Good/Very Good USA lead once per tier, hashed, and never sends clear email', async () => {
+  const http = require('http');
+  const { createAdsSync, normalizeEmail } = require('../lib/pipeline/ads-sync');
+  assert.strictEqual(normalizeEmail(' Jo.Hn+ads@Gmail.com '), 'john@gmail.com');
+  const got = [];
+  const srv = http.createServer((req, res) => { let b = ''; req.on('data', (c) => { b += c; }); req.on('end', () => { got.push({ key: req.headers['x-hub-key'], body: JSON.parse(b) }); res.end('ok'); }); });
+  await new Promise((r) => srv.listen(0, r));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ads-'));
+  const today = new Date().toISOString().slice(0, 10);
+  const mk = (id, score, extra = {}) => { const { g, ...rest } = extra; const r = { id, region: 'USA', bucket: 'Active / Other', admissionsScore: score, date: today, email: `p${id}@x.com`, ...rest }; Object.defineProperty(r, 'gclid', { value: g || null, enumerable: false, writable: true }); return r; };
+  const records = [mk('1', 'Very Good', { g: 'abc' }), mk('2', 'Good'), mk('3', 'Bad'), mk('4', 'Very Good', { region: 'LATAM' }), mk('5', 'Good', { bucket: 'Lost - Classified' })];
+  const sync = createAdsSync({ store: fileStore(dir), getRecords: () => records, log: { log() {}, warn() {} }, env: { ADS_SYNC_WEBHOOK_URL: `http://127.0.0.1:${srv.address().port}/hook`, ADS_SYNC_KEY: 'k' } });
+  await sync.run();
+  assert.deepStrictEqual(got.map((g) => g.body.dealId).sort(), ['1', '2']);
+  const one = got.find((g) => g.body.dealId === '1').body;
+  assert.strictEqual(one.tier, 'very_good'); assert.strictEqual(one.gclid, 'abc'); assert.match(one.emailSha256, /^[0-9a-f]{64}$/);
+  assert.ok(!JSON.stringify(got).includes('@x.com'));
+  assert.strictEqual(got[0].key, 'k');
+  await sync.run();
+  assert.strictEqual(got.length, 2); // nothing re-sent
+  records[1].admissionsScore = 'Very Good';
+  await sync.run();
+  assert.strictEqual(got.length, 3); // upgrade Good -> Very Good is its own conversion
+  assert.ok(!JSON.stringify(records[0]).includes('abc')); // gclid never serialized
+  srv.closeAllConnections(); srv.close();
+});
