@@ -301,3 +301,19 @@ Env: `ADS_SYNC_WEBHOOK_URL`, `ADS_SYNC_KEY` (required to turn it on),
 `ADS_SYNC_REGIONS` (USA), `ADS_VALUE_VERY_GOOD`, `ADS_VALUE_GOOD`,
 `ADS_SYNC_DISABLED=true`. Status: `/api/pipeline/ads-sync`.
 GCLID stays server-side (non-enumerable on the record, never in JSON).
+
+### Speed (Oct 2026)
+- `/api/summary` (~17 MB, every lead) is built once per data version and served
+  pre-gzipped with an ETag: repeat loads get a 304, new loads skip ~0.6 s of
+  server work.
+- The redacted payload is saved to Postgres (`pipeline_blobs`, same hashed data
+  the browser gets). After a deploy/restart the Hub opens instantly with the last
+  data instead of waiting ~5 minutes for the first ActiveCampaign pull.
+- Pipeline intelligence pauses while the main ActiveCampaign refresh runs, so it
+  never slows the data down.
+
+### Google Ads sync log
+Marketing & AI → **Google Ads sync**: every qualified lead and its state
+(pending, waiting for Google, uploaded, failed, can't be matched), the reason
+for failures, retry one / retry all, and "send pending now". n8n reports
+Google's answer to `POST /api/pipeline/ads-sync/result` (header `x-hub-key`).

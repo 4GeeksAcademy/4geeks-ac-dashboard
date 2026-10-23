@@ -76,6 +76,7 @@ const I = { // inline icons (24px, stroke)
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  upload: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 20h14"/>',
   filter: '<path d="M3 5h18l-7 8v6l-4 2v-8z"/>',
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   status: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
@@ -197,7 +198,7 @@ const FILTER_BY_KEY = Object.fromEntries(FILTERS.map((f) => [f.key, f]));
 const fVals = (f, r) => (f.vals ? f.vals(r) : (r[f.key] != null && r[f.key] !== '' ? [String(r[f.key])] : []));
 const fLabel = (f, v) => (f.label ? f.label(v) : v);
 
-const VIEWS = ['overview', 'enrollments', 'recommendations', 'compare', 'individual', 'ads', 'ai', 'press', 'events', 'social', 'proposals', 'users'];
+const VIEWS = ['overview', 'enrollments', 'recommendations', 'compare', 'individual', 'ads', 'adsync', 'ai', 'press', 'events', 'social', 'proposals', 'users'];
 const state = { view: 'overview', region: 'all', q: '', dateFrom: '', dateTo: '', preset: '', gran: 'auto', page: 1, sort: { field: 'date', dir: 'desc' }, groupBy: 'assignTo', aiScope: 'both', adsRegion: 'US', recUsePeriod: '0' };
 FILTERS.forEach((f) => { state[f.key] = []; });
 
@@ -342,6 +343,7 @@ const NAV = [
   { view: 'compare', icon: 'regions' },
   { section: 'navSectionMarketing' },
   { view: 'ads', icon: 'ads' },
+  { view: 'adsync', icon: 'upload' },
   { view: 'ai', icon: 'ai' },
   { view: 'press', icon: 'press' },
   { section: 'navSectionContent' },
@@ -1213,6 +1215,8 @@ function renderAll(o = {}) {
   if (state.view === 'users') { $('#filterbar').hidden = true; $('#active-chips').hidden = true; window.renderUsers(el); return; }
   // Press is campaign-wide: it doesn't use the lead filters or ActiveCampaign data.
   if (state.view === 'press') { $('#filterbar').hidden = true; $('#active-chips').hidden = true; renderPress(el); return; }
+  // Google Ads sync log has its own toolbar (lib/pipeline/ads-sync.js, public/pipeline.js).
+  if (state.view === 'adsync') { $('#filterbar').hidden = true; $('#active-chips').hidden = true; renderAdsSync(el); return; }
   const isProposals = state.view === 'proposals';
   $('#filterbar').hidden = isProposals; $('#active-chips').hidden = isProposals;
   // Events and Social have their own toolbars; they don't use the lead filters or AC data.
