@@ -77,6 +77,7 @@ const I = { // inline icons (24px, stroke)
   check: '<path d="M20 6 9 17l-5-5"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   upload: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 20h14"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   filter: '<path d="M3 5h18l-7 8v6l-4 2v-8z"/>',
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   status: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
@@ -198,7 +199,7 @@ const FILTER_BY_KEY = Object.fromEntries(FILTERS.map((f) => [f.key, f]));
 const fVals = (f, r) => (f.vals ? f.vals(r) : (r[f.key] != null && r[f.key] !== '' ? [String(r[f.key])] : []));
 const fLabel = (f, v) => (f.label ? f.label(v) : v);
 
-const VIEWS = ['overview', 'enrollments', 'recommendations', 'compare', 'individual', 'ads', 'adsync', 'ai', 'press', 'events', 'social', 'proposals', 'users'];
+const VIEWS = ['overview', 'enrollments', 'recommendations', 'compare', 'individual', 'ads', 'adsync', 'ai', 'press', 'events', 'social', 'proposals', 'settings'];
 const state = { view: 'overview', region: 'all', q: '', dateFrom: '', dateTo: '', preset: '', gran: 'auto', page: 1, sort: { field: 'date', dir: 'desc' }, groupBy: 'assignTo', aiScope: 'both', adsRegion: 'US', recUsePeriod: '0' };
 FILTERS.forEach((f) => { state[f.key] = []; });
 
@@ -223,7 +224,7 @@ const PRESETS = ['today', 'yesterday', '7d', '30d', 'thisWeek', 'thisMonth', 'la
 function syncStateFromUrl() {
   const p = new URLSearchParams(location.search);
   // Old links: Compare regions → Compare, Pivot (removed) → Overview.
-  const alias = { regions: 'compare', grouped: 'overview' };
+  const alias = { regions: 'compare', grouped: 'overview', users: 'settings' };
   const v0 = alias[p.get('view')] || p.get('view');
   if (p.has('view') && VIEWS.includes(v0)) state.view = v0;
   else if (p.has('tab') && VIEWS.includes(p.get('tab'))) state.view = p.get('tab');
@@ -351,8 +352,6 @@ const NAV = [
   { view: 'social', icon: 'social' },
   { section: 'navSectionB2B' },
   { view: 'proposals', icon: 'doc' },
-  { section: 'navSectionAdmin', adminOnly: true },
-  { view: 'users', icon: 'users', adminOnly: true },
 ];
 function buildNav() {
   $('#nav').innerHTML = NAV.filter((n) => !n.adminOnly || window.__isAdmin).map((n) => (n.section
@@ -363,10 +362,11 @@ function buildNav() {
   $$('#nav .sb-item').forEach((b) => b.addEventListener('click', () => { go(b.dataset.view); $('#app').classList.remove('menu-open'); }));
 }
 function go(view) {
+  if (view === 'users') view = 'settings';
   if (view === 'proposals') { delete $('#tab-proposals').dataset.ready; if (window.resetProposals) window.resetProposals(); }
   if (view === 'events' || view === 'social') delete $('#tab-' + view).dataset.ready;
   state.view = view; state.page = 1;
-  $$('#nav .sb-item').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
+  $$('#nav .sb-item, #btn-settings').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   buildFilterBar();
   renderAll();
   window.scrollTo({ top: 0 });
@@ -1206,13 +1206,16 @@ function renderAll(o = {}) {
   // Eyebrow: yellow section number + section name (same numbers as the sidebar).
   const secs = NAV.filter((n) => n.section); let sec = null;
   for (const n of NAV) { if (n.section) sec = n.section; if (n.view === state.view) break; }
+  if (!NAV.some((n) => n.view === state.view)) sec = null; // e.g. Settings lives in the sidebar footer
   const sIdx = secs.findIndex((n) => n.section === sec);
   $('#page-eyebrow').innerHTML = sec ? `<span class="ytag">${String(sIdx + 1).padStart(2, '0')}</span>${esc(t(sec))}` : '';
   $('#page-sub').textContent = t('sub_' + state.view);
   VIEWS.forEach((v) => $('#tab-' + v).classList.toggle('active', v === state.view));
+  const sbSet = $('#btn-settings'); if (sbSet) sbSet.classList.toggle('active', state.view === 'settings');
   const el = $('#tab-' + state.view);
   // Proposal Studio has its own UI and doesn't use the lead filters or AC data.
-  if (state.view === 'users') { $('#filterbar').hidden = true; $('#active-chips').hidden = true; window.renderUsers(el); return; }
+  // Settings: language, theme and (admins) users + system status, all in one place.
+  if (state.view === 'settings') { $('#filterbar').hidden = true; $('#active-chips').hidden = true; renderSettings(el); return; }
   // Press is campaign-wide: it doesn't use the lead filters or ActiveCampaign data.
   if (state.view === 'press') { $('#filterbar').hidden = true; $('#active-chips').hidden = true; renderPress(el); return; }
   // Google Ads sync log has its own toolbar (lib/pipeline/ads-sync.js, public/pipeline.js).
@@ -1263,6 +1266,7 @@ function renderAll(o = {}) {
   $('#btn-menu').addEventListener('click', () => $('#app').classList.add('menu-open'));
   $('#sb-scrim').addEventListener('click', () => $('#app').classList.remove('menu-open'));
   $('#btn-logout').addEventListener('click', logout);
+  $('#btn-settings').addEventListener('click', () => { go('settings'); $('#app').classList.remove('menu-open'); });
   $('#drawer-scrim').addEventListener('click', () => { closePopover(); closeDrawers(); buildFilterBar(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (popEl) closePopover(); else closeDrawers(); } });
   window.addEventListener('resize', closePopover);
@@ -1280,8 +1284,8 @@ function renderAll(o = {}) {
   qToHash(state.q).then((h) => { state.qHash = h; }).catch(() => {});
   booted = true;
   buildNav();
-  // Role-aware nav: admins also see Admin → Users.
-  api('/api/me').then((r) => r.json()).then((me) => { window.__me = me; window.__isAdmin = !!me.admin; if (me.admin) buildNav(); else if (state.view === 'users') go('overview'); }).catch(() => {});
+  // Role-aware Settings: admins also get Users and system status there.
+  api('/api/me').then((r) => r.json()).then((me) => { window.__me = me; window.__isAdmin = !!me.admin; if (state.view === 'settings') renderAll(); }).catch(() => {});
   buildFilterBar();
   renderAll();
   // Lead data loads in the background; Ads renders independently meanwhile.
