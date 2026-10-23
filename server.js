@@ -421,6 +421,60 @@ snapshotStore.getBlob('summary-all').then((b) => {
 // Save a fresh snapshot after each successful pull (checked every minute; cheap when unchanged).
 let lastSnapshotAt = 0;
 setInterval(() => { if (cache.records && cache.at !== lastSnapshotAt && !refreshing) { lastSnapshotAt = cache.at; saveSummarySnapshot(); } }, 60 * 1000);
+// ---------------------------------------------------------------------------
+// Intelligence page. Sales tab: lead score → real enrollment + score journeys
+// (lib/pipeline/scores.js). Marketing tab: sources/campaigns by lead quality,
+// enrollments and cost (lib/marketing/intel.js). Both take the deal ids the
+// page's filters show, so every number follows the filters.
+// ---------------------------------------------------------------------------
+const { createScoreJourneys } = require('./lib/pipeline/scores');
+const marketingIntel = require('./lib/marketing/intel');
+const intelStore = createPipelineStore();
+const scoreJourneys = createScoreJourneys({ store: intelStore, getRecords: () => cache.records, getEnrollments: () => enrollments.get() });
+let lastScoreSnapAt = 0;
+setInterval(() => {
+    if (cache.records && cache.at !== lastScoreSnapAt && !refreshing) {
+        lastScoreSnapAt = cache.at;
+        scoreJourneys.snapshot(cache.records).then((n) => { if (n) console.log(`[scores] ${n} score changes recorded`); }).catch((e) => console.warn('[scores]', e.message));
+    }
+}, 60 * 1000);
+const recordsFor = (body) => {
+    const b = body || {};
+    const region = String(b.region || 'all');
+    const only = Array.isArray(b.ids) ? new Set(b.ids.map(String)) : null;
+    return (cache.records || []).filter((r) => (region === 'all' || r.region === region) && (!only || only.has(String(r.id))));
+};
+app.post('/api/pipeline/scores', requireAuth, async (req, res) => {
+    if (!cache.records) return res.status(503).json({ error: 'Data still loading', loading: true });
+    await scoreJourneys.load();
+    res.json({ ...scoreJourneys.report(recordsFor(req.body)), enrollmentsLoading: !!enrollments.meta().loading });
+});
+app.post('/api/marketing/intel', requireAuth, (req, res) => {
+    if (!cache.records) return res.status(503).json({ error: 'Data still loading', loading: true });
+    const b = req.body || {};
+    const prev = Array.isArray(b.prevIds) ? recordsFor({ region: b.region, ids: b.prevIds }) : [];
+    res.json(marketingIntel.report({
+        records: recordsFor(b), prevRecords: prev,
+        dim: ['source', 'campaign', 'medium'].includes(b.dim) ? b.dim : 'source',
+        enrollOf: scoreJourneys.matcher(), center: b.center || null,
+    }));
+});
+app.post('/api/marketing/advice', requireAuth, async (req, res) => {
+    const b = req.body || {};
+    if (!b.report || !Array.isArray(b.report.rows)) return res.status(400).json({ error: 'report is required' });
+    if (!process.env.ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+    try {
+        const text = await callClaude({ system: marketingIntel.ADVICE_SYSTEM, messages: [{ role: 'user', content: marketingIntel.adviceContent({ region: b.region || 'all', period: b.period || '', report: b.report, lang: b.lang }) }], maxTokens: 900 });
+        const rec = { text, at: new Date().toISOString(), user: req.user && req.user.name, region: b.region || 'all', period: b.period || '', dim: b.report.dim };
+        await intelStore.put('advice', `mkt:${rec.region}:${rec.dim}`, rec).catch(() => {});
+        res.json(rec);
+    } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+});
+app.get('/api/marketing/advice', requireAuth, async (req, res) => {
+    const rec = await intelStore.get('advice', `mkt:${String(req.query.region || 'all')}:${String(req.query.dim || 'source')}`).catch(() => null);
+    res.json(rec || {});
+});
+
 // Good / Very Good leads -> Google Ads (via the n8n workflow), see lib/pipeline/ads-sync.js.
 const { createAdsSync } = require('./lib/pipeline/ads-sync');
 const adsSync = createAdsSync({ store: createPipelineStore(), getRecords: () => cache.records });
