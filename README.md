@@ -253,3 +253,35 @@ Every new draft learns from them:
 - **Start from one**: on a past proposal, *Start a new client from this* creates a proposal whose intake carries its programs and prices and pins it as the reference; *Import as editable proposal* converts the original into an editable Studio proposal (versions, revisions, PDF, Google Docs).
 
 The draft's version note says which past proposals it learned from. Needs `ANTHROPIC_API_KEY` (already used for drafting).
+
+## Pipeline intelligence + interactive Recommendations (Oct 2026)
+
+Why: the CRM fields don't say why qualified leads stop (USA: Offer Sent is never
+filled, Lead Sentiment is empty for ~97% of leads, Feedback holds payment terms).
+The why is in what reps write. `lib/pipeline/` reads it and acts on it.
+
+- **Reads the conversation**: deal notes, contact notes and deal activities for
+  every deal worth reading (open qualified first, then won and recently lost to
+  learn from), on the slow background AC lane, re-read when the deal changes or
+  daily. Stored in Postgres (`pipeline_items`, `pipeline_actions`).
+- **Per-lead diagnosis (Claude)**: where it's stuck, who owes the next move
+  ("Waiting on us"), objections, intent, next action, ready-to-send SMS / email /
+  call opener. Only re-run when the conversation changed. Phones/emails are
+  hashed before anything is sent to the AI.
+- **Recommendations page**: intelligence strip (Very Good vs Good real win
+  rates, waiting on us, quiet 8+ days, no notes, objections open vs won, won vs
+  open medians, by rep) + a new "Waiting on us" list. USA "Ready to close" now
+  uses F4/F5 stages and payment terms, not the never-filled Offer Sent date.
+- **Work queue**: every lead has Script · Note · Move · Reassign · Snooze · Done
+  · Lost. Note / Move / Reassign / Lost **write to ActiveCampaign** (signed
+  "— user via Marketing Hub"). Bulk snooze / reassign / done / lost (max 500).
+- **List advice**: must cite lead ids, compares with won leads, and says what
+  changed since the previous advice (actions taken, leads moved). Follow-up
+  questions per list.
+
+Env (all optional): `INTEL_BATCH` (deals per tick, 25), `INTEL_TICK_SECONDS` (60),
+`INTEL_AI_DAILY_MAX` (800), `INTEL_AI_CONCURRENCY` (2), `INTEL_MODEL`,
+`INTEL_DISABLED=true` (emergency brake), `INTEL_CONTEXT_USA|SPAIN|LATAM`
+(program facts the scripts may use).
+Check progress at `/api/pipeline/status`; raw AC shapes for one deal at
+`/api/pipeline/diag/<dealId>` (admin).
