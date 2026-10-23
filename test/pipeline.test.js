@@ -152,5 +152,12 @@ test('ads-sync posts each Good/Very Good USA lead once per tier, hashed, and nev
   await sync.run();
   assert.strictEqual(got.length, 4); // failed one sent again
   assert.ok(sync.checkKey('k') && !sync.checkKey('x'));
+  // Temporary Google errors and silent uploads go again by themselves; duplicates count as uploaded.
+  await sync.recordResult({ deal_id: '1', tier: 'very_good', ok: false, error: '{"conversionUploadError":"TOO_RECENT_CONVERSION_ACTION"}' });
+  await sync.recordResult({ deal_id: '2', tier: 'good', ok: false, error: 'DUPLICATE_ORDER_ID' });
+  await sync.autoRetry(Date.now() + 8 * 3600000);
+  const after = Object.fromEntries(sync.logRows().map((r) => [r.key, r.status]));
+  assert.strictEqual(after['1:very_good'], 'pending');
+  assert.strictEqual(after['2:good'], 'uploaded');
   srv.closeAllConnections(); srv.close();
 });

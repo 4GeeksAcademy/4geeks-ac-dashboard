@@ -830,7 +830,7 @@ function asReason(err) {
   const code = (s.match(/"(?:conversionUploadError|dateError|clickConversionError|requestError|authorizationError|[a-zA-Z]+Error)":"([A-Z_]+)"/) || [])[1];
   const map = {
     EXPIRED_EVENT: 'Click older than the conversion window', CLICK_NOT_FOUND: 'Google doesn’t know this click', UNPARSEABLE_GCLID: 'Invalid click ID',
-    TOO_RECENT_EVENT: 'Click too recent — retry later', LATER_THAN_MAXIMUM_DATE: 'Conversion time in the future', UNAUTHORIZED_CUSTOMER: 'Click belongs to another Ads account',
+    TOO_RECENT_EVENT: 'Click too recent — retried automatically', TOO_RECENT_CONVERSION_ACTION: 'New conversion action — Google needs 6h, retried automatically', DUPLICATE_ORDER_ID: 'Already in Google', LATER_THAN_MAXIMUM_DATE: 'Conversion time in the future', UNAUTHORIZED_CUSTOMER: 'Click belongs to another Ads account',
     CONVERSION_PRECEDES_EVENT: 'Conversion before the click', NO_CONVERSION_ACTION_FOUND: 'Conversion action missing', CUSTOMER_NOT_ACCEPTED_CUSTOMER_DATA_TERMS: 'Customer data terms not accepted in Google Ads',
   };
   return code ? (map[code] || code.replace(/_/g, ' ').toLowerCase()) : s.replace(/[{}"\\]/g, ' ').slice(0, 90);
