@@ -13,6 +13,21 @@
 // ───────────────────────── strings ─────────────────────────
 (function addPipelineStrings() {
   const en = {
+    in_sales: 'Sales', in_marketing: 'Marketing',
+    pi_scope: 'Follows the filters above: {n} leads.',
+    pi_wonOpen: 'In a Won stage, still open', pi_wonOpenSub: 'mark them Won in ActiveCampaign so they count',
+    pi_whyOpen: 'Open leads that raised it', pi_whyWon: 'Enrolled who raised it anyway',
+    sc_title: 'Lead score → real enrollment', sc_sub: 'Enrolled = matched to the Enrollments section (USA attribution sheet, Spain/LATAM won deals) by deal or email, not ActiveCampaign\'s Won stage.',
+    sc_line: '{s}: {e} of {n} enrolled ({r})',
+    sc_score: 'Score', sc_leads: 'Leads', sc_enrolled: 'Enrolled', sc_rate: 'Enrolled %', sc_decided: '% of decided', sc_decidedHint: 'enrolled ÷ (enrolled + lost): leaves out leads still open, so recent leads don\'t drag it down',
+    sc_open: 'Still open', sc_lost: 'Lost', sc_notWon: 'Not marked Won in AC', sc_days: 'Median days to enroll',
+    sc_cohorts: 'By month the lead came in (enrolled / leads)',
+    sc_journeys: 'Score journeys', sc_tracking: 'Score changes tracked since {d} ({n} leads followed). ActiveCampaign doesn\'t keep score history, so paths fill in as reps update scores from that day on.',
+    sc_noChanges: 'No score changes seen yet.', sc_paths: 'Paths that ended in an enrollment', sc_transitions: 'Every score change seen', sc_afterChange: 'median {d} days from the last change to enrolling', sc_ofWhich: '{e} enrolled',
+    sc_offPath: 'Enrolled without a Good / Very Good score', sc_offPathNone: 'None: every enrolled lead had a Good or Very Good score.',
+    sc_hygiene: 'Fix in ActiveCampaign', sc_hyg1: '{n} enrolled students are not marked Won in AC', sc_hyg2: '{n} deals sit in a Won stage but are still open', sc_hyg3: '{n} deals marked Won in AC match no enrollment (check the email or the sheet)',
+    sc_loadingEnr: 'Enrollments are still loading: enrolled counts may be low for a minute.',
+    sb_Very_Good: 'Very Good', sb_Good: 'Good', sb_No_Feedback: 'No Feedback', sb_Bad: 'Bad', sb_Junk: 'Junk (invalid, fake, duplicate)', sb_Not_scored: 'Not scored',
     g_waitingOnUs: 'Waiting on us',
     why_waitingOnUs: 'The lead replied, asked something or was promised something — and nothing came back from us (read from the AC notes).',
     do_waitingOnUs: 'Reply today, using what they asked. These are the cheapest enrollments you have.',
@@ -54,6 +69,21 @@
     adv_none: 'No previous advice for this list — this is the baseline. Next time it will say what changed.',
   };
   const es = {
+    in_sales: 'Ventas', in_marketing: 'Marketing',
+    pi_scope: 'Sigue los filtros de arriba: {n} leads.',
+    pi_wonOpen: 'En etapa Won, aún abiertos', pi_wonOpenSub: 'márcalos como ganados en ActiveCampaign para que cuenten',
+    pi_whyOpen: 'Abiertos que lo plantearon', pi_whyWon: 'Matriculados que lo plantearon igual',
+    sc_title: 'Score del lead → matrícula real', sc_sub: 'Matriculado = cruzado con la sección Matrículas (hoja de atribución USA, deals ganados España/LATAM) por deal o email, no la etapa Won de ActiveCampaign.',
+    sc_line: '{s}: {e} de {n} matriculados ({r})',
+    sc_score: 'Score', sc_leads: 'Leads', sc_enrolled: 'Matriculados', sc_rate: '% matriculados', sc_decided: '% de decididos', sc_decidedHint: 'matriculados ÷ (matriculados + perdidos): deja fuera los abiertos, así los leads recientes no bajan la tasa',
+    sc_open: 'Aún abiertos', sc_lost: 'Perdidos', sc_notWon: 'Sin marcar Won en AC', sc_days: 'Mediana de días a matricularse',
+    sc_cohorts: 'Por mes en que entró el lead (matriculados / leads)',
+    sc_journeys: 'Recorridos de score', sc_tracking: 'Cambios de score registrados desde el {d} ({n} leads seguidos). ActiveCampaign no guarda el historial del score, así que los recorridos se completan a medida que los asesores lo actualizan desde ese día.',
+    sc_noChanges: 'Aún no se ve ningún cambio de score.', sc_paths: 'Recorridos que terminaron en matrícula', sc_transitions: 'Todos los cambios de score', sc_afterChange: 'mediana de {d} días desde el último cambio hasta matricularse', sc_ofWhich: '{e} matriculados',
+    sc_offPath: 'Matriculados sin score Good / Very Good', sc_offPathNone: 'Ninguno: todos los matriculados tenían score Good o Very Good.',
+    sc_hygiene: 'Arreglar en ActiveCampaign', sc_hyg1: '{n} matriculados no están marcados Won en AC', sc_hyg2: '{n} deals están en una etapa Won pero siguen abiertos', sc_hyg3: '{n} deals Won en AC no cruzan con ninguna matrícula (revisa el email o la hoja)',
+    sc_loadingEnr: 'Las matrículas aún se están cargando: los matriculados pueden salir bajos durante un minuto.',
+    sb_Very_Good: 'Very Good', sb_Good: 'Good', sb_No_Feedback: 'Sin feedback', sb_Bad: 'Bad', sb_Junk: 'Basura (inválido, falso, duplicado)', sb_Not_scored: 'Sin score',
     g_waitingOnUs: 'Esperando por nosotros',
     why_waitingOnUs: 'El lead respondió, preguntó algo o se le prometió algo — y no le volvimos a escribir (leído de las notas de AC).',
     do_waitingOnUs: 'Responder hoy con lo que pidió. Son las matrículas más baratas que tienes.',
@@ -100,11 +130,18 @@
 
 // ───────────────────────── state ─────────────────────────
 const PIPE = {
-  summaries: {}, states: {}, insights: {}, meta: {}, advice: new Map(),
+  summaries: {}, states: {}, insights: {}, scores: {}, meta: {}, advice: new Map(),
   open: new Set(), shown: {}, selected: new Set(), showHidden: new Set(),
   loading: false, loadedAt: 0, loadedKey: '', bulk: null,
 };
-function pipeClearCache() { PIPE.advice.clear(); PIPE.loadedAt = 0; PIPE.insights = {}; }
+function pipeClearCache() { PIPE.advice.clear(); PIPE.loadedAt = 0; PIPE.insights = {}; PIPE.scores = {}; }
+// One key per set of filtered leads, so the panels always match the filters.
+function rowsKey(rows) {
+  let h = 0;
+  for (const r of rows) { const x = String(r.id); for (let i = 0; i < x.length; i++) h = (h * 31 + x.charCodeAt(i)) | 0; }
+  return `${state.region}|${rows.length}|${h}`;
+}
+let INTEL_TAB = (() => { try { return localStorage.getItem('intelTab') || 'sales'; } catch (e) { return 'sales'; } })();
 
 const PI_DAY = 86400000;
 // fmtDate() keeps only the date part; these need the time too.
@@ -178,18 +215,21 @@ const isHiddenNow = (id) => { const s = PIPE.states[String(id)]; return !!(s && 
 
 // ───────────────────────── data ─────────────────────────
 async function pipeLoad(rows, { force = false } = {}) {
-  const key = state.region;
+  const key = rowsKey(rows);
   if (PIPE.loading) return;
   if (!force && PIPE.loadedKey === key && Date.now() - PIPE.loadedAt < 60000) return;
   PIPE.loading = true;
   try {
     const ids = rows.filter((r) => isActive(r) || isWon(r) || /Lost/.test(r.bucket)).map((r) => String(r.id));
-    const [sRes, iRes] = await Promise.all([
+    const allIds = rows.map((r) => String(r.id));
+    const [sRes, iRes, cRes] = await Promise.all([
       api('/api/pipeline/summaries', { method: 'POST', body: { ids } }),
-      api('/api/pipeline/insights?region=' + encodeURIComponent(key)),
+      api('/api/pipeline/insights', { method: 'POST', body: { region: state.region, ids: allIds } }),
+      api('/api/pipeline/scores', { method: 'POST', body: { region: state.region, ids: allIds } }),
     ]);
     if (sRes.ok) { const d = await sRes.json(); PIPE.summaries = d.summaries || {}; PIPE.states = d.states || {}; }
     if (iRes.ok) PIPE.insights[key] = await iRes.json();
+    if (cRes.ok) PIPE.scores[key] = await cRes.json();
     PIPE.loadedKey = key; PIPE.loadedAt = Date.now();
   } catch (e) { console.warn('[pipeline]', e.message); }
   PIPE.loading = false;
@@ -205,8 +245,23 @@ async function pipeMeta(pipelineId) {
 }
 
 // ───────────────────────── page ─────────────────────────
+function intelTabsHtml() {
+  return `<div class="seg intel-tabs" id="intel-tabs"><button data-t="sales" class="${INTEL_TAB === 'sales' ? 'active' : ''}">${esc(t('in_sales'))}</button><button data-t="marketing" class="${INTEL_TAB === 'marketing' ? 'active' : ''}">${esc(t('in_marketing'))}</button></div>`;
+}
+function bindIntelTabs(el) {
+  $$('#intel-tabs button', el).forEach((b) => b.addEventListener('click', () => {
+    INTEL_TAB = b.dataset.t; try { localStorage.setItem('intelTab', INTEL_TAB); } catch (e) { /* private mode */ }
+    renderRecommendations();
+  }));
+}
+
 function renderRecommendations(o = {}) {
   const el = $('#tab-recommendations');
+  if (INTEL_TAB === 'marketing' && window.renderMarketingIntel) {
+    el.innerHTML = `${intelTabsHtml()}<div id="mk-root"></div>`;
+    bindIntelTabs(el);
+    return window.renderMarketingIntel($('#mk-root', el));
+  }
   const usePeriod = state.recUsePeriod === '1';
   const rows = ALL.filter((r) => match(r, { skipDate: !usePeriod }));
   if (!o.fromLoad) pipeLoad(rows);
@@ -214,13 +269,16 @@ function renderRecommendations(o = {}) {
   rows.forEach((r) => { const k = classifyRec(r); if (k) groups[k].push(r); });
   const openCount = rows.filter(isActive).length;
   const scrollY = window.scrollY;
-  el.innerHTML = `
+  const key = rowsKey(rows);
+  el.innerHTML = `${intelTabsHtml()}
     <div class="panel"><div class="panel-head" style="margin:0"><div><h2>${esc(t('recTitle'))}</h2><div class="panel-sub">${esc(t('recSub', { n: fmtInt(openCount) }))}</div></div>
       <div class="seg" id="rec-period"><button data-p="0" class="${usePeriod ? '' : 'active'}">${esc(t('recWholePipeline'))}</button><button data-p="1" class="${usePeriod ? 'active' : ''}">${esc(t('recOnlyPeriod', { p: dateLabel() }))}</button></div></div></div>
-    <div id="pi-insights">${insightsHtml(PIPE.insights[state.region])}</div>
+    <div id="pi-insights">${insightsHtml(PIPE.insights[key], PIPE.scores[key], rows.length)}</div>
+    <div id="pi-scores">${scoresHtml(PIPE.scores[key])}</div>
     <div class="rec-grid">${REC_GROUPS.map((g) => recCardHtml(g, groups[g.key].sort(recSort(g.key)))).join('')}</div>
     <div id="bulk-bar"></div>`;
   if (o.fromLoad) window.scrollTo(0, scrollY);
+  bindIntelTabs(el);
   $$('#rec-period button', el).forEach((b) => b.addEventListener('click', () => { state.recUsePeriod = b.dataset.p; renderRecommendations(); }));
   $$('[data-toggle]', el).forEach((b) => b.addEventListener('click', () => { const k = b.dataset.toggle; if (PIPE.open.has(k)) PIPE.open.delete(k); else PIPE.open.add(k); renderRecommendations(); }));
   $$('[data-more]', el).forEach((b) => b.addEventListener('click', () => { PIPE.shown[b.dataset.more] = (PIPE.shown[b.dataset.more] || 40) + 40; renderRecommendations(); }));
@@ -236,7 +294,7 @@ function renderRecommendations(o = {}) {
   renderBulkBar();
 }
 
-function insightsHtml(ins) {
+function insightsHtml(ins, sc, n) {
   if (!ins || !ins.byScore) return `<div class="panel"><div class="skeleton" style="width:40%"></div><div class="skeleton" style="width:80%"></div></div>`;
   const vg = ins.byScore['Very Good'] || {}; const g = ins.byScore.Good || {};
   const rate = (x) => (x && x.total ? (x.winRate * 100).toFixed(1) + '%' : '—');
@@ -246,16 +304,16 @@ function insightsHtml(ins) {
   const firstRead = cov.candidates && cov.read / cov.candidates < 0.8;
   const kpi = (cls, label, val, sub) => `<div class="kpi ${cls}"><div class="k-lbl">${esc(label)}</div><div class="k-val">${val}</div><div class="k-sub">${sub}</div></div>`;
   const stages = ['not_reached', 'f1', 'f2', 'f3', 'f4', 'f5', 'stalled', 'other'];
-  const maxStage = Math.max(1, ...stages.map((s) => ins.stageCounts[s] || 0), ins.qualified.won || 0);
+  const maxStage = Math.max(1, ...stages.map((s) => ins.stageCounts[s] || 0));
   const objKeys = [...new Set([...Object.keys(ins.objectionsOpen || {}), ...Object.keys(ins.objectionsWon || {})])]
     .sort((a, b) => (ins.objectionsOpen[b] || 0) - (ins.objectionsOpen[a] || 0)).slice(0, 8);
   const objMax = Math.max(1, ...objKeys.map((k) => Math.max(ins.objectionsOpen[k] || 0, ins.objectionsWon[k] || 0)));
   const cmp = ins.compare || { won: {}, open: {} };
   const cmpRow = (label, a, b) => `<tr><td>${esc(label)}</td><td class="num">${a == null ? '—' : esc(Math.round(a * 10) / 10)}</td><td class="num">${b == null ? '—' : esc(Math.round(b * 10) / 10)}</td></tr>`;
   return `<div class="panel pi-panel">
-    <div class="panel-head"><div><h2>${icon('sparkle')} ${esc(t('pi_title'))}</h2><div class="panel-sub">${esc(t('pi_sub'))}</div></div></div>
+    <div class="panel-head"><div><h2>${icon('sparkle')} ${esc(t('pi_title'))}</h2><div class="panel-sub">${esc(t('pi_sub'))} · <strong>${esc(t('pi_scope', { n: fmtInt(n || 0) }))}</strong></div></div></div>
     <div class="kpis k8" style="margin-bottom:12px">
-      ${kpi('hl-blue', t('pi_scoreTruth'), `${rate(vg)} <span class="pi-vs">/ ${rate(g)}</span>`, esc(t('pi_scoreTruthSub', { vg: `${fmtInt(vg.won)}/${fmtInt(vg.total)}`, g: `${fmtInt(g.won)}/${fmtInt(g.total)}` })))}
+      ${kpi(sc && sc.hygiene && sc.hygiene.wonStageOpen ? 'hl-bad' : '', t('pi_wonOpen'), sc && sc.hygiene ? fmtInt(sc.hygiene.wonStageOpen) : '…', esc(t('pi_wonOpenSub')))}
       ${kpi(waiting ? 'hl-bad' : '', t('pi_waiting'), fmtInt(waiting), esc(t('pi_waitingSub')))}
       ${kpi(quiet ? 'hl-bad' : '', t('pi_quiet'), fmtInt(quiet), esc(t('pi_quietSub')))}
       ${kpi('', t('pi_noNotes'), fmtInt(ins.noNotes), esc(t('pi_noNotesSub')))}
@@ -263,15 +321,54 @@ function insightsHtml(ins) {
     </div>
     ${firstRead ? `<p class="pi-note">${icon('clock')}${esc(t('pi_firstRead'))}</p>` : ''}
     <div class="pi-cols">
-      <div><h3>${esc(t('pi_where'))}</h3><div class="pi-bars">${stages.concat(['won']).map((s) => {
-        const n = s === 'won' ? ins.qualified.won : (ins.stageCounts[s] || 0);
+      <div><h3>${esc(t('pi_where'))}</h3><div class="pi-bars">${stages.map((s) => {
+        const n = ins.stageCounts[s] || 0;
         return `<div class="pi-bar"><span class="l">${esc(t('sg_' + s))}</span><span class="b"><i style="width:${(n / maxStage) * 100}%;background:var(${s === 'won' ? '--good-ink' : s === 'f4' || s === 'f5' || s === 'f3' ? '--s-won' : '--s-active'})"></i></span><span class="n">${fmtInt(n)}</span></div>`;
       }).join('')}</div></div>
-      <div><h3>${esc(t('pi_why'))}</h3>${objKeys.length ? `<div class="pi-bars">${objKeys.map((k) => `<div class="pi-bar two"><span class="l">${esc(t('obj_' + k))}</span><span class="b"><i style="width:${((ins.objectionsOpen[k] || 0) / objMax) * 100}%;background:var(--s-lostc)"></i><i style="width:${((ins.objectionsWon[k] || 0) / objMax) * 100}%;background:var(--good-ink)"></i></span><span class="n">${fmtInt(ins.objectionsOpen[k] || 0)} / ${fmtInt(ins.objectionsWon[k] || 0)}</span></div>`).join('')}</div><div class="pi-legend"><span><i style="background:var(--s-lostc)"></i>${esc(t('pi_open'))}</span><span><i style="background:var(--good-ink)"></i>${esc(t('pi_won'))}</span></div>` : `<p class="muted" style="font-size:12.5px">${esc(t('pi_noAiYet'))}</p>`}</div>
+      <div><h3>${esc(t('pi_why'))}</h3>${objKeys.length ? `<div class="pi-bars">${objKeys.map((k) => `<div class="pi-bar two"><span class="l">${esc(t('obj_' + k))}</span><span class="b"><i style="width:${((ins.objectionsOpen[k] || 0) / objMax) * 100}%;background:var(--s-lostc)"></i><i style="width:${((ins.objectionsWon[k] || 0) / objMax) * 100}%;background:var(--good-ink)"></i></span><span class="n"><b title="${esc(t('pi_whyOpen'))}">${fmtInt(ins.objectionsOpen[k] || 0)}</b> · <span class="ok" title="${esc(t('pi_whyWon'))}">${fmtInt(ins.objectionsWon[k] || 0)}</span></span></div>`).join('')}</div><div class="pi-legend"><span><i style="background:var(--s-lostc)"></i>${esc(t('pi_whyOpen'))}</span><span><i style="background:var(--good-ink)"></i>${esc(t('pi_whyWon'))}</span></div>` : `<p class="muted" style="font-size:12.5px">${esc(t('pi_noAiYet'))}</p>`}</div>
       <div><h3>${esc(t('pi_compare'))}</h3><table class="pi-table"><thead><tr><th></th><th class="num">${esc(t('pi_won'))} (${fmtInt(cmp.won.n)})</th><th class="num">${esc(t('pi_open'))} (${fmtInt(cmp.open.n)})</th></tr></thead><tbody>
         ${cmpRow(t('pi_firstTouch'), cmp.won.firstTouchHours, cmp.open.firstTouchHours)}${cmpRow(t('pi_touches'), cmp.won.touches, cmp.open.touches)}${cmpRow(t('pi_notes'), cmp.won.notes, cmp.open.notes)}
         ${cmpRow(t('pi_silence'), null, cmp.open.daysSinceLastTouch)}${cmpRow(t('pi_inStage'), null, cmp.open.daysInStage)}</tbody></table>
         ${(ins.reps || []).length ? `<h3>${esc(t('pi_reps'))}</h3><table class="pi-table"><thead><tr><th>${esc(t('pi_rep'))}</th><th class="num">${esc(t('pi_openQ'))}</th><th class="num">${esc(t('pi_waitingCol'))}</th><th class="num">${esc(t('pi_quietCol'))}</th></tr></thead><tbody>${ins.reps.slice(0, 6).map((r) => `<tr><td>${esc(r.rep)}</td><td class="num">${fmtInt(r.openQualified)}</td><td class="num ${r.waitingOnUs ? 'bad' : ''}">${fmtInt(r.waitingOnUs)}</td><td class="num">${fmtInt(r.quiet7)}</td></tr>`).join('')}</tbody></table>` : ''}
+      </div>
+    </div></div>`;
+}
+
+// ───────────────────────── score → enrollment ─────────────────────────
+const sbLabel = (s) => { const k = 'sb_' + String(s).replace(/[^A-Za-z]+/g, '_'); const v = t(k); return v === k ? s : v; };
+const pctTxt = (x) => (x == null ? '—' : `${(x * 100).toFixed(x < 0.1 ? 1 : 0)}%`);
+function scoresHtml(sc) {
+  if (!sc || !sc.scores) return `<div class="panel"><div class="skeleton" style="width:30%"></div><div class="skeleton" style="width:70%"></div></div>`;
+  const main = sc.scores.filter((x) => ['Very Good', 'Good'].includes(x.score));
+  const lines = main.map((x) => t('sc_line', { s: sbLabel(x.score), e: fmtInt(x.enrolled), n: fmtInt(x.total), r: pctTxt(x.rate) }));
+  const j = sc.journeys || {};
+  const months = (sc.cohorts || []).map((c) => c.month);
+  const cohortScores = ['Very Good', 'Good', 'No Feedback', 'Bad', 'Not scored'].filter((s) => (sc.cohorts || []).some((c) => c.byScore[s]));
+  const hy = sc.hygiene || {};
+  const hyg = [hy.enrolledNotWonInAC ? t('sc_hyg1', { n: fmtInt(hy.enrolledNotWonInAC) }) : '', hy.wonStageOpen ? t('sc_hyg2', { n: fmtInt(hy.wonStageOpen) }) : '', hy.wonInACNotEnrolled ? t('sc_hyg3', { n: fmtInt(hy.wonInACNotEnrolled) }) : ''].filter(Boolean);
+  return `<div class="panel sc-panel">
+    <div class="panel-head"><div><h2>${icon('trophy')} ${esc(t('sc_title'))}</h2><div class="panel-sub">${esc(t('sc_sub'))}</div></div></div>
+    ${sc.enrollmentsLoading ? `<p class="pi-note">${icon('clock')}${esc(t('sc_loadingEnr'))}</p>` : ''}
+    ${lines.length ? `<p class="sc-lines">${lines.map((l) => `<span>${esc(l)}</span>`).join('')}</p>` : ''}
+    <div class="sc-cols">
+      <div class="sc-main">
+        <table class="pi-table sc-table"><thead><tr><th>${esc(t('sc_score'))}</th><th class="num">${esc(t('sc_leads'))}</th><th class="num">${esc(t('sc_enrolled'))}</th><th class="num">${esc(t('sc_rate'))}</th><th class="num" title="${esc(t('sc_decidedHint'))}">${esc(t('sc_decided'))} ⓘ</th><th class="num">${esc(t('sc_open'))}</th><th class="num">${esc(t('sc_lost'))}</th><th class="num">${esc(t('sc_notWon'))}</th><th class="num">${esc(t('sc_days'))}</th></tr></thead>
+        <tbody>${sc.scores.map((x) => `<tr class="${['Very Good', 'Good'].includes(x.score) ? 'q' : ''}"><td>${esc(sbLabel(x.score))}</td><td class="num">${fmtInt(x.total)}</td><td class="num"><strong>${fmtInt(x.enrolled)}</strong></td><td class="num">${pctTxt(x.rate)}</td><td class="num">${pctTxt(x.decidedRate)}</td><td class="num">${fmtInt(x.open)}</td><td class="num">${fmtInt(x.lost)}</td><td class="num ${x.notWonInAC ? 'bad' : ''}">${fmtInt(x.notWonInAC)}</td><td class="num">${x.medianDaysToEnroll == null ? '—' : fmtInt(x.medianDaysToEnroll)}</td></tr>`).join('')}</tbody></table>
+        ${months.length ? `<h3>${esc(t('sc_cohorts'))}</h3><table class="pi-table sc-table"><thead><tr><th></th>${months.map((m) => `<th class="num">${esc(m)}</th>`).join('')}</tr></thead><tbody>
+          ${cohortScores.map((s) => `<tr><td>${esc(sbLabel(s))}</td>${sc.cohorts.map((c) => { const v = c.byScore[s]; return `<td class="num">${v ? `${fmtInt(v.enrolled)} / ${fmtInt(v.total)}` : '—'}</td>`; }).join('')}</tr>`).join('')}</tbody></table>` : ''}
+      </div>
+      <div class="sc-side">
+        <div>
+        <h3>${esc(t('sc_journeys'))}</h3>
+        <p class="muted sc-note">${esc(t('sc_tracking', { d: j.trackingSince || '—', n: fmtInt(j.tracked || 0) }))}</p>
+        ${(j.paths || []).length ? `<div class="sc-sub">${esc(t('sc_paths'))}</div><ul class="sc-list">${j.paths.slice(0, 6).map((p) => `<li><strong>${esc(p.path.split(' → ').map((x) => (x === 'Enrolled' ? t('sc_enrolled') : sbLabel(x))).join(' → '))}</strong> · ${fmtInt(p.n)}${p.medianDaysAfterChange != null ? ` <span class="muted">(${esc(t('sc_afterChange', { d: fmtInt(p.medianDaysAfterChange) }))})</span>` : ''}</li>`).join('')}</ul>` : ''}
+        ${(j.transitions || []).length ? `<div class="sc-sub">${esc(t('sc_transitions'))}</div><ul class="sc-list">${j.transitions.slice(0, 8).map((x) => `<li>${esc(x.path.split(' → ').map(sbLabel).join(' → '))} · ${fmtInt(x.n)} <span class="muted">(${esc(t('sc_ofWhich', { e: fmtInt(x.enrolled) }))})</span></li>`).join('')}</ul>` : `<p class="muted sc-note">${esc(t('sc_noChanges'))}</p>`}
+        </div><div>
+        <h3>${esc(t('sc_offPath'))}</h3>
+        ${(sc.offPath || []).length ? `<ul class="sc-list">${sc.offPath.map((o) => `<li><strong>${esc(sbLabel(o.score))}</strong> · ${fmtInt(o.n)} <span class="muted">(${o.programs.slice(0, 3).map((p) => `${esc(p.program)} ${fmtInt(p.n)}`).join(', ')})</span></li>`).join('')}</ul>` : `<p class="muted sc-note">${esc(t('sc_offPathNone'))}</p>`}
+        </div><div>
+        ${hyg.length ? `<h3>${esc(t('sc_hygiene'))}</h3><ul class="sc-list bad">${hyg.map((h) => `<li>${esc(h)}</li>`).join('')}</ul>` : ''}
+        </div>
       </div>
     </div></div>`;
 }
