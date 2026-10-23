@@ -594,3 +594,16 @@ a.sb-item:hover{text-decoration:none;}
 .as-reason{max-width:260px;color:var(--bad-ink);font-size:12px;}
 .as-warn{font-size:11px;color:var(--warn-ink);margin-top:3px;}
 .as-wrap{overflow-x:auto;margin:0 -4px;padding:0 4px;}
+
+/* Settings page */
+.set-panel .panel-head{margin-bottom:8px;}
+.set-row{display:flex;align-items:center;gap:14px;padding:12px 0;border-top:1px solid var(--border);flex-wrap:wrap;}
+.set-row:first-of-type{border-top:none;}
+.set-label{display:inline-flex;align-items:center;gap:8px;min-width:200px;font-weight:600;font-size:13px;color:var(--ink);}
+.set-label .ico{width:16px;height:16px;color:var(--blue);}
+.set-val{flex:1;font-size:13px;color:var(--body);min-width:0;}
+.set-err{color:var(--bad-ink);font-size:12px;margin-top:3px;}
+#theme-seg .ico{width:14px;height:14px;}
+.set-section-head{margin:22px 0 10px;}
+.set-section-head h2{font-size:15px;margin:0;font-weight:700;}
+.sb-settings.active{background:var(--blue-soft);color:var(--blue-ink);}
