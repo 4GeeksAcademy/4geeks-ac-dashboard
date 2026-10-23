@@ -138,5 +138,26 @@ test('ads-sync posts each Good/Very Good USA lead once per tier, hashed, and nev
   await sync.run();
   assert.strictEqual(got.length, 3); // upgrade Good -> Very Good is its own conversion
   assert.ok(!JSON.stringify(records[0]).includes('abc')); // gclid never serialized
+  // n8n reports back; the log shows each state; failures can be retried.
+  await sync.recordResult({ deal_id: '1', tier: 'very_good', ok: true, identifier_used: 'gclid' });
+  await sync.recordResult({ deal_id: '2', tier: 'very_good', ok: false, identifier_used: 'hashed_email', error: 'CLICK_NOT_FOUND' });
+  records.push(mk('6', 'Good', { email: '' }));
+  const byKey = Object.fromEntries(sync.logRows().map((r) => [r.key, r.status]));
+  assert.strictEqual(byKey['1:very_good'], 'uploaded');
+  assert.strictEqual(byKey['2:very_good'], 'failed');
+  assert.strictEqual(byKey['2:good'], 'queued');
+  assert.strictEqual(byKey['6:good'], 'no_id');
+  assert.strictEqual(sync.summary().counts.uploaded, 1);
+  assert.strictEqual(await sync.retry(['2:very_good']), 1);
+  await sync.run();
+  assert.strictEqual(got.length, 4); // failed one sent again
+  assert.ok(sync.checkKey('k') && !sync.checkKey('x'));
+  // Temporary Google errors and silent uploads go again by themselves; duplicates count as uploaded.
+  await sync.recordResult({ deal_id: '1', tier: 'very_good', ok: false, error: '{"conversionUploadError":"TOO_RECENT_CONVERSION_ACTION"}' });
+  await sync.recordResult({ deal_id: '2', tier: 'good', ok: false, error: 'DUPLICATE_ORDER_ID' });
+  await sync.autoRetry(Date.now() + 8 * 3600000);
+  const after = Object.fromEntries(sync.logRows().map((r) => [r.key, r.status]));
+  assert.strictEqual(after['1:very_good'], 'pending');
+  assert.strictEqual(after['2:good'], 'uploaded');
   srv.closeAllConnections(); srv.close();
 });

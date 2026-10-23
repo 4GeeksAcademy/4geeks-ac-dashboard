@@ -399,12 +399,14 @@ const pipelineIntel = createIntel({
     getRecords: () => cache.records,
     getLookups: () => lookups,
     callClaude: (args) => callClaude(args),
+    isBusy: () => refreshing || !cache.records,
 });
 // Apply a change we just wrote to AC to the cached record, so the page shows
 // it right away instead of after the next refresh.
 function patchRecord(dealId, patch) {
     const rec = (cache.records || []).find((r) => String(r.id) === String(dealId));
     if (rec) Object.assign(rec, patch, { dealUpdatedAt: new Date().toISOString() });
+    dataPatches++;
     return rec;
 }
 mountPipelineRoutes(app, {
@@ -412,10 +414,29 @@ mountPipelineRoutes(app, {
     getRecords: () => cache.records, getLookups: () => lookups, patchRecord, acAppUrl: AC_APP_URL,
 });
 if (client) pipelineIntel.start();
+const snapshotStore = createPipelineStore();
+snapshotStore.getBlob('summary-all').then((b) => {
+    if (b && b.data && !cache.records) { summarySnapshot = { gz: b.data, etag: b.meta.etag, generatedAt: b.meta.generatedAt }; console.log(`[summary] warm start from snapshot of ${b.meta.generatedAt} (${Math.round(b.data.length / 1024)} KB)`); }
+}).catch((e) => console.warn('[summary] no snapshot:', e.message));
+// Save a fresh snapshot after each successful pull (checked every minute; cheap when unchanged).
+let lastSnapshotAt = 0;
+setInterval(() => { if (cache.records && cache.at !== lastSnapshotAt && !refreshing) { lastSnapshotAt = cache.at; saveSummarySnapshot(); } }, 60 * 1000);
 // Good / Very Good leads -> Google Ads (via the n8n workflow), see lib/pipeline/ads-sync.js.
 const { createAdsSync } = require('./lib/pipeline/ads-sync');
 const adsSync = createAdsSync({ store: createPipelineStore(), getRecords: () => cache.records });
-app.get('/api/pipeline/ads-sync', requireAuth, (req, res) => res.json(adsSync.status()));
+app.get('/api/pipeline/ads-sync', requireAuth, (req, res) => res.json(adsSync.summary()));
+app.get('/api/pipeline/ads-sync/log', requireAuth, (req, res) => res.json({ summary: adsSync.summary(), rows: adsSync.logRows() }));
+app.post('/api/pipeline/ads-sync/retry', requireAuth, async (req, res) => {
+    try { res.json({ retried: await adsSync.retry((req.body && req.body.keys) || []) }); adsSync.run().catch(() => {}); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/pipeline/ads-sync/run', requireAuth, async (req, res) => {
+    try { await adsSync.run(); res.json(adsSync.summary()); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// n8n reports Google's answer for each upload. Not a user session: authenticated by the shared key.
+app.post('/api/pipeline/ads-sync/result', async (req, res) => {
+    if (!adsSync.checkKey(req.get('x-hub-key'))) return res.status(401).json({ error: 'bad key' });
+    try { const row = await adsSync.recordResult(req.body || {}); res.json({ ok: true, status: row.status }); } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+});
 if (client) adsSync.start();
 
 app.post('/api/login', async (req, res) => {
@@ -611,20 +632,52 @@ app.get('/api/diag/scores/:id', requireAuth, async (req, res) => {
   }
 });
 
+// /api/summary is ~17 MB of JSON (every lead in the window). Building it --
+// redacting PII, serializing, gzipping -- used to happen on EVERY page load
+// (~0.6 s before the first byte). Now it's built once per data version and
+// served as pre-gzipped bytes with an ETag, so repeat loads are instant
+// (304) and new loads skip the server work.
+// The redacted payload is also saved to Postgres, so after a deploy or
+// restart the dashboard opens immediately with the last data instead of
+// waiting ~5 minutes for the first ActiveCampaign pull. It is the same
+// hashed data the browser receives: no personal data in clear is stored.
+const zlib = require('zlib');
+let summaryCache = { key: null, gz: null, etag: null, generatedAt: null };
+let summarySnapshot = null; // { gz, etag, generatedAt } restored at boot
+let dataPatches = 0; // bumped by patchRecord() so actions show up on next load
+function summaryKey(region) { return `${cache.at}:${dataPatches}:${region || 'all'}`; }
+function buildSummary(region) {
+    const key = summaryKey(region);
+    if (summaryCache.key === key) return summaryCache;
+    const records = region ? cache.records.filter((r) => r.region === region) : cache.records;
+    const generatedAt = new Date(cache.at).toISOString();
+    const body = redactPii({ records, generatedAt, cacheAgeSeconds: 0, dataWindowMonths: DATA_WINDOW_MONTHS, acAppUrl: AC_APP_URL }, { partials: true });
+    const gz = zlib.gzipSync(Buffer.from(JSON.stringify(body)), { level: 6 });
+    summaryCache = { key, gz, etag: `W/"${require('crypto').createHash('sha1').update(key).digest('hex').slice(0, 16)}"`, generatedAt };
+    return summaryCache;
+}
+function sendSummary(req, res, built) {
+    res.set('Cache-Control', 'private, no-cache');
+    res.set('ETag', built.etag);
+    res.set('Vary', 'Accept-Encoding');
+    if (req.get('if-none-match') === built.etag) return res.status(304).end();
+    res.type('application/json');
+    if (/\bgzip\b/.test(req.get('accept-encoding') || '')) { res.set('Content-Encoding', 'gzip'); return res.end(built.gz); }
+    return res.end(zlib.gunzipSync(built.gz));
+}
+async function saveSummarySnapshot() {
+    try {
+        const built = buildSummary();
+        await snapshotStore.putBlob('summary-all', built.gz, { etag: built.etag, generatedAt: built.generatedAt });
+    } catch (e) { console.warn('[summary] snapshot save failed:', e.message); }
+}
 app.get('/api/summary', requireAuth, (req, res) => {
   if (!client) return res.status(500).json({ error: 'AC_API_URL / AC_API_KEY not configured' });
   if (!cache.records) {
+    if (summarySnapshot && !req.query.region) return sendSummary(req, res, summarySnapshot);
     return res.status(202).json({ ready: false, refreshing, lastError });
   }
-  const region = req.query.region;
-  const records = region ? cache.records.filter((r) => r.region === region) : cache.records;
-  res.json({
-    records,
-    generatedAt: new Date(cache.at).toISOString(),
-    cacheAgeSeconds: Math.round((Date.now() - cache.at) / 1000),
-    dataWindowMonths: DATA_WINDOW_MONTHS,
-    acAppUrl: AC_APP_URL,
-  });
+  try { return sendSummary(req, res, buildSummary(req.query.region)); } catch (e) { return res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/refresh', requireAuth, (req, res) => {

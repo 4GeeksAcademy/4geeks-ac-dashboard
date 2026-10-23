@@ -107,6 +107,8 @@ const PIPE = {
 function pipeClearCache() { PIPE.advice.clear(); PIPE.loadedAt = 0; PIPE.insights = {}; }
 
 const PI_DAY = 86400000;
+// fmtDate() keeps only the date part; these need the time too.
+const fmtDT = (iso) => (iso ? new Date(iso).toLocaleString(LANG === 'es' ? 'es-ES' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
 // Phones/emails inside notes arrive hashed (server lib/pii.js): show a short mask instead of 64 hex chars.
 const unhash = (v) => String(v ?? '').replace(/\b[0-9a-f]{64}\b/gi, '•••');
 const piAge = (iso) => (iso ? Math.floor((Date.now() - new Date(String(iso).slice(0, 10) + 'T12:00:00')) / PI_DAY) : null);
@@ -590,7 +592,7 @@ function adviceHtml(key, adv) {
   const linked = mdToHtml(adv.text).replace(/(?<!&)#(\d{2,9})\b/g, '<a href="#" class="lead-ref" data-lead-link="$1">#$1</a>');
   const b = adv.basis || {};
   return `<div class="rc-ai md">${linked}
-    <div class="adv-foot">${esc(t('adv_basis', { n: fmtInt(b.leads), r: fmtInt(b.read), d: fmtInt(b.diagnosed) }))}${adv.previousAt ? ' · ' + esc(t('adv_prev', { d: fmtDate(adv.previousAt, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) })) : ' · ' + esc(t('adv_none'))}</div>
+    <div class="adv-foot">${esc(t('adv_basis', { n: fmtInt(b.leads), r: fmtInt(b.read), d: fmtInt(b.diagnosed) }))}${adv.previousAt ? ' · ' + esc(t('adv_prev', { d: fmtDT(adv.previousAt) })) : ' · ' + esc(t('adv_none'))}</div>
     ${(adv.follow || []).map((f) => `<div class="adv-q"><b>${esc(f.q)}</b>${f.loading ? ` <span class="dots"><span></span><span></span><span></span></span>` : mdToHtml(f.a || '').replace(/(?<!&)#(\d{2,9})\b/g, '<a href="#" class="lead-ref" data-lead-link="$1">#$1</a>')}</div>`).join('')}
     <form class="adv-ask" data-ask="${key}"><input type="text" placeholder="${esc(t('adv_ask'))}"><button class="btn ghost sm">${esc(t('adv_send'))}</button></form>
   </div>`;
@@ -668,7 +670,7 @@ function leadIntelHtml(r, data) {
     <button class="qa" data-act="snooze" data-id="${esc(id)}">${icon('clock')}${esc(t('a_snooze'))}</button>
     <button class="qa good" data-act="done" data-id="${esc(id)}">${icon('check')}${esc(t('a_done'))}</button>
     ${isActive(r) ? `<button class="qa bad" data-act="lost" data-id="${esc(id)}">${icon('xcircle')}${esc(t('a_lost'))}</button>` : ''}</div>`;
-  const head = `<h3>${icon('sparkle')}${esc(t('pi_leadTitle'))}<span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500;margin-left:auto">${it ? esc(t('pi_readAt', { a: fmtDate(it.fetchedAt, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), b: it.diagnosedAt ? fmtDate(it.diagnosedAt, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—' })) : ''}</span></h3>`;
+  const head = `<h3>${icon('sparkle')}${esc(t('pi_leadTitle'))}<span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500;margin-left:auto">${it ? esc(t('pi_readAt', { a: fmtDT(it.fetchedAt), b: it.diagnosedAt ? fmtDT(it.diagnosedAt) : '—' })) : ''}</span></h3>`;
   if (!it) return head + `<p class="muted">${esc(t('pi_notRead'))}</p>` + actions;
   const m = it.metrics || {};
   const diagHtml = di ? `
@@ -693,4 +695,143 @@ function leadIntelHtml(r, data) {
     ${diagHtml}${actions}
     <h4>${esc(t('pi_timeline'))} <button class="linkish" data-reread style="margin-left:8px">${icon('refresh')}${esc(t('pi_reread'))}</button></h4>
     ${tl.length ? `<div class="timeline pi-tl">${tl.slice(0, 25).map((e) => `<div class="k-${esc(e.kind)}"><span class="d">${fmtDate(e.at, { day: 'numeric', month: 'short' })}</span><span class="w">${esc(e.by)}</span>${e.kind === 'stage' ? icon('target') : ''}<span class="tx">${esc(unhash(e.note))}</span></div>`).join('')}</div>` : `<p class="muted" style="font-size:12.5px">${esc(t('pi_noTimeline'))}</p>`}`;
+}
+
+// ───────────────────────── Google Ads sync log ─────────────────────────
+// Every qualified lead (Good / Very Good) and where it is on its way to
+// Google Ads: pending → queued (handed to n8n) → uploaded / failed.
+(function addAdsSyncStrings() {
+  const en = {
+    nav_adsync: 'Google Ads sync', sub_adsync: 'Every Good / Very Good lead sent to Google Ads as a conversion — uploaded, waiting, pending or failed',
+    as_uploaded: 'Uploaded', as_queued: 'Waiting for Google', as_pending: 'Pending', as_failed: 'Failed', as_no_id: 'Can’t be matched', as_all: 'All',
+    as_uploadedSub: '{v} in conversion value', as_queuedSub: 'handed to n8n, no answer yet', as_pendingSub: 'goes out within a minute', as_failedSub: 'rejected — retry or check the reason', as_no_idSub: 'no click ID and no email in the CRM',
+    as_on: 'Sync is on · {r} · leads created in the last {d} days · last run {t}', as_off: 'Sync is off. Set ADS_SYNC_WEBHOOK_URL and ADS_SYNC_KEY on Railway to turn it on.',
+    as_sendNow: 'Send pending now', as_retryFailed: 'Retry all failed ({n})', as_retry: 'Retry', as_search: 'Search deal # or name…',
+    as_lead: 'Lead', as_tier: 'Tier', as_status: 'Status', as_match: 'Matched by', as_value: 'Value', as_sent: 'Sent', as_answer: 'Google answer', as_reason: 'Reason',
+    as_gclid: 'Click ID', as_email: 'Hashed email', as_vg: 'Very Good', as_good: 'Good', as_none: 'Nothing here.', as_stale: 'no answer after 1h',
+    as_retried: '{n} queued again', as_sent2: 'Sent {n} pending leads', as_lastErr: 'Last error: {e}', as_attempts: '{n} attempts',
+    as_note: 'Both conversion actions are secondary in Google Ads: they are reported but do not steer bidding until you make one primary.',
+  };
+  const es = {
+    nav_adsync: 'Sync con Google Ads', sub_adsync: 'Cada lead Good / Very Good enviado a Google Ads como conversión — subido, en espera, pendiente o fallido',
+    as_uploaded: 'Subidos', as_queued: 'Esperando a Google', as_pending: 'Pendientes', as_failed: 'Fallidos', as_no_id: 'Sin forma de cruzar', as_all: 'Todos',
+    as_uploadedSub: '{v} en valor de conversión', as_queuedSub: 'entregados a n8n, sin respuesta aún', as_pendingSub: 'salen en menos de un minuto', as_failedSub: 'rechazados — reintentar o revisar el motivo', as_no_idSub: 'sin click ID ni email en el CRM',
+    as_on: 'Sync activo · {r} · leads creados en los últimos {d} días · última corrida {t}', as_off: 'Sync apagado. Configura ADS_SYNC_WEBHOOK_URL y ADS_SYNC_KEY en Railway para activarlo.',
+    as_sendNow: 'Enviar pendientes ya', as_retryFailed: 'Reintentar fallidos ({n})', as_retry: 'Reintentar', as_search: 'Buscar deal # o nombre…',
+    as_lead: 'Lead', as_tier: 'Nivel', as_status: 'Estado', as_match: 'Cruce por', as_value: 'Valor', as_sent: 'Enviado', as_answer: 'Respuesta de Google', as_reason: 'Motivo',
+    as_gclid: 'Click ID', as_email: 'Email hasheado', as_vg: 'Very Good', as_good: 'Good', as_none: 'Nada por aquí.', as_stale: 'sin respuesta tras 1h',
+    as_retried: '{n} reenviados a la cola', as_sent2: 'Enviados {n} pendientes', as_lastErr: 'Último error: {e}', as_attempts: '{n} intentos',
+    as_note: 'Las dos acciones de conversión son secundarias en Google Ads: se reportan pero no guían la puja hasta que marques una como principal.',
+  };
+  window.I18N.en = { ...window.I18N.en, ...en };
+  window.I18N.es = { ...window.I18N.es, ...es };
+})();
+
+const ADS = { data: null, loading: false, status: 'all', tier: 'all', q: '', shown: 100 };
+const AS_ORDER = ['uploaded', 'queued', 'pending', 'failed', 'no_id'];
+const AS_BADGE = { uploaded: 'b-won', queued: 'b-neutral', pending: 'b-lostu', failed: 'b-lostc', no_id: 'b-neutral' };
+const asStale = (r) => r.status === 'queued' && r.sentAt && Date.now() - Date.parse(r.sentAt) > 3600000;
+
+async function loadAdsSync() {
+  ADS.loading = true;
+  try {
+    const res = await api('/api/pipeline/ads-sync/log');
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error || res.statusText);
+    ADS.data = d; ADS.error = null; ADS.at = Date.now();
+  } catch (e) { ADS.error = e.message; ADS.at = Date.now(); }
+  ADS.loading = false;
+  if (state.view === 'adsync') renderAdsSync($('#tab-adsync'));
+}
+
+function renderAdsSync(el) {
+  if (!ADS.loading && (!ADS.data || Date.now() - (ADS.at || 0) > 20000)) loadAdsSync();
+  if (!ADS.data) {
+    el.innerHTML = ADS.error ? `<div class="panel state-card">${icon('alert')}<p>${esc(ADS.error)}</p></div>` : `<div class="kpis">${'<div class="kpi"><div class="skeleton" style="width:50%"></div><div class="skeleton" style="height:28px;width:70%"></div></div>'.repeat(5)}</div>`;
+    return;
+  }
+  const s = ADS.data.summary || {}; const c = s.counts || {};
+  const all = ADS.data.rows || [];
+  const q = ADS.q.trim().toLowerCase();
+  const rows = all.filter((r) => (ADS.status === 'all' || r.status === ADS.status)
+    && (ADS.tier === 'all' || r.tier === ADS.tier)
+    && (!q || String(r.dealId).includes(q) || String((r.lead && (r.lead.namePartial || '')) || '').toLowerCase().includes(q)));
+  const failedKeys = all.filter((r) => r.status === 'failed' || asStale(r)).map((r) => r.key);
+  const kpi = (k, val, sub, cls = '') => `<button class="kpi as-kpi ${cls} ${ADS.status === k ? 'sel' : ''}" data-as-status="${k}"><div class="k-lbl"><span class="dot" style="background:var(${k === 'uploaded' ? '--good' : k === 'failed' ? '--bad' : k === 'pending' ? '--warn' : '--s-active'})"></span>${esc(t('as_' + k))}</div><div class="k-val">${fmtInt(val || 0)}</div><div class="k-sub">${esc(sub)}</div></button>`;
+  el.innerHTML = `
+    <div class="panel as-head">
+      <div class="as-line">${s.enabled ? `<span class="as-dot on"></span>${esc(t('as_on', { r: (s.regions || []).join(', '), d: s.lookbackDays, t: s.lastRunAt ? fmtDT(s.lastRunAt) : '—' }))}` : `<span class="as-dot"></span>${esc(t('as_off'))}`}
+        ${s.lastError ? `<span class="as-err" title="${esc(s.lastError)}">${esc(t('as_lastErr', { e: s.lastError.slice(0, 80) }))}</span>` : ''}</div>
+      <div class="as-actions">
+        <button class="btn soft sm" data-as-run ${s.enabled ? '' : 'disabled'}>${icon('upload')}${esc(t('as_sendNow'))}</button>
+        ${failedKeys.length ? `<button class="btn ghost sm" data-as-retry-all>${icon('refresh')}${esc(t('as_retryFailed', { n: fmtInt(failedKeys.length) }))}</button>` : ''}
+      </div>
+      <p class="as-note">${esc(t('as_note'))}</p>
+    </div>
+    <div class="kpis k8">
+      ${kpi('uploaded', c.uploaded, t('as_uploadedSub', { v: fmtMoney(s.uploadedValue || 0) }), 'hl-good')}
+      ${kpi('queued', c.queued, t('as_queuedSub'))}
+      ${kpi('pending', c.pending, t('as_pendingSub'))}
+      ${kpi('failed', c.failed, t('as_failedSub'), c.failed ? 'hl-bad' : '')}
+      ${kpi('no_id', c.no_id, t('as_no_idSub'))}
+    </div>
+    <div class="panel">
+      <div class="as-filters">
+        <div class="seg seg-sm">${['all', ...AS_ORDER].map((k) => `<button data-as-status="${k}" class="${ADS.status === k ? 'active' : ''}">${esc(t('as_' + k))}</button>`).join('')}</div>
+        <div class="seg seg-sm">${['all', 'very_good', 'good'].map((k) => `<button data-as-tier="${k}" class="${ADS.tier === k ? 'active' : ''}">${esc(k === 'all' ? t('as_all') : t(k === 'very_good' ? 'as_vg' : 'as_good'))}</button>`).join('')}</div>
+        <input type="search" class="as-search" placeholder="${esc(t('as_search'))}" value="${esc(ADS.q)}">
+      </div>
+      ${rows.length ? `<div class="as-wrap"><table class="as-table"><thead><tr>
+        <th>${esc(t('as_lead'))}</th><th>${esc(t('as_tier'))}</th><th>${esc(t('as_status'))}</th><th>${esc(t('as_match'))}</th><th class="num">${esc(t('as_value'))}</th><th>${esc(t('as_sent'))}</th><th>${esc(t('as_answer'))}</th><th>${esc(t('as_reason'))}</th><th></th></tr></thead><tbody>
+        ${rows.slice(0, ADS.shown).map((r) => {
+          const L = r.lead || {};
+          const stale = asStale(r);
+          const match = r.identifier ? (r.identifier === 'gclid' ? t('as_gclid') : t('as_email')) : (r.status === 'no_id' ? '—' : (r.viaGclid || L.hasGclid ? t('as_gclid') : t('as_email')));
+          return `<tr>
+            <td><button class="q-name" data-open="${esc(r.dealId)}">${L.namePartial ? esc(L.namePartial) : '#' + esc(r.dealId)}</button><div class="muted" style="font-size:11px">#${esc(r.dealId)}${L.owner ? ' · ' + esc(L.owner) : ''}${L.stage ? ' · ' + esc(L.stage) : ''}</div></td>
+            <td>${scoreBadge(r.tier === 'very_good' ? 'Very Good' : 'Good')}</td>
+            <td><span class="badge ${AS_BADGE[r.status] || 'b-neutral'}">${esc(t('as_' + r.status))}</span>${stale ? `<div class="as-warn">${esc(t('as_stale'))}</div>` : ''}${r.attempts > 1 ? `<div class="muted" style="font-size:11px">${esc(t('as_attempts', { n: r.attempts }))}</div>` : ''}</td>
+            <td>${esc(match)}</td>
+            <td class="num">${r.value != null ? fmtMoney(r.value) : '—'}</td>
+            <td>${r.sentAt ? fmtDT(r.sentAt) : '—'}</td>
+            <td>${r.resultAt ? fmtDT(r.resultAt) : '—'}</td>
+            <td class="as-reason" title="${esc(r.error || '')}">${r.error ? esc(asReason(r.error)) : ''}</td>
+            <td>${r.status === 'failed' || stale ? `<button class="qa" data-as-retry="${esc(r.key)}">${icon('refresh')}${esc(t('as_retry'))}</button>` : ''}</td></tr>`;
+        }).join('')}</tbody></table></div>
+        ${rows.length > ADS.shown ? `<button class="btn ghost sm" data-as-more style="margin-top:10px">${esc(t('q_showMore', { n: fmtInt(Math.min(100, rows.length - ADS.shown)) }))}</button>` : ''}` : `<p class="muted">${esc(t('as_none'))}</p>`}
+    </div>`;
+  $$('[data-as-status]', el).forEach((b) => b.addEventListener('click', () => { ADS.status = ADS.status === b.dataset.asStatus && b.classList.contains('as-kpi') ? 'all' : b.dataset.asStatus; ADS.shown = 100; renderAdsSync(el); }));
+  $$('[data-as-tier]', el).forEach((b) => b.addEventListener('click', () => { ADS.tier = b.dataset.asTier; renderAdsSync(el); }));
+  const search = $('.as-search', el);
+  if (search) search.addEventListener('input', (e) => { ADS.q = e.target.value; clearTimeout(ADS.t); ADS.t = setTimeout(() => { renderAdsSync(el); const i = $('.as-search', el); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250); });
+  $$('[data-open]', el).forEach((b) => b.addEventListener('click', () => openLead(b.dataset.open)));
+  const more = $('[data-as-more]', el); if (more) more.addEventListener('click', () => { ADS.shown += 100; renderAdsSync(el); });
+  const reload = $('[data-as-reload]', el); if (reload) reload.addEventListener('click', () => loadAdsSync());
+  const run = $('[data-as-run]', el);
+  if (run) run.addEventListener('click', async () => {
+    run.disabled = true;
+    const before = c.pending || 0;
+    const res = await api('/api/pipeline/ads-sync/run', { method: 'POST' }).catch(() => null);
+    if (res && res.ok) showToast(t('as_sent2', { n: fmtInt(before) }));
+    loadAdsSync();
+  });
+  const retryKeys = async (keys) => {
+    const res = await api('/api/pipeline/ads-sync/retry', { method: 'POST', body: { keys } }).catch(() => null);
+    const d = res ? await res.json().catch(() => ({})) : {};
+    showToast(t('as_retried', { n: fmtInt(d.retried || 0) }));
+    setTimeout(loadAdsSync, 1500);
+  };
+  const ra = $('[data-as-retry-all]', el); if (ra) ra.addEventListener('click', () => retryKeys(failedKeys));
+  $$('[data-as-retry]', el).forEach((b) => b.addEventListener('click', () => { b.disabled = true; retryKeys([b.dataset.asRetry]); }));
+}
+// Google's errors are long JSON: show the error code in plain words.
+function asReason(err) {
+  const s = String(err || '');
+  const code = (s.match(/"(?:conversionUploadError|dateError|clickConversionError|requestError|authorizationError|[a-zA-Z]+Error)":"([A-Z_]+)"/) || [])[1];
+  const map = {
+    EXPIRED_EVENT: 'Click older than the conversion window', CLICK_NOT_FOUND: 'Google doesn’t know this click', UNPARSEABLE_GCLID: 'Invalid click ID',
+    TOO_RECENT_EVENT: 'Click too recent — retried automatically', TOO_RECENT_CONVERSION_ACTION: 'New conversion action — Google needs 6h, retried automatically', DUPLICATE_ORDER_ID: 'Already in Google', LATER_THAN_MAXIMUM_DATE: 'Conversion time in the future', UNAUTHORIZED_CUSTOMER: 'Click belongs to another Ads account',
+    CONVERSION_PRECEDES_EVENT: 'Conversion before the click', NO_CONVERSION_ACTION_FOUND: 'Conversion action missing', CUSTOMER_NOT_ACCEPTED_CUSTOMER_DATA_TERMS: 'Customer data terms not accepted in Google Ads',
+  };
+  return code ? (map[code] || code.replace(/_/g, ' ').toLowerCase()) : s.replace(/[{}"\\]/g, ' ').slice(0, 90);
 }
