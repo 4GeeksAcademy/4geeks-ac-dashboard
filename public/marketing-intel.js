@@ -58,7 +58,11 @@ async function renderMarketingIntel(el) {
   const rows = ALL.filter((r) => match(r));
   const prev = (typeof previousRows === 'function' && previousRows()) || null;
   const key = `${rowsKey(rows)}|${prev ? rowsKey(prev) : '-'}|${MK.dim}|${state.dateFrom}|${state.dateTo}`;
-  const draw = (data) => { el.innerHTML = mkHtml(data, rows, prev); bindMk(el, data); };
+  const draw = (data) => {
+    el.innerHTML = `${mkHtml(data, rows, prev)}<div id="attr-root"></div>`;
+    bindMk(el, data);
+    if (window.renderAttribution) window.renderAttribution($('#attr-root', el), rows);
+  };
   if (MK.cache.has(key)) return draw(MK.cache.get(key));
   el.innerHTML = `<div class="panel"><p class="muted">${esc(t('mk_loading'))}</p><div class="skeleton" style="width:60%"></div><div class="skeleton" style="width:80%"></div></div>`;
   const center = await mkCenter();

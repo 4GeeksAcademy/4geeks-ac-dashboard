@@ -363,6 +363,46 @@ if (client) {
   setTimeout(() => { refreshEnrollments(); setInterval(refreshEnrollments, CACHE_TTL_MS); }, 45000);
 }
 
+// ---------------------------------------------------------------------------
+// Attribution machine (lib/attribution): /t.js runs on the 4Geeks sites
+// (installed through Google Tag Manager) and posts visits to /t/c. Public on
+// purpose, so it only accepts 4Geeks origins, small payloads and no bots.
+// ---------------------------------------------------------------------------
+const { createAttributionStore } = require('./lib/attribution/store');
+const { createAttribution } = require('./lib/attribution/journeys');
+const attribution = createAttribution({
+    store: createAttributionStore(),
+    getRecords: () => cache.records,
+    getEnrollOf: () => (global.__scoreJourneys ? global.__scoreJourneys.matcher() : () => null),
+});
+const ATTR_HOSTS = String(process.env.ATTR_ALLOWED_HOSTS || '4geeks.com,4geeksacademy.com,4geeks.co').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+const attrHostOk = (h) => { const host = String(h || '').toLowerCase(); return ATTR_HOSTS.some((d) => host === d || host.endsWith('.' + d)) || (process.env.ATTR_ALLOW_LOCAL === '1' && /^(localhost|127\.0\.0\.1)$/.test(host)); };
+const attrOrigin = (req) => { try { return new URL(req.get('origin') || req.get('referer') || '').hostname; } catch (e) { return ''; } };
+const attrHits = new Map();
+setInterval(() => attrHits.clear(), 60 * 1000).unref();
+app.get('/t.js', (req, res) => {
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.set('Access-Control-Allow-Origin', '*');
+    res.type('application/javascript').sendFile(path.join(__dirname, 'public', 't.js'));
+});
+app.options('/t/c', (req, res) => {
+    const host = attrOrigin(req);
+    if (!attrHostOk(host)) return res.status(403).end();
+    res.set({ 'Access-Control-Allow-Origin': req.get('origin'), 'Access-Control-Allow-Methods': 'POST', 'Access-Control-Allow-Headers': 'content-type', 'Access-Control-Max-Age': '86400' });
+    res.status(204).end();
+});
+app.post('/t/c', express.text({ type: () => true, limit: '24kb' }), async (req, res) => {
+    const host = attrOrigin(req);
+    if (!attrHostOk(host)) return res.status(403).end();
+    if (req.get('origin')) res.set('Access-Control-Allow-Origin', req.get('origin'));
+    const ip = String(req.get('x-forwarded-for') || req.ip || 'x').split(',')[0].trim();
+    const n = (attrHits.get(ip) || 0) + 1; attrHits.set(ip, n);
+    if (n > 120) return res.status(429).end();
+    if (/bot|crawl|spider|headless/i.test(req.get('user-agent') || '')) return res.status(204).end();
+    let body; try { body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body; } catch (e) { return res.status(400).end(); }
+    try { await attribution.collect(body); res.status(204).end(); } catch (e) { console.warn('[attribution] collect failed:', e.message); res.status(500).end(); }
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json({ limit: '2mb' }));
 // Personal data (lead names, emails, phones, deal titles...) never leaves the
@@ -431,6 +471,23 @@ const { createScoreJourneys } = require('./lib/pipeline/scores');
 const marketingIntel = require('./lib/marketing/intel');
 const intelStore = createPipelineStore();
 const scoreJourneys = createScoreJourneys({ store: intelStore, getRecords: () => cache.records, getEnrollments: () => enrollments.get() });
+global.__scoreJourneys = scoreJourneys; // shared with the attribution machine (same enrollment truth)
+app.get('/api/attribution/lead/:id', requireAuth, async (req, res) => {
+    const r = (cache.records || []).find((x) => String(x.id) === String(req.params.id));
+    if (!r) return res.status(404).json({ error: 'Lead not in the current data window' });
+    try { res.json(await attribution.journey(r)); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/attribution/report', requireAuth, async (req, res) => {
+    if (!cache.records) return res.status(503).json({ error: 'Data still loading', loading: true });
+    try { await scoreJourneys.load(); res.json(await attribution.report(recordsFor(req.body))); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.get('/api/attribution/status', requireAuth, async (req, res) => {
+    const base = `${req.protocol}://${req.get('host')}`;
+    let st = {}; try { st = await attribution.status(); } catch (e) { st = { error: e.message }; }
+    res.json({ ...st, allowedHosts: ATTR_HOSTS, script: `${base}/t.js`, snippet: `<script async src="${base}/t.js"></script>` });
+});
+// Keep 13 months of visits.
+setInterval(() => { attribution.prune(400).catch((e) => console.warn('[attribution] prune failed:', e.message)); }, 24 * 3600 * 1000).unref();
 let lastScoreSnapAt = 0;
 setInterval(() => {
     if (cache.records && cache.at !== lastScoreSnapAt && !refreshing) {

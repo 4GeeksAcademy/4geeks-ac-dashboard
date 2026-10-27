@@ -774,8 +774,8 @@ async function openLead(id) {
         ${kvRow(t('owner'), r.assignTo ? esc(r.assignTo) : esc(t('unassigned')))}${kvRow(t('stage'), esc(r.stage))}
         ${kvRow(t('created'), fmtDate(r.date, { day: 'numeric', month: 'short', year: 'numeric' }))}${kvRow(t('value'), r.dealValue ? fmtMoney(r.dealValue) : null)}
         ${kvRow(t('course'), esc(r.course))}${kvRow(t('region'), esc(r.region))}</dl></div>
-      <div class="lsec"><h3>${icon('target')}${esc(t('leadAttribution'))}</h3><dl class="kv">
-        ${kvRow(t('f_source'), esc(r.source))}${kvRow(t('f_medium'), esc(r.medium))}${kvRow(t('f_campaign'), esc(r.campaign), true)}${kvRow(t('f_location'), esc(r.location))}</dl></div>
+      <div class="lsec" id="ld-journey"><h3>${icon('target')}${esc(window.I18N[LANG] && window.I18N[LANG].at_journey ? t('at_journey') : t('leadAttribution'))}</h3><div class="at-body"><div class="skeleton" style="width:65%"></div></div><dl class="kv">
+        ${kvRow(t('f_location'), esc(r.location))}</dl></div>
       <div class="lsec"><h3>${icon('star')}${esc(t('leadQualification'))}</h3><dl class="kv">
         ${kvRow(t('f_admissionsScore'), r.admissionsScore ? scoreBadge(r.admissionsScore) : null)}${kvRow(t('dealQuality'), r.dealQuality != null ? esc(r.dealQuality) : null)}
         ${kvRow(t('f_leadSentiment'), esc(r.leadSentiment))}${kvRow(t('f_classification'), esc(r.classification))}${kvRow(t('f_admissionsConversationType'), esc(r.admissionsConversationType), true)}</dl></div>
@@ -798,6 +798,8 @@ async function openLead(id) {
     box.innerHTML = `<h3>${icon('mail')}${esc(t('leadEngagement'))} <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500;margin-left:auto">${esc(t('loadedIn', { s: ((performance.now() - t0) / 1000).toFixed(1) }))}</span></h3>` + engagementHtml(data);
   }).catch((e) => { const box = $('#ld-eng'); if (box) box.innerHTML = `<h3>${icon('mail')}${esc(t('leadEngagement'))}</h3><p class="muted">${esc(t('engagementFailed', { e: e.message }))}</p>`; });
 
+  // Every tracked visit before (and after) the form (public/attribution.js).
+  if (window.loadLeadJourney) window.loadLeadJourney(r);
   // Conversation, AI diagnosis and actions (public/pipeline.js).
   loadLeadIntel(r);
 }

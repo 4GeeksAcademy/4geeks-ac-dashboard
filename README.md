@@ -334,3 +334,18 @@ The former Recommendations page is now **Intelligence**, with two tabs. Every nu
 - **Sales**: the action lists and Pipeline intelligence as before, plus **Lead score → real enrollment** (`lib/pipeline/scores.js`). A lead counts as enrolled when it matches the Enrollments section (USA attribution sheet, Spain/LATAM won deals) by deal id or email, not AC's Won stage. Per score: leads, enrolled, % enrolled, % of decided (enrolled ÷ enrolled + lost), still open, lost, enrolled but not marked Won in AC, median days to enroll; by month of entry; leads that enrolled without a Good/Very Good score, by program; and data to fix in AC (enrolled not marked Won, deals in a Won stage still open, Won in AC with no enrollment).
 - **Score journeys**: ActiveCampaign keeps no history of the admissions score, so the app snapshots every lead's score after each refresh (`pipeline_blobs` id `score-history`) and shows the changes (Good → Very Good → Enrolled) from the day tracking started.
 - **Marketing** (`lib/marketing/intel.js`, `public/marketing-intel.js`): by source, campaign or medium — leads and change vs the previous period of the same length, qualified %, junk %, enrolled, enrolled %, and (with a date range) spend and cost per enrollment from 4Geeks Center, matched to UTM campaigns by name. **Analyze with AI** writes 3–5 changes for this week from those numbers.
+
+## Attribution machine (every visit → every lead)
+
+`public/t.js` is a first-party tracker for 4geeks.com and every 4Geeks site, installed once through Google Tag Manager (container GTM-PGGRR6): New tag → Custom HTML → `<script async src="https://marketing.4geeksacademy.com/t.js"></script>` → trigger All Pages (use a consent trigger for EU visitors).
+
+- It gives each browser a random visitor id (cookie on the root domain + localStorage, carried to other 4Geeks domains with `?_4gv=`), and records each visit: page, referrer, UTMs, ad click ids (gclid, gbraid, wbraid, fbclid, ttclid, msclkid…), single-page-app navigation.
+- When a form with an email is submitted (or its button clicked), it sends the **SHA-256 of the email** — the raw address never leaves the page through this script — which links every earlier visit to the lead.
+- It stays off for bots, with Global Privacy Control, or when `window.__4gTrack = false` (consent).
+- `/t/c` (public) accepts only 4Geeks origins (`ATTR_ALLOWED_HOSTS`), max 20 events / 24 KB per call, 120 calls/min per visitor. Stored in Postgres `attr_events` / `attr_ids`; no IPs, no raw emails; visits older than 400 days are pruned.
+
+In the Hub:
+- **Lead drawer → Journey**: every visit before the form (channel, campaign, ad, keyword, landing page, key pages such as Apply or pricing, device), the form, and visits after it, next to what ActiveCampaign recorded.
+- **Intelligence → Marketing → Attribution**: credit by channel under first touch, last non-direct touch, linear and position (40/20/40), with leads, qualified and enrolled (same enrollment truth as the rest of the page); most common journeys; every ad that touched a lead (touched / started / closed); coverage; tag health; and the setup card (snippet + URL templates for Meta, Google Ads and TikTok so every paid click names its ad).
+
+Channels (`lib/attribution/channel.js`): gclid = Google Ads even without UTMs; fbclid alone is organic (Meta adds it to organic clicks too) unless the UTMs say paid; paid search with "4geeks" in the keyword is **branded**; ChatGPT / Perplexity / Gemini / Copilot / Claude are **AI Assistant**. Ad impressions without a click can't be seen per person on any platform; send enrollments back to the platforms for their aggregate view-through numbers, and add "How did you first hear about us?" to the form for what no tracker can see.
