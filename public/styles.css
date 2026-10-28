@@ -593,6 +593,7 @@ a.sb-item:hover{text-decoration:none;}
 .as-table .num{text-align:right;font-variant-numeric:tabular-nums;}
 .as-reason{max-width:260px;color:var(--bad-ink);font-size:12px;}
 .as-warn{font-size:11px;color:var(--warn-ink);margin-top:3px;}
+.as-market{white-space:nowrap;font-size:12px;}
 .as-wrap{overflow-x:auto;margin:0 -4px;padding:0 4px;}
 
 /* Settings page */

@@ -807,7 +807,8 @@ function leadIntelHtml(r, data) {
     as_lead: 'Lead', as_tier: 'Tier', as_status: 'Status', as_match: 'Matched by', as_value: 'Value', as_sent: 'Sent', as_answer: 'Google answer', as_reason: 'Reason',
     as_gclid: 'Click ID', as_email: 'Hashed email', as_vg: 'Very Good', as_good: 'Good', as_none: 'Nothing here.', as_stale: 'no answer after 1h',
     as_retried: '{n} queued again', as_sent2: 'Sent {n} pending leads', as_lastErr: 'Last error: {e}', as_attempts: '{n} attempts',
-    as_note: 'Both conversion actions are secondary in Google Ads: they are reported but do not steer bidding until you make one primary.',
+    as_note: 'Every market has its own Very Good and Good conversion actions (LATAM in its own Ads account). They are secondary: reported, but they do not steer bidding until you make one primary.',
+    as_market: 'Market', as_allMarkets: 'All markets', as_valueEach: 'Very Good {vg} · Good {g}',
   };
   const es = {
     nav_adsync: 'Sync con Google Ads', sub_adsync: 'Cada lead Good / Very Good enviado a Google Ads como conversión — subido, en espera, pendiente o fallido',
@@ -818,13 +819,16 @@ function leadIntelHtml(r, data) {
     as_lead: 'Lead', as_tier: 'Nivel', as_status: 'Estado', as_match: 'Cruce por', as_value: 'Valor', as_sent: 'Enviado', as_answer: 'Respuesta de Google', as_reason: 'Motivo',
     as_gclid: 'Click ID', as_email: 'Email hasheado', as_vg: 'Very Good', as_good: 'Good', as_none: 'Nada por aquí.', as_stale: 'sin respuesta tras 1h',
     as_retried: '{n} reenviados a la cola', as_sent2: 'Enviados {n} pendientes', as_lastErr: 'Último error: {e}', as_attempts: '{n} intentos',
-    as_note: 'Las dos acciones de conversión son secundarias en Google Ads: se reportan pero no guían la puja hasta que marques una como principal.',
+    as_note: 'Cada mercado tiene sus propias acciones de conversión Very Good y Good (LATAM en su propia cuenta de Ads). Son secundarias: se reportan, pero no guían la puja hasta que marques una como principal.',
+    as_market: 'Mercado', as_allMarkets: 'Todos los mercados', as_valueEach: 'Very Good {vg} · Good {g}',
   };
   window.I18N.en = { ...window.I18N.en, ...en };
   window.I18N.es = { ...window.I18N.es, ...es };
 })();
 
-const ADS = { data: null, loading: false, status: 'all', tier: 'all', q: '', shown: 100 };
+const ADS = { data: null, loading: false, status: 'all', tier: 'all', region: 'all', q: '', shown: 100 };
+const AS_FLAG = { USA: '🇺🇸', Spain: '🇪🇸', LATAM: '🌎' };
+const asMoneyByCur = (m) => Object.entries(m || {}).map(([cur, v]) => fmtMoney(v, cur)).join(' + ') || fmtMoney(0);
 const AS_ORDER = ['uploaded', 'queued', 'pending', 'failed', 'no_id'];
 const AS_BADGE = { uploaded: 'b-won', queued: 'b-neutral', pending: 'b-lostu', failed: 'b-lostc', no_id: 'b-neutral' };
 const asStale = (r) => r.status === 'queued' && r.sentAt && Date.now() - Date.parse(r.sentAt) > 3600000;
@@ -847,8 +851,14 @@ function renderAdsSync(el) {
     el.innerHTML = ADS.error ? `<div class="panel state-card">${icon('alert')}<p>${esc(ADS.error)}</p></div>` : `<div class="kpis">${'<div class="kpi"><div class="skeleton" style="width:50%"></div><div class="skeleton" style="height:28px;width:70%"></div></div>'.repeat(5)}</div>`;
     return;
   }
-  const s = ADS.data.summary || {}; const c = s.counts || {};
-  const all = ADS.data.rows || [];
+  const s = ADS.data.summary || {};
+  const regionsSeen = [...new Set([...(s.regions || []), ...(ADS.data.rows || []).map((r) => r.region).filter(Boolean)])];
+  if (ADS.region !== 'all' && !regionsSeen.includes(ADS.region)) ADS.region = 'all';
+  const all = (ADS.data.rows || []).filter((r) => ADS.region === 'all' || r.region === ADS.region);
+  const c = ADS.region === 'all' ? (s.counts || {}) : ((s.byRegion || {})[ADS.region] || {});
+  const upByCur = {};
+  all.forEach((r) => { if (r.status === 'uploaded') upByCur[r.currency || 'USD'] = (upByCur[r.currency || 'USD'] || 0) + Number(r.value || 0); });
+  const vals = ADS.region !== 'all' && s.values ? s.values[ADS.region] : null;
   const q = ADS.q.trim().toLowerCase();
   const rows = all.filter((r) => (ADS.status === 'all' || r.status === ADS.status)
     && (ADS.tier === 'all' || r.tier === ADS.tier)
@@ -863,10 +873,10 @@ function renderAdsSync(el) {
         <button class="btn soft sm" data-as-run ${s.enabled ? '' : 'disabled'}>${icon('upload')}${esc(t('as_sendNow'))}</button>
         ${failedKeys.length ? `<button class="btn ghost sm" data-as-retry-all>${icon('refresh')}${esc(t('as_retryFailed', { n: fmtInt(failedKeys.length) }))}</button>` : ''}
       </div>
-      <p class="as-note">${esc(t('as_note'))}</p>
+      <p class="as-note">${esc(t('as_note'))}${vals ? ` <span class="muted">· ${esc(ADS.region)}: ${esc(t('as_valueEach', { vg: fmtMoney(vals.very_good, vals.currency), g: fmtMoney(vals.good, vals.currency) }))}</span>` : ''}</p>
     </div>
     <div class="kpis k8">
-      ${kpi('uploaded', c.uploaded, t('as_uploadedSub', { v: fmtMoney(s.uploadedValue || 0) }), 'hl-good')}
+      ${kpi('uploaded', c.uploaded, t('as_uploadedSub', { v: asMoneyByCur(upByCur) }), 'hl-good')}
       ${kpi('queued', c.queued, t('as_queuedSub'))}
       ${kpi('pending', c.pending, t('as_pendingSub'))}
       ${kpi('failed', c.failed, t('as_failedSub'), c.failed ? 'hl-bad' : '')}
@@ -874,22 +884,24 @@ function renderAdsSync(el) {
     </div>
     <div class="panel">
       <div class="as-filters">
+        ${regionsSeen.length > 1 ? `<div class="seg seg-sm">${['all', ...regionsSeen].map((k) => `<button data-as-region="${esc(k)}" class="${ADS.region === k ? 'active' : ''}">${k === 'all' ? esc(t('as_allMarkets')) : `${AS_FLAG[k] || ''} ${esc(k)}`}</button>`).join('')}</div>` : ''}
         <div class="seg seg-sm">${['all', ...AS_ORDER].map((k) => `<button data-as-status="${k}" class="${ADS.status === k ? 'active' : ''}">${esc(t('as_' + k))}</button>`).join('')}</div>
         <div class="seg seg-sm">${['all', 'very_good', 'good'].map((k) => `<button data-as-tier="${k}" class="${ADS.tier === k ? 'active' : ''}">${esc(k === 'all' ? t('as_all') : t(k === 'very_good' ? 'as_vg' : 'as_good'))}</button>`).join('')}</div>
         <input type="search" class="as-search" placeholder="${esc(t('as_search'))}" value="${esc(ADS.q)}">
       </div>
       ${rows.length ? `<div class="as-wrap"><table class="as-table"><thead><tr>
-        <th>${esc(t('as_lead'))}</th><th>${esc(t('as_tier'))}</th><th>${esc(t('as_status'))}</th><th>${esc(t('as_match'))}</th><th class="num">${esc(t('as_value'))}</th><th>${esc(t('as_sent'))}</th><th>${esc(t('as_answer'))}</th><th>${esc(t('as_reason'))}</th><th></th></tr></thead><tbody>
+        <th>${esc(t('as_lead'))}</th><th>${esc(t('as_market'))}</th><th>${esc(t('as_tier'))}</th><th>${esc(t('as_status'))}</th><th>${esc(t('as_match'))}</th><th class="num">${esc(t('as_value'))}</th><th>${esc(t('as_sent'))}</th><th>${esc(t('as_answer'))}</th><th>${esc(t('as_reason'))}</th><th></th></tr></thead><tbody>
         ${rows.slice(0, ADS.shown).map((r) => {
           const L = r.lead || {};
           const stale = asStale(r);
           const match = r.identifier ? (r.identifier === 'gclid' ? t('as_gclid') : t('as_email')) : (r.status === 'no_id' ? '—' : (r.viaGclid || L.hasGclid ? t('as_gclid') : t('as_email')));
           return `<tr>
             <td><button class="q-name" data-open="${esc(r.dealId)}">${L.namePartial ? esc(L.namePartial) : '#' + esc(r.dealId)}</button><div class="muted" style="font-size:11px">#${esc(r.dealId)}${L.owner ? ' · ' + esc(L.owner) : ''}${L.stage ? ' · ' + esc(L.stage) : ''}</div></td>
+            <td><span class="as-market">${AS_FLAG[r.region] || ''} ${esc(r.region || '—')}</span></td>
             <td>${scoreBadge(r.tier === 'very_good' ? 'Very Good' : 'Good')}</td>
             <td><span class="badge ${AS_BADGE[r.status] || 'b-neutral'}">${esc(t('as_' + r.status))}</span>${stale ? `<div class="as-warn">${esc(t('as_stale'))}</div>` : ''}${r.attempts > 1 ? `<div class="muted" style="font-size:11px">${esc(t('as_attempts', { n: r.attempts }))}</div>` : ''}</td>
             <td>${esc(match)}</td>
-            <td class="num">${r.value != null ? fmtMoney(r.value) : '—'}</td>
+            <td class="num">${r.value != null ? fmtMoney(r.value, r.currency) : '—'}</td>
             <td>${r.sentAt ? fmtDT(r.sentAt) : '—'}</td>
             <td>${r.resultAt ? fmtDT(r.resultAt) : '—'}</td>
             <td class="as-reason" title="${esc(r.error || '')}">${r.error ? esc(asReason(r.error)) : ''}</td>
@@ -899,6 +911,7 @@ function renderAdsSync(el) {
     </div>`;
   $$('[data-as-status]', el).forEach((b) => b.addEventListener('click', () => { ADS.status = ADS.status === b.dataset.asStatus && b.classList.contains('as-kpi') ? 'all' : b.dataset.asStatus; ADS.shown = 100; renderAdsSync(el); }));
   $$('[data-as-tier]', el).forEach((b) => b.addEventListener('click', () => { ADS.tier = b.dataset.asTier; renderAdsSync(el); }));
+  $$('[data-as-region]', el).forEach((b) => b.addEventListener('click', () => { ADS.region = b.dataset.asRegion; ADS.status = 'all'; ADS.shown = 100; renderAdsSync(el); }));
   const search = $('.as-search', el);
   if (search) search.addEventListener('input', (e) => { ADS.q = e.target.value; clearTimeout(ADS.t); ADS.t = setTimeout(() => { renderAdsSync(el); const i = $('.as-search', el); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250); });
   $$('[data-open]', el).forEach((b) => b.addEventListener('click', () => openLead(b.dataset.open)));

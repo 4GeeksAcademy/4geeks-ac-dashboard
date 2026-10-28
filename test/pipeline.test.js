@@ -125,7 +125,7 @@ test('ads-sync posts each Good/Very Good USA lead once per tier, hashed, and nev
   const today = new Date().toISOString().slice(0, 10);
   const mk = (id, score, extra = {}) => { const { g, ...rest } = extra; const r = { id, region: 'USA', bucket: 'Active / Other', admissionsScore: score, date: today, email: `p${id}@x.com`, ...rest }; Object.defineProperty(r, 'gclid', { value: g || null, enumerable: false, writable: true }); return r; };
   const records = [mk('1', 'Very Good', { g: 'abc' }), mk('2', 'Good'), mk('3', 'Bad'), mk('4', 'Very Good', { region: 'LATAM' }), mk('5', 'Good', { bucket: 'Lost - Classified' })];
-  const sync = createAdsSync({ store: fileStore(dir), getRecords: () => records, log: { log() {}, warn() {} }, env: { ADS_SYNC_WEBHOOK_URL: `http://127.0.0.1:${srv.address().port}/hook`, ADS_SYNC_KEY: 'k' } });
+  const sync = createAdsSync({ store: fileStore(dir), getRecords: () => records, log: { log() {}, warn() {} }, env: { ADS_SYNC_WEBHOOK_URL: `http://127.0.0.1:${srv.address().port}/hook`, ADS_SYNC_KEY: 'k', ADS_SYNC_REGIONS: 'USA' } });
   await sync.run();
   assert.deepStrictEqual(got.map((g) => g.body.dealId).sort(), ['1', '2']);
   const one = got.find((g) => g.body.dealId === '1').body;
@@ -160,4 +160,34 @@ test('ads-sync posts each Good/Very Good USA lead once per tier, hashed, and nev
   assert.strictEqual(after['1:very_good'], 'pending');
   assert.strictEqual(after['2:good'], 'uploaded');
   srv.closeAllConnections(); srv.close();
+});
+
+test('ads-sync sends every market by default, each with its own currency and expected-revenue value', async (t) => {
+  const http = require('http');
+  const { createAdsSync } = require('../lib/pipeline/ads-sync');
+  const got = [];
+  const srv = http.createServer((req, res) => { let b = ''; req.on('data', (c) => { b += c; }); req.on('end', () => { got.push(JSON.parse(b)); res.end('ok'); }); });
+  await new Promise((r) => srv.listen(0, r));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ads-'));
+  const today = new Date().toISOString().slice(0, 10);
+  let n = 0;
+  const old = new Date(Date.now() - 200 * 86400000).toISOString().slice(0, 10); // history: outside the 30-day send window
+  const mk = (region, score, bucket = 'Active / Other', dealValue = 0, date = today) => ({ id: String(++n), region, bucket, admissionsScore: score, date, email: `p${n}@x.com`, dealValue });
+  const records = [mk('USA', 'Good'), mk('Spain', 'Very Good'), mk('LATAM', 'Good'), mk('Unmapped pipeline', 'Good')];
+  // Spain history: 20 Very Good leads, 5 won at 8,000 EUR -> 25% x 8,000 = 2,000
+  for (let i = 0; i < 20; i++) records.push(mk('Spain', 'Very Good', i < 5 ? 'Won' : 'Lost - Classified', i < 5 ? 8000 : 0, old));
+  t.after(() => { srv.closeAllConnections(); srv.close(); });
+  const sync = createAdsSync({ store: fileStore(dir), getRecords: () => records, log: { log() {}, warn() {} }, env: { ADS_SYNC_WEBHOOK_URL: `http://127.0.0.1:${srv.address().port}/hook`, ADS_SYNC_KEY: 'k', ADS_VALUES: '{"LATAM":{"good":40}}' } });
+  await sync.run();
+  const by = Object.fromEntries(got.map((b) => [b.region, b]));
+  assert.deepStrictEqual(Object.keys(by).sort(), ['LATAM', 'Spain', 'USA']); // unmapped pipelines never go
+  assert.strictEqual(by.USA.currency, 'USD'); assert.strictEqual(by.USA.value, 90);
+  assert.strictEqual(by.Spain.currency, 'EUR'); assert.strictEqual(by.Spain.value, 2000);
+  assert.strictEqual(by.LATAM.currency, 'USD'); assert.strictEqual(by.LATAM.value, 40);
+  const s = sync.summary();
+  assert.strictEqual(s.byRegion.Spain.queued, 1);
+  assert.strictEqual(s.values.Spain.currency, 'EUR');
+  await sync.recordResult({ deal_id: by.Spain.dealId, tier: 'very_good', ok: true, identifier_used: 'hashed_email' });
+  assert.strictEqual(sync.summary().uploadedValueByCurrency.EUR, 2000);
+  assert.ok(sync.logRows().every((r) => r.region && r.currency));
 });
