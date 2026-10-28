@@ -174,16 +174,18 @@ test('ads-sync sends every market by default, each with its own currency and exp
   const old = new Date(Date.now() - 200 * 86400000).toISOString().slice(0, 10); // history: outside the 30-day send window
   const mk = (region, score, bucket = 'Active / Other', dealValue = 0, date = today) => ({ id: String(++n), region, bucket, admissionsScore: score, date, email: `p${n}@x.com`, dealValue });
   const records = [mk('USA', 'Good'), mk('Spain', 'Very Good'), mk('LATAM', 'Good'), mk('Unmapped pipeline', 'Good')];
-  // Spain history: 20 Very Good leads, 5 won at 8,000 EUR -> 25% x 8,000 = 2,000
-  for (let i = 0; i < 20; i++) records.push(mk('Spain', 'Very Good', i < 5 ? 'Won' : 'Lost - Classified', i < 5 ? 8000 : 0, old));
+  // Spain history: 20 decided Very Good leads, 5 won -> 25% x 8,000 EUR tuition = 2,000. CRM deal amounts are ignored.
+  for (let i = 0; i < 20; i++) records.push(mk('Spain', 'Very Good', i < 5 ? 'Won' : 'Lost - Classified', i < 5 ? 999999 : 0, old));
+  Object.defineProperty(records[2], 'gclid', { value: 'IwZXh0bgNhZW0BMAB0c2Fm', enumerable: false }); // a Meta click id in the GCLID field
   t.after(() => { srv.closeAllConnections(); srv.close(); });
-  const sync = createAdsSync({ store: fileStore(dir), getRecords: () => records, log: { log() {}, warn() {} }, env: { ADS_SYNC_WEBHOOK_URL: `http://127.0.0.1:${srv.address().port}/hook`, ADS_SYNC_KEY: 'k', ADS_VALUES: '{"LATAM":{"good":40}}' } });
+  const sync = createAdsSync({ store: fileStore(dir), getRecords: () => records, log: { log() {}, warn() {} }, env: { ADS_SYNC_WEBHOOK_URL: `http://127.0.0.1:${srv.address().port}/hook`, ADS_SYNC_KEY: 'k', ADS_VALUES: '{"LATAM":{"good":40}}', ADS_TUITION: '{"Spain":8000}' } });
   await sync.run();
   const by = Object.fromEntries(got.map((b) => [b.region, b]));
   assert.deepStrictEqual(Object.keys(by).sort(), ['LATAM', 'Spain', 'USA']); // unmapped pipelines never go
   assert.strictEqual(by.USA.currency, 'USD'); assert.strictEqual(by.USA.value, 90);
   assert.strictEqual(by.Spain.currency, 'EUR'); assert.strictEqual(by.Spain.value, 2000);
   assert.strictEqual(by.LATAM.currency, 'USD'); assert.strictEqual(by.LATAM.value, 40);
+  assert.strictEqual(by.LATAM.gclid, null); // fbclid is not sent as a Google click
   const s = sync.summary();
   assert.strictEqual(s.byRegion.Spain.queued, 1);
   assert.strictEqual(s.values.Spain.currency, 'EUR');
