@@ -370,11 +370,22 @@ if (client) {
 // ---------------------------------------------------------------------------
 const { createAttributionStore } = require('./lib/attribution/store');
 const { createAttribution } = require('./lib/attribution/journeys');
+const attrStore = createAttributionStore();
 const attribution = createAttribution({
-    store: createAttributionStore(),
+    store: attrStore,
     getRecords: () => cache.records,
     getEnrollOf: () => (global.__scoreJourneys ? global.__scoreJourneys.matcher() : () => null),
 });
+// Main source: the GA4 export in BigQuery that the server-side GTM already feeds
+// (lib/attribution/ga4.js). Every 3 hours it links new leads to their GA visitor
+// and loads their visits. /t.js below stays available but isn't needed.
+const { createGa4Sync } = require('./lib/attribution/ga4');
+const ga4Sync = createGa4Sync({ store: attrStore, getRecords: () => cache.records });
+if (ga4Sync.configured) {
+    const runGa4 = () => { if (cache.records && !refreshing) ga4Sync.run(); };
+    setTimeout(runGa4, 3 * 60 * 1000).unref();
+    setInterval(runGa4, 3 * 3600 * 1000).unref();
+} else console.log('[attribution] GA4 export not configured (set GA_BQ_KEY and GA_BQ_PROJECT)');
 const ATTR_HOSTS = String(process.env.ATTR_ALLOWED_HOSTS || '4geeks.com,4geeksacademy.com,4geeks.co').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
 const attrHostOk = (h) => { const host = String(h || '').toLowerCase(); return ATTR_HOSTS.some((d) => host === d || host.endsWith('.' + d)) || (process.env.ATTR_ALLOW_LOCAL === '1' && /^(localhost|127\.0\.0\.1)$/.test(host)); };
 const attrOrigin = (req) => { try { return new URL(req.get('origin') || req.get('referer') || '').hostname; } catch (e) { return ''; } };
@@ -484,7 +495,12 @@ app.post('/api/attribution/report', requireAuth, async (req, res) => {
 app.get('/api/attribution/status', requireAuth, async (req, res) => {
     const base = `${req.protocol}://${req.get('host')}`;
     let st = {}; try { st = await attribution.status(); } catch (e) { st = { error: e.message }; }
-    res.json({ ...st, allowedHosts: ATTR_HOSTS, script: `${base}/t.js`, snippet: `<script async src="${base}/t.js"></script>` });
+    res.json({ ...st, ga4: ga4Sync.status(), allowedHosts: ATTR_HOSTS, script: `${base}/t.js`, snippet: `<script async src="${base}/t.js"></script>` });
+});
+app.post('/api/attribution/sync', auth.requireAdmin, async (req, res) => {
+    if (!ga4Sync.configured) return res.status(400).json({ error: 'Set GA_BQ_KEY and GA_BQ_PROJECT in Railway first' });
+    if (!cache.records) return res.status(503).json({ error: 'Data still loading' });
+    res.json(await ga4Sync.run());
 });
 // Keep 13 months of visits.
 setInterval(() => { attribution.prune(400).catch((e) => console.warn('[attribution] prune failed:', e.message)); }, 24 * 3600 * 1000).unref();
