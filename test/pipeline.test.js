@@ -192,4 +192,12 @@ test('ads-sync sends every market by default, each with its own currency and exp
   await sync.recordResult({ deal_id: by.Spain.dealId, tier: 'very_good', ok: true, identifier_used: 'hashed_email' });
   assert.strictEqual(sync.summary().uploadedValueByCurrency.EUR, 2000);
   assert.ok(sync.logRows().every((r) => r.region && r.currency));
+  // A lead that qualified and was later lost still gets its retry.
+  const before = got.length;
+  await sync.recordResult({ deal_id: by.LATAM.dealId, tier: 'good', ok: false, error: 'TOO_RECENT_CONVERSION_ACTION' });
+  records.find((r) => r.id === by.LATAM.dealId).bucket = 'Lost - Classified';
+  await sync.autoRetry(Date.now() + 8 * 3600000);
+  await sync.run();
+  assert.strictEqual(got.length, before + 1);
+  assert.strictEqual(got[got.length - 1].dealId, by.LATAM.dealId);
 });
