@@ -337,15 +337,18 @@ The former Recommendations page is now **Intelligence**, with two tabs. Every nu
 
 ## Attribution machine (every visit → every lead)
 
-`public/t.js` is a first-party tracker for 4geeks.com and every 4Geeks site, installed once through Google Tag Manager (container GTM-PGGRR6): New tag → Custom HTML → `<script async src="https://marketing.4geeksacademy.com/t.js"></script>` → trigger All Pages (use a consent trigger for EU visitors).
+**Source: what is already installed.** 4geeks.com sends GA4 through the server-side Google Tag Manager, and GA4 property 281853246 already exports every event to BigQuery (project 533541562873, daily + streaming). The Hub reads that export (`lib/attribution/ga4.js`); nothing new runs on the sites.
 
-- It gives each browser a random visitor id (cookie on the root domain + localStorage, carried to other 4Geeks domains with `?_4gv=`), and records each visit: page, referrer, UTMs, ad click ids (gclid, gbraid, wbraid, fbclid, ttclid, msclkid…), single-page-app navigation.
-- When a form with an email is submitted (or its button clicked), it sends the **SHA-256 of the email** — the raw address never leaves the page through this script — which links every earlier visit to the lead.
-- It stays off for bots, with Global Privacy Control, or when `window.__4gTrack = false` (consent).
-- `/t/c` (public) accepts only 4Geeks origins (`ATTR_ALLOWED_HOSTS`), max 20 events / 24 KB per call, 120 calls/min per visitor. Stored in Postgres `attr_events` / `attr_ids`; no IPs, no raw emails; visits older than 400 days are pruned.
+- **Linking a lead to its GA visitor** (every 3 h, first run 3 min after boot, leads from the last `GA_LEAD_LOOKBACK_DAYS` = 45 days):
+  1. **Google Ads click (exact):** the deal's GCLID field = the gclid GA saw on a visit.
+  2. **Form time:** the GA lead event (`request_more_info`, `student_application`, `sign_up`, `submit_form`, `application_submitted`, `generate_lead`) within 20 minutes of the deal's creation, favouring the same campaign and the same landing page. Each GA form event goes to one lead only; confidence high / medium / low by how close and how well it matches.
+- Then the visitor's page views from the previous `GA_HISTORY_DAYS` (90) are loaded: page, referrer, UTMs, gclid, the Google Ads campaign and ad group GA joined to the click, device.
+- **Setup (once):** in Google Cloud project 533541562873 create a service account with **BigQuery Data Viewer** on the GA4 dataset and **BigQuery Job User** on the project, create a JSON key, and set Railway variables `GA_BQ_KEY` (the key JSON) and `GA_BQ_PROJECT` (the project ID). Optional: `GA_BQ_DATASET` (default `analytics_281853246`). Admins can run it now with **Sync now** (`POST /api/attribution/sync`).
+- Stored in Postgres `attr_events` / `attr_ids` (with link method and confidence); no IPs, no raw emails (emails are SHA-256 hashed); visits older than 400 days are pruned.
+- `public/t.js` (a first-party tag) is still in the code as an option, but it is **not** needed and not installed.
 
 In the Hub:
 - **Lead drawer → Journey**: every visit before the form (channel, campaign, ad, keyword, landing page, key pages such as Apply or pricing, device), the form, and visits after it, next to what ActiveCampaign recorded.
-- **Intelligence → Marketing → Attribution**: credit by channel under first touch, last non-direct touch, linear and position (40/20/40), with leads, qualified and enrolled (same enrollment truth as the rest of the page); most common journeys; every ad that touched a lead (touched / started / closed); coverage; tag health; and the setup card (snippet + URL templates for Meta, Google Ads and TikTok so every paid click names its ad).
+- **Intelligence → Marketing → Attribution**: credit by channel under first touch, last non-direct touch, linear and position (40/20/40), with leads, qualified and enrolled (same enrollment truth as the rest of the page); most common journeys; every ad that touched a lead (touched / started / closed); coverage; and the setup card (GA4 export status, last sync, leads linked by Google Ads click vs form time, and URL templates for Meta, Google Ads and TikTok so every paid click names its ad — set in the ad platforms, not on the sites). Each journey says how the lead was linked.
 
 Channels (`lib/attribution/channel.js`): gclid = Google Ads even without UTMs; fbclid alone is organic (Meta adds it to organic clicks too) unless the UTMs say paid; paid search with "4geeks" in the keyword is **branded**; ChatGPT / Perplexity / Gemini / Copilot / Claude are **AI Assistant**. Ad impressions without a click can't be seen per person on any platform; send enrollments back to the platforms for their aggregate view-through numbers, and add "How did you first hear about us?" to the form for what no tracker can see.
