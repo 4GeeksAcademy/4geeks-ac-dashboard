@@ -382,9 +382,12 @@ const attribution = createAttribution({
 const { createGa4Sync } = require('./lib/attribution/ga4');
 const ga4Sync = createGa4Sync({ store: attrStore, getRecords: () => cache.records });
 if (ga4Sync.configured) {
-    const runGa4 = () => { if (cache.records && !refreshing) ga4Sync.run(); };
-    setTimeout(runGa4, 3 * 60 * 1000).unref();
+    const runGa4 = () => { if (!cache.records || refreshing) return false; ga4Sync.run(); return true; };
+    // First run once the leads are loaded (checked every minute from minute 3), then every 3 hours.
+    const firstRun = () => { if (!runGa4()) setTimeout(firstRun, 60 * 1000).unref(); };
+    setTimeout(firstRun, 3 * 60 * 1000).unref();
     setInterval(runGa4, 3 * 3600 * 1000).unref();
+    console.log(`[attribution] GA4 sync on (${ga4Sync.status().project} · ${ga4Sync.status().dataset}); first run in ~3 min, then every 3 h`);
 } else if (!ga4Sync.status().lastError) console.log('[attribution] GA4 export not configured (set GA_BQ_KEY and GA_BQ_PROJECT)');
 const ATTR_HOSTS = String(process.env.ATTR_ALLOWED_HOSTS || '4geeks.com,4geeksacademy.com,4geeks.co').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
 const attrHostOk = (h) => { const host = String(h || '').toLowerCase(); return ATTR_HOSTS.some((d) => host === d || host.endsWith('.' + d)) || (process.env.ATTR_ALLOW_LOCAL === '1' && /^(localhost|127\.0\.0\.1)$/.test(host)); };
