@@ -167,7 +167,7 @@ function atSetupHtml(st) {
     ${g.configured ? `<p>${esc(t('at_srcGa4', { p: g.project || '—', d: g.dataset || '—' }))}</p>
       ${last ? `<p class="muted at-hint">${esc(t('at_syncLine', { t: new Date(g.lastRun).toLocaleString(), m: fmtInt(last.matched), n: fmtInt(last.leads), g: fmtInt(last.byMethod.gclid), f: fmtInt(last.byMethod['form-time']), v: fmtInt(last.events) }))}</p>` : ''}
       ${admin ? `<button class="btn soft sm" id="at-sync">${icon('refresh')}${esc(t('at_syncNow'))}</button>` : ''}`
-    : `<p>${esc(t('at_needKey'))}</p>`}
+    : `${g.lastError ? `<p class="at-off">${esc(g.lastError)}</p>` : ''}<p>${esc(t('at_needKey'))}</p>`}
     <p style="margin-top:12px">${esc(t('at_step2'))}</p>
     ${['meta', 'google', 'tiktok'].map((k) => `<div class="at-tpl"><div class="at-tpl-t">${esc(t('at_' + k))}</div><div class="at-code"><code>${esc(AT_TEMPLATES[k])}</code><button class="btn ghost sm" data-copy="${esc(AT_TEMPLATES[k])}">${esc(t('at_copy'))}</button></div></div>`).join('')}
     <p class="muted">${esc(t('at_step3'))}</p></details>`;

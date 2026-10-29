@@ -105,3 +105,14 @@ test('GA4 sync is off without credentials; BigQuery client signs and pages', asy
   assert.deepEqual(rows, [{ u: 'A', n: '1' }, { u: 'B', n: '2' }]);
   assert.ok(seen.some((u) => /oauth2/.test(u)));
 });
+
+test('a wrong GA_BQ_KEY (e.g. the key ID) never stops the app', () => {
+  const warns = [];
+  const sync = createGa4Sync({ store: memStore(), getRecords: () => [], env: { GA_BQ_KEY: '7e69f6042cd4c5cb1dfc14508bb173ed53d66e84', GA_BQ_PROJECT: 'p' }, log: { log() {}, warn: (...a) => warns.push(a.join(' ')) } });
+  assert.equal(sync.configured, false);
+  assert.match(sync.status().lastError, /not a service-account JSON key/);
+  assert.ok(warns.length);
+  const { parseKey } = require('../lib/attribution/ga4');
+  const k = { type: 'service_account', client_email: 'a@b', private_key: 'x' };
+  assert.deepEqual(parseKey(Buffer.from(JSON.stringify(k)).toString('base64')), k);
+});
