@@ -385,7 +385,7 @@ if (ga4Sync.configured) {
     const runGa4 = () => { if (cache.records && !refreshing) ga4Sync.run(); };
     setTimeout(runGa4, 3 * 60 * 1000).unref();
     setInterval(runGa4, 3 * 3600 * 1000).unref();
-} else console.log('[attribution] GA4 export not configured (set GA_BQ_KEY and GA_BQ_PROJECT)');
+} else if (!ga4Sync.status().lastError) console.log('[attribution] GA4 export not configured (set GA_BQ_KEY and GA_BQ_PROJECT)');
 const ATTR_HOSTS = String(process.env.ATTR_ALLOWED_HOSTS || '4geeks.com,4geeksacademy.com,4geeks.co').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
 const attrHostOk = (h) => { const host = String(h || '').toLowerCase(); return ATTR_HOSTS.some((d) => host === d || host.endsWith('.' + d)) || (process.env.ATTR_ALLOW_LOCAL === '1' && /^(localhost|127\.0\.0\.1)$/.test(host)); };
 const attrOrigin = (req) => { try { return new URL(req.get('origin') || req.get('referer') || '').hostname; } catch (e) { return ''; } };
