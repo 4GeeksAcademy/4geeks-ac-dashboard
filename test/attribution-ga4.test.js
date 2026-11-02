@@ -116,3 +116,65 @@ test('a wrong GA_BQ_KEY (e.g. the key ID) never stops the app', () => {
   const k = { type: 'service_account', client_email: 'a@b', private_key: 'x' };
   assert.deepEqual(parseKey(Buffer.from(JSON.stringify(k)).toString('base64')), k);
 });
+
+test('matchLeads: one GA visitor per lead, ambiguous or weak matches are not linked', () => {
+  const forms = [
+    { u: 'X', ts: us('2026-10-20T10:00:00Z'), n: 'sign_up', loc: 'https://4geeks.com/a', camp: null },
+    { u: 'Y', ts: us('2026-10-20T10:00:30Z'), n: 'sign_up', loc: 'https://4geeks.com/b', camp: null },
+    { u: 'Z', ts: us('2026-10-20T12:00:00Z'), n: 'request_more_info', loc: 'https://4geeks.com/c', camp: null },
+    { u: 'W', ts: us('2026-10-20T14:09:00Z'), n: 'request_more_info', loc: 'https://4geeks.com/d', camp: null },
+  ];
+  const m = matchLeads([
+    { id: 1, createdAt: '2026-10-20T10:00:15Z' }, // X and Y equally close, nothing to tell them apart
+    { id: 2, createdAt: '2026-10-20T12:01:00Z' }, // Z is already someone else's
+    { id: 3, createdAt: '2026-10-20T14:00:00Z' }, // 9 minutes, no campaign/page evidence: weak
+  ], forms, new Map(), new Set(['Z']));
+  assert.equal(m.size, 0);
+});
+
+test('store: form-time links sharing a visitor are removed, Google Ads ones stay', async () => {
+  const s = memStore();
+  await s.link('h1', 'ga:A', { method: 'form-time' });
+  await s.link('h2', 'ga:A', { method: 'form-time' });
+  await s.link('h3', 'ga:B', { method: 'gclid' });
+  await s.link('h4', 'ga:B', { method: 'form-time' });
+  await s.link('h5', 'ga:C', { method: 'form-time' });
+  assert.equal(await s.dropSharedFormTime(), 3);
+  assert.deepEqual(s._ids.map((x) => x.email_hash).sort(), ['h3', 'h5']);
+  assert.deepEqual((await s.linkedVids(['ga:A', 'ga:B', 'ga:C'])).sort(), ['ga:B', 'ga:C']);
+});
+
+test('share: enrolled leads in %, GA path when linked, CRM channel otherwise', async () => {
+  const { applyChannels } = require('../lib/attribution/lead-channel');
+  const store = memStore();
+  const { emailHash } = require('../lib/attribution/journeys');
+  const recs = applyChannels([
+    { id: 1, email: 'a@x.com', date: '2026-10-20', bucket: 'Won', admissionsScore: 'Very Good' }, // GA: Meta ad then Google search
+    { id: 2, email: 'b@x.com', date: '2026-10-20', bucket: 'Won', admissionsScore: 'Good', source: 'google', medium: 'cpc' },
+    { id: 3, email: 'c@x.com', date: '2026-10-20', bucket: 'Won', admissionsScore: 'Good' }, // nothing: organic, no source
+    { id: 4, email: 'd@x.com', date: '2026-10-20', bucket: 'Lost - Classified', admissionsScore: 'Bad' },
+  ]);
+  await store.addEvents('ga:A', [
+    { vid: 'ga:A', type: 'pv', ts: Date.parse('2026-10-10T10:00:00Z'), sid: 's1', host: '4geeks.com', path: '/', newSession: true, utm: { source: 'facebook', medium: 'paid_social', campaign: 'AIE' } },
+    { vid: 'ga:A', type: 'pv', ts: Date.parse('2026-10-19T10:00:00Z'), sid: 's2', host: '4geeks.com', path: '/apply', newSession: true, referrer: 'https://www.google.com/' },
+  ]);
+  await store.link(emailHash('a@x.com'), 'ga:A', { at: '2026-10-20T10:00:00Z', method: 'form-time', confidence: 'high' });
+  const attr = createAttribution({ store, getRecords: () => recs, getEnrollOf: () => () => null });
+  const d = await attr.share(recs, { who: 'won', by: 'channel', model: 'linear' });
+  assert.deepEqual([d.total, d.withGa, d.crmOnly], [3, 1, 2]);
+  const by = Object.fromEntries(d.rows.map((r) => [r.key, r.credit]));
+  assert.deepEqual(by, { 'Paid Search': 1, 'Organic · no source': 1, 'Paid Social': 0.5, 'Organic Search': 0.5 });
+  const t = await attr.share(recs, { who: 'won', by: 'type', model: 'first' });
+  assert.deepEqual(Object.fromEntries(t.rows.map((r) => [r.key, r.credit])), { Paid: 2, Organic: 1 });
+  assert.equal(d.leads.find((l) => l.id === 1).path.join(' → '), 'Paid Social · Meta → Organic Search · Google');
+  assert.equal(d.leads.find((l) => l.id === 3).by, 'crm');
+});
+
+test('lead channel: no source is organic, never dropped; GA fills it when linked', () => {
+  const { applyChannels, gaChannel } = require('../lib/attribution/lead-channel');
+  const recs = applyChannels([{ id: 1 }, { id: 2, source: 'website' }, { id: 3, source: 'google', medium: 'cpc' }, { id: 4, gclid: 'IwAR1' }],
+    new Map([['2', gaChannel([{ group: 'Organic Search', source: 'Google' }, { group: 'Direct', source: '' }])]]));
+  assert.deepEqual(recs.map((r) => [r.channel, r.channelType, r.channelBy]), [
+    ['Organic · no source', 'Organic', 'none'], ['Organic Search', 'Organic', 'GA4'], ['Paid Search', 'Paid', 'CRM'], ['Organic Social', 'Organic', 'CRM'],
+  ]);
+});

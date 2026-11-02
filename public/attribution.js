@@ -33,6 +33,19 @@
     at_needKey: 'Not connected yet. In Google Cloud project 533541562873: IAM → Service accounts → create "marketing-hub-reader" with BigQuery Data Viewer (on the GA4 dataset, usually analytics_281853246) and BigQuery Job User, create a JSON key, then in Railway → Variables add GA_BQ_KEY (the key) and GA_BQ_PROJECT (the project ID). Paste the key in Railway, not in chat.',
     at_link_gclid: 'Linked to Google Analytics by the Google Ads click (exact)', at_link_form: 'Linked to Google Analytics by the form event ({c} confidence)', at_link_tracker: 'Linked by the Hub tracker',
     at_cf_high: 'high', at_cf_medium: 'medium', at_cf_low: 'low',
+    av_title: 'Attribution: where enrollments come from', av_sub: 'Every lead counts: its full path from Google Analytics when linked, otherwise the channel the CRM recorded (no-source leads are organic).',
+    av_whoL: 'Leads', av_who_won: 'Enrolled (Won)', av_who_qualified: 'Good / Very Good', av_who_all: 'All leads',
+    av_byL: 'Group by', av_by_type: 'Paid vs organic', av_by_channel: 'Channel', av_by_source: 'Source', av_by_campaign: 'Campaign',
+    av_modelL: 'Credit', av_m_linear: 'Shared', av_m_first: 'First touch', av_m_last: 'Last touch',
+    av_m_linear_h: 'Shared: each lead counts as 1, split equally across everything that brought them (e.g. a Meta ad, then a Google search → 50% / 50%). The fairest single view.',
+    av_m_first_h: 'First touch: 100% to what brought the person the first time. Shows what creates new demand.',
+    av_m_last_h: 'Last touch: 100% to the last thing before the form (ignoring direct visits). Shows what closes.',
+    av_summary: '{n} {w} in these filters: {g} with their full path from Google Analytics, {c} with only what the CRM recorded.',
+    av_shareH: '% of {w}', av_credit: 'Credited', av_touched: 'Touched', av_touchedH: 'Leads that had this anywhere in their path',
+    av_leadsT: '{w}: who they are and their path', av_leadsH: 'Click a lead to open it. Path = channels in order, then the form.',
+    av_lead: 'Lead', av_date: 'Lead created', av_program: 'Program', av_score: 'Score', av_path: 'Path', av_idBy: 'Path from', av_won: 'Won',
+    av_id_gclid: 'Google Analytics (Ads click)', 'av_id_form-time': 'Google Analytics (form)', av_id_ga: 'Google Analytics', av_id_crm: 'CRM only',
+    av_none: 'No {w} in these filters.', av_setup: 'Data source and ad links',
   };
   const es = {
     at_journey: 'Recorrido', at_recorded: 'Según ActiveCampaign', at_noJourney: 'Aún no hay visitas vinculadas a este lead. Los leads se vinculan a Google Analytics por su clic de Google Ads o por el evento del formulario (sincronización cada 3 horas, últimos 45 días); si el lead llegó desde un navegador que GA no vio, solo tiene lo que registró ActiveCampaign.',
@@ -60,6 +73,19 @@
     at_needKey: 'Aún no está conectado. En el proyecto de Google Cloud 533541562873: IAM → Cuentas de servicio → crea "marketing-hub-reader" con BigQuery Data Viewer (en el dataset de GA4, normalmente analytics_281853246) y BigQuery Job User, crea una clave JSON y en Railway → Variables añade GA_BQ_KEY (la clave) y GA_BQ_PROJECT (el ID del proyecto). Pega la clave en Railway, no en el chat.',
     at_link_gclid: 'Vinculado a Google Analytics por el clic de Google Ads (exacto)', at_link_form: 'Vinculado a Google Analytics por el evento del formulario (confianza {c})', at_link_tracker: 'Vinculado por el tracker del Hub',
     at_cf_high: 'alta', at_cf_medium: 'media', at_cf_low: 'baja',
+    av_title: 'Atribución: de dónde vienen las matrículas', av_sub: 'Cuentan todos los leads: su recorrido completo de Google Analytics si está vinculado, si no el canal que guardó el CRM (los leads sin fuente son orgánicos).',
+    av_whoL: 'Leads', av_who_won: 'Matriculados (Won)', av_who_qualified: 'Good / Very Good', av_who_all: 'Todos los leads',
+    av_byL: 'Agrupar por', av_by_type: 'Pago vs orgánico', av_by_channel: 'Canal', av_by_source: 'Fuente', av_by_campaign: 'Campaña',
+    av_modelL: 'Crédito', av_m_linear: 'Compartido', av_m_first: 'Primer contacto', av_m_last: 'Último contacto',
+    av_m_linear_h: 'Compartido: cada lead cuenta 1, repartido por igual entre todo lo que lo trajo (p. ej. un anuncio de Meta y luego una búsqueda en Google → 50% / 50%). La vista más justa.',
+    av_m_first_h: 'Primer contacto: 100% a lo que trajo a la persona la primera vez. Muestra qué crea demanda nueva.',
+    av_m_last_h: 'Último contacto: 100% a lo último antes del formulario (sin contar visitas directas). Muestra qué cierra.',
+    av_summary: '{n} {w} con estos filtros: {g} con su recorrido completo de Google Analytics, {c} solo con lo que registró el CRM.',
+    av_shareH: '% de {w}', av_credit: 'Crédito', av_touched: 'Tocados', av_touchedH: 'Leads que tuvieron esto en algún punto de su recorrido',
+    av_leadsT: '{w}: quiénes son y su recorrido', av_leadsH: 'Haz clic en un lead para abrirlo. Recorrido = canales en orden, luego el formulario.',
+    av_lead: 'Lead', av_date: 'Lead creado', av_program: 'Programa', av_score: 'Score', av_path: 'Recorrido', av_idBy: 'Recorrido de', av_won: 'Won',
+    av_id_gclid: 'Google Analytics (clic de Ads)', 'av_id_form-time': 'Google Analytics (formulario)', av_id_ga: 'Google Analytics', av_id_crm: 'Solo CRM',
+    av_none: 'No hay {w} con estos filtros.', av_setup: 'Fuente de datos y enlaces de anuncios',
   };
   window.I18N.en = { ...window.I18N.en, ...en };
   window.I18N.es = { ...window.I18N.es, ...es };
@@ -111,46 +137,59 @@ async function loadLeadJourney(r) {
 window.loadLeadJourney = loadLeadJourney;
 
 // ---------------- Marketing tab panel ----------------
+// One question, answered in %: where do our enrollments come from?
+// Who: enrolled / Good-Very Good / all leads. Group by: paid vs organic, channel, source, campaign.
+// Credit: shared across every touch (default), first touch, or last touch.
+// Every lead counts: its Google Analytics path when linked, otherwise what the CRM recorded.
+const ATV = (() => { let v = {}; try { v = JSON.parse(localStorage.getItem('atView') || '{}'); } catch (e) { /* private */ } return { who: v.who || 'won', by: v.by || 'channel', model: v.model || 'linear', cache: new Map() }; })();
+const atTone = (label) => { const g = String(label).split(' · ')[0].replace(/ \(brand\)$/, ''); return /^Paid/.test(g) ? 'blue' : /^(Organic|AI Assistant|Referral|Direct)/.test(g) ? 'green' : 'gray'; };
+const atPathChip = (x) => `<span class="at-chip t-${atTone(x)}">${esc(x)}</span>`;
+const atPct = (x) => `${(Math.round(x * 1000) / 10).toLocaleString(LANG === 'es' ? 'es-ES' : 'en-US')}%`;
+
 async function renderAttribution(el, rows) {
-  const key = `${rowsKey(rows)}`;
-  el.innerHTML = `<div class="panel"><div class="skeleton" style="width:40%"></div><div class="skeleton" style="width:75%"></div></div>`;
+  const key = `${rowsKey(rows)}|${ATV.who}|${ATV.by}|${ATV.model}`;
+  if (!ATV.cache.has(key)) el.innerHTML = `<div class="panel"><div class="skeleton" style="width:40%"></div><div class="skeleton" style="width:75%"></div></div>`;
   try {
-    if (!AT.cache.has(key)) {
-      const res = await api('/api/attribution/report', { method: 'POST', body: { region: state.region, ids: rows.map((r) => String(r.id)) } });
+    if (!ATV.cache.has(key)) {
+      const res = await api('/api/attribution/share', { method: 'POST', body: { region: state.region, ids: rows.map((r) => String(r.id)), who: ATV.who, by: ATV.by, model: ATV.model } });
       const d = await res.json(); if (!res.ok) throw new Error(d.error || res.statusText);
-      AT.cache.set(key, d);
+      ATV.cache.set(key, d);
     }
     if (!AT.status) AT.status = await (await api('/api/attribution/status')).json().catch(() => ({}));
   } catch (e) { el.innerHTML = `<div class="panel state-card">${icon('alert')}<p>${esc(e.message)}</p></div>`; return; }
-  const d = AT.cache.get(key); const st = AT.status || {};
-  const c = d.coverage || {};
-  const m = d.models[AT.model] || { groups: [], sources: [] };
-  const totalLeads = m.groups.reduce((a, g) => a + g.leads, 0) || 1;
-  const fmt1 = (x) => (Math.round(x * 10) / 10).toLocaleString(LANG === 'es' ? 'es-ES' : 'en-US');
-  const th = d.tagHealth || {};
+  const d = ATV.cache.get(key); const st = AT.status || {};
+  const seg = (id, opts, cur) => `<div class="seg" id="${id}">${opts.map(([k, l, h]) => `<button data-v="${k}" ${h ? `title="${esc(h)}"` : ''} class="${cur === k ? 'active' : ''}">${esc(l)}</button>`).join('')}</div>`;
+  const whoTxt = t('av_who_' + d.who);
+  const peak = d.rows.length ? Math.max(...d.rows.map((r) => r.share)) : 1;
   el.innerHTML = `<div class="panel at-panel">
-    <div class="panel-head"><div><h2>${icon('target')} ${esc(t('at_title'))}</h2><div class="panel-sub">${esc(t('at_sub'))}</div></div>
-      <div class="seg" id="at-model"><span class="mk-by">${esc(t('at_model'))}</span>${['first', 'last', 'linear', 'position'].map((k) => `<button data-m="${k}" title="${esc(t('at_m_' + k + '_h'))}" class="${AT.model === k ? 'active' : ''}">${esc(t('at_m_' + k))}</button>`).join('')}</div></div>
-    ${c.withJourney ? `<p class="at-cov">${esc(t('at_cov', { w: fmtInt(c.withJourney), n: fmtInt(c.leads), m: fmtInt(c.multiTouch), t: c.medianTouches == null ? '—' : fmt1(c.medianTouches), d: c.medianDaysFirstTouchToLead == null ? '—' : fmt1(c.medianDaysFirstTouchToLead) }))}</p>
-      ${c.paidThenSearchOrDirect ? `<p class="at-cov hl">${esc(t('at_paidThen', { n: fmtInt(c.paidThenSearchOrDirect) }))}</p>` : ''}
-      <p class="muted at-hint">${esc(t('at_m_' + AT.model + '_h'))}</p>
-      <div class="at-cols">
-        <div><table class="pi-table"><thead><tr><th>${esc(t('at_channel'))}</th><th class="num">${esc(t('at_leads'))}</th><th class="num">${esc(t('at_share'))}</th><th class="num">${esc(t('at_qualified'))}</th><th class="num">${esc(t('at_enrolled'))}</th></tr></thead>
-          <tbody>${m.groups.map((g) => `<tr><td>${atChip(g.key)}</td><td class="num">${fmt1(g.leads)}</td><td class="num">${Math.round((g.leads / totalLeads) * 100)}%</td><td class="num">${fmt1(g.qualified)}</td><td class="num"><strong>${fmt1(g.enrolled)}</strong></td></tr>`).join('')}</tbody></table>
-          <details class="at-more"><summary>${esc(t('at_detail'))}</summary><table class="pi-table"><tbody>${m.sources.map((g) => `<tr><td>${esc(g.key)}</td><td class="num">${fmt1(g.leads)}</td><td class="num">${fmt1(g.qualified)}</td><td class="num">${fmt1(g.enrolled)}</td></tr>`).join('')}</tbody></table></details></div>
-        <div><h3>${esc(t('at_paths'))}</h3><ul class="at-paths">${(d.paths || []).map((p) => `<li><span class="at-path">${p.path.split(' → ').map((x) => atChip(x)).join('<span class="at-arrow">→</span>')}</span><span class="at-pn">${fmtInt(p.leads)} · ${fmtInt(p.qualified)} ${esc(t('at_qualified').toLowerCase())} · <strong>${fmtInt(p.enrolled)}</strong> ${esc(t('at_enrolled').toLowerCase())}</span></li>`).join('')}</ul></div>
-      </div>
-      ${(d.ads || []).length ? `<h3>${esc(t('at_ads'))}</h3><div class="table-wrap"><table class="pi-table"><thead><tr><th>${esc(t('at_campaign'))}</th><th>${esc(t('at_ad'))}</th><th class="num">${esc(t('at_anyT'))}</th><th class="num">${esc(t('at_firstT'))}</th><th class="num">${esc(t('at_lastT'))}</th><th class="num">${esc(t('at_qualified'))}</th><th class="num">${esc(t('at_enrolled'))}</th></tr></thead>
-        <tbody>${d.ads.map((a) => `<tr><td>${esc(a.source)} · ${esc(a.campaign)}</td><td>${esc(a.ad)}</td><td class="num">${fmtInt(a.leads)}</td><td class="num">${fmtInt(a.firstTouch)}</td><td class="num">${fmtInt(a.lastTouch)}</td><td class="num">${fmtInt(a.qualified)}</td><td class="num"><strong>${fmtInt(a.enrolled)}</strong></td></tr>`).join('')}</tbody></table></div>` : ''}
-      ${th.paidTouches && (th.noAdName || th.noCampaign) ? `<p class="at-cov warn">${esc(t('at_health', { a: fmtInt(th.noAdName), p: fmtInt(th.paidTouches), c: fmtInt(th.noCampaign) }))}</p>` : ''}`
-    : `<p class="muted">${esc(t('at_empty'))}</p>`}
+    <div class="panel-head"><div><h2>${icon('target')} ${esc(t('av_title'))}</h2><div class="panel-sub">${esc(t('av_sub'))}</div></div></div>
+    <div class="av-ctl">
+      <div><span class="av-lbl">${esc(t('av_whoL'))}</span>${seg('av-who', [['won', t('av_who_won')], ['qualified', t('av_who_qualified')], ['all', t('av_who_all')]], ATV.who)}</div>
+      <div><span class="av-lbl">${esc(t('av_byL'))}</span>${seg('av-by', [['type', t('av_by_type')], ['channel', t('av_by_channel')], ['source', t('av_by_source')], ['campaign', t('av_by_campaign')]], ATV.by)}</div>
+      <div><span class="av-lbl">${esc(t('av_modelL'))}</span>${seg('av-model', [['linear', t('av_m_linear')], ['first', t('av_m_first')], ['last', t('av_m_last')]], ATV.model)}</div>
+    </div>
+    <p class="av-explain">${esc(t('av_m_' + ATV.model + '_h'))}</p>
+    ${d.total ? `
+    <p class="av-sum">${t('av_summary', { n: `<b>${fmtInt(d.total)}</b>`, w: esc(whoTxt.toLowerCase()), g: `<b>${fmtInt(d.withGa)}</b>`, c: `<b>${fmtInt(d.crmOnly)}</b>` })}</p>
+    <div class="table-wrap"><table class="pi-table av-table"><thead><tr><th>${esc(t('av_by_' + d.by))}</th><th class="av-bar-h">${esc(t('av_shareH', { w: whoTxt.toLowerCase() }))}</th><th class="num">${esc(t('av_credit'))}</th><th class="num" title="${esc(t('av_touchedH'))}">${esc(t('av_touched'))}</th></tr></thead>
+      <tbody>${d.rows.map((r) => `<tr><td>${atPathChip(d.by === 'type' ? t('ct_' + r.key) : r.key)}</td>
+        <td><div class="av-bar"><i style="width:${(r.share / (peak || 1) * 100).toFixed(1)}%" class="t-${d.by === 'type' ? (r.key === 'Paid' ? 'blue' : r.key === 'Organic' ? 'green' : 'gray') : atTone(r.key)}"></i><b>${atPct(r.share)}</b></div></td>
+        <td class="num">${(Math.round(r.credit * 10) / 10).toLocaleString(LANG === 'es' ? 'es-ES' : 'en-US')}</td><td class="num">${fmtInt(r.touched)}</td></tr>`).join('')}</tbody></table></div>
+    <details class="av-leads" ${d.who === 'won' ? 'open' : ''}><summary><h3>${esc(t('av_leadsT', { w: whoTxt }))} <span class="count-tag">${fmtInt(d.leads.length)}</span></h3></summary>
+      <p class="muted at-hint">${esc(t('av_leadsH'))}</p>
+      <div class="table-wrap" style="max-height:520px"><table class="pi-table"><thead><tr><th>${esc(t('av_lead'))}</th><th>${esc(t('av_date'))}</th><th>${esc(t('av_program'))}</th><th>${esc(t('av_score'))}</th><th>${esc(t('av_path'))}</th><th>${esc(t('av_idBy'))}</th></tr></thead>
+      <tbody>${d.leads.map((l) => `<tr class="clickrow" data-open="${esc(l.id)}"><td>${esc(l.namePartial || l.name || '#' + l.id)}${l.won ? ` <span class="badge b-won">${esc(t('av_won'))}</span>` : ''}</td><td>${esc(fmtDate(l.date))}</td><td class="truncate">${esc(l.course || '—')}</td><td>${esc(l.score || '—')}</td>
+        <td><span class="at-path">${l.path.map(atPathChip).join('<span class="at-arrow">→</span>')}</span></td><td class="muted">${esc(t('av_id_' + (['gclid', 'form-time', 'crm'].includes(l.by) ? l.by : 'ga')))}</td></tr>`).join('')}</tbody></table></div></details>`
+    : `<p class="muted">${esc(t('av_none', { w: whoTxt.toLowerCase() }))}</p>`}
     ${atSetupHtml(st)}
   </div>`;
-  $$('#at-model button', el).forEach((b) => b.addEventListener('click', () => { AT.model = b.dataset.m; try { localStorage.setItem('atModel', AT.model); } catch (e) { /* private */ } renderAttribution(el, rows); }));
+  const save = () => { try { localStorage.setItem('atView', JSON.stringify({ who: ATV.who, by: ATV.by, model: ATV.model })); } catch (e) { /* private */ } };
+  [['#av-who', 'who'], ['#av-by', 'by'], ['#av-model', 'model']].forEach(([sel, k]) => $$(`${sel} button`, el).forEach((b) => b.addEventListener('click', () => { ATV[k] = b.dataset.v; save(); renderAttribution(el, rows); })));
+  $$('[data-open]', el).forEach((tr) => tr.addEventListener('click', () => openLead(tr.dataset.open)));
   const sync = $('#at-sync', el);
   if (sync) sync.addEventListener('click', async () => {
     sync.disabled = true; sync.textContent = t('at_syncing');
-    try { const r = await api('/api/attribution/sync', { method: 'POST' }); const d = await r.json(); if (!r.ok) throw new Error(d.error || r.statusText); AT.status = null; AT.cache.clear(); renderAttribution(el, rows); }
+    try { const r = await api('/api/attribution/sync', { method: 'POST' }); const x = await r.json(); if (!r.ok) throw new Error(x.error || r.statusText); AT.status = null; ATV.cache.clear(); renderAttribution(el, rows); }
     catch (e) { showToast(e.message); sync.disabled = false; sync.textContent = t('at_syncNow'); }
   });
   $$('[data-copy]', el).forEach((b) => b.addEventListener('click', async () => { try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = t('at_copied'); } catch (e) { /* no clipboard */ } }));
@@ -163,7 +202,7 @@ function atSetupHtml(st) {
     ? (g.lastError ? `<span class="at-off">${esc(t('at_syncErr', { e: g.lastError }))}</span>` : `<span class="at-ok">${esc(t('at_linkedLine', { l: fmtInt(st.linkedLeads || 0), g: fmtInt(st.linkedByGclid || 0), f: fmtInt(st.linkedByFormTime || 0) }))}</span>`)
     : `<span class="at-off">${esc(t('at_notLive'))}</span>`;
   const admin = !!window.__isAdmin;
-  return `<details class="at-setup" ${ok ? '' : 'open'}><summary><h3>${icon('settings')} ${esc(t('at_setup'))}</h3> ${head}</summary>
+  return `<details class="at-setup" ${ok ? '' : 'open'}><summary><h3>${icon('settings')} ${esc(t('av_setup'))}</h3> ${head}</summary>
     ${g.configured ? `<p>${esc(t('at_srcGa4', { p: g.project || '—', d: g.dataset || '—' }))}</p>
       ${last ? `<p class="muted at-hint">${esc(t('at_syncLine', { t: new Date(g.lastRun).toLocaleString(), m: fmtInt(last.matched), n: fmtInt(last.leads), g: fmtInt(last.byMethod.gclid), f: fmtInt(last.byMethod['form-time']), v: fmtInt(last.events) }))}</p>` : ''}
       ${admin ? `<button class="btn soft sm" id="at-sync">${icon('refresh')}${esc(t('at_syncNow'))}</button>` : ''}`

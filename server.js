@@ -55,6 +55,10 @@ try {
 // keeps `cache.records` warm; route handlers only ever read whatever is
 // currently cached and return immediately.
 let cache = { at: 0, records: null };
+// Leads with no source in the CRM: their channel from the Google Analytics visits linked to them
+// (filled after each GA4 sync; lib/attribution/lead-channel.js).
+const { applyChannels, gaChannel } = require('./lib/attribution/lead-channel');
+let gaChannelById = new Map();
 let refreshing = false;
 let lastError = null;
 let dealFieldSample = null;
@@ -120,10 +124,10 @@ function buildRecords(deals, contactsRaw, dealCustomFieldData, fieldValuesRaw) {
         if (!contactFieldValuesById.has(key)) contactFieldValuesById.set(key, []);
         contactFieldValuesById.get(key).push(fv);
     });
-    return buildDataset({
+    return applyChannels(buildDataset({
         deals, dealCustomFieldData, contactsById, contactFieldValuesById,
         usersById: lookups.usersById, stagesById: lookups.stagesById,
-    });
+    }), gaChannelById);
 }
 
 // Two phases:
@@ -376,13 +380,29 @@ const attribution = createAttribution({
     getRecords: () => cache.records,
     getEnrollOf: () => (global.__scoreJourneys ? global.__scoreJourneys.matcher() : () => null),
 });
+// Channel from GA for leads the CRM has no source on (last 150 days).
+async function refreshGaChannels() {
+    const recs = (cache.records || []).filter((r) => r.channelBy === 'none' || r.channelBy === 'GA4');
+    const since = new Date(Date.now() - 150 * 864e5).toISOString().slice(0, 10);
+    const target = recs.filter((r) => r.date >= since);
+    const next = new Map();
+    for (let i = 0; i < target.length; i += 1500) {
+        const js = await attribution.journeysFor(target.slice(i, i + 1500));
+        Object.entries(js).forEach(([id, j]) => { const c = gaChannel(j.touches); if (c) next.set(id, c); });
+    }
+    gaChannelById = next;
+    applyChannels(cache.records || [], gaChannelById);
+    dataPatches++; // the cached summary carries channels: rebuild it
+    console.log(`[attribution] channels: ${next.size} of ${target.length} leads with no CRM source got their channel from Google Analytics`);
+}
+setTimeout(() => { if (cache.records) refreshGaChannels().catch((e) => console.warn('[attribution] channels:', e.message)); }, 4 * 60 * 1000).unref();
 // Main source: the GA4 export in BigQuery that the server-side GTM already feeds
 // (lib/attribution/ga4.js). Every 3 hours it links new leads to their GA visitor
 // and loads their visits. /t.js below stays available but isn't needed.
 const { createGa4Sync } = require('./lib/attribution/ga4');
 const ga4Sync = createGa4Sync({ store: attrStore, getRecords: () => cache.records });
 if (ga4Sync.configured) {
-    const runGa4 = () => { if (!cache.records || refreshing) return false; ga4Sync.run(); return true; };
+    const runGa4 = () => { if (!cache.records || refreshing) return false; ga4Sync.run().then(refreshGaChannels).catch((e) => console.warn('[attribution] channels:', e.message)); return true; };
     // First run once the leads are loaded (checked every minute from minute 3), then every 3 hours.
     const firstRun = () => { if (!runGa4()) setTimeout(firstRun, 60 * 1000).unref(); };
     setTimeout(firstRun, 3 * 60 * 1000).unref();
@@ -484,7 +504,21 @@ setInterval(() => { if (cache.records && cache.at !== lastSnapshotAt && !refresh
 const { createScoreJourneys } = require('./lib/pipeline/scores');
 const marketingIntel = require('./lib/marketing/intel');
 const intelStore = createPipelineStore();
-const scoreJourneys = createScoreJourneys({ store: intelStore, getRecords: () => cache.records, getEnrollments: () => enrollments.get() });
+const scoreJourneys = createScoreJourneys({
+    store: intelStore, getRecords: () => cache.records, getEnrollments: () => enrollments.get(),
+    // The Google Ads sync log dates each Good / Very Good a lead reached (history before score snapshots began).
+    extraHistory: () => {
+        const out = {};
+        try {
+            adsSync.logRows().forEach((x) => {
+                if (!x.sentAt || !['uploaded', 'queued', 'failed'].includes(x.status)) return;
+                const sc = { very_good: 'Very Good', good: 'Good' }[x.tier]; if (!sc) return;
+                (out[String(x.dealId)] || (out[String(x.dealId)] = [])).push([x.sentAt, sc]);
+            });
+        } catch (e) { /* ads sync not ready */ }
+        return out;
+    },
+});
 global.__scoreJourneys = scoreJourneys; // shared with the attribution machine (same enrollment truth)
 app.get('/api/attribution/lead/:id', requireAuth, async (req, res) => {
     const r = (cache.records || []).find((x) => String(x.id) === String(req.params.id));
@@ -494,6 +528,18 @@ app.get('/api/attribution/lead/:id', requireAuth, async (req, res) => {
 app.post('/api/attribution/report', requireAuth, async (req, res) => {
     if (!cache.records) return res.status(503).json({ error: 'Data still loading', loading: true });
     try { await scoreJourneys.load(); res.json(await attribution.report(recordsFor(req.body))); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/attribution/share', requireAuth, async (req, res) => {
+    if (!cache.records) return res.status(503).json({ error: 'Data still loading', loading: true });
+    const b = req.body || {};
+    try {
+        await scoreJourneys.load();
+        res.json(await attribution.share(recordsFor(b), {
+            who: ['won', 'qualified', 'all'].includes(b.who) ? b.who : 'won',
+            by: ['type', 'channel', 'source', 'campaign'].includes(b.by) ? b.by : 'channel',
+            model: ['linear', 'first', 'last'].includes(b.model) ? b.model : 'linear',
+        }));
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.get('/api/attribution/status', requireAuth, async (req, res) => {
     const base = `${req.protocol}://${req.get('host')}`;
@@ -531,7 +577,7 @@ app.post('/api/marketing/intel', requireAuth, (req, res) => {
     const prev = Array.isArray(b.prevIds) ? recordsFor({ region: b.region, ids: b.prevIds }) : [];
     res.json(marketingIntel.report({
         records: recordsFor(b), prevRecords: prev,
-        dim: ['source', 'campaign', 'medium'].includes(b.dim) ? b.dim : 'source',
+        dim: ['channel', 'source', 'campaign', 'medium'].includes(b.dim) ? b.dim : 'channel',
         enrollOf: scoreJourneys.matcher(), center: b.center || null,
     }));
 });
@@ -568,6 +614,30 @@ app.post('/api/pipeline/ads-sync/result', async (req, res) => {
     try { const row = await adsSync.recordResult(req.body || {}); res.json({ ok: true, status: row.status }); } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
 });
 if (client) adsSync.start();
+
+// The same Good / Very Good leads -> Meta (Conversions API via n8n), own log. lib/pipeline/ads-sync.js platform 'meta'.
+const metaSync = createAdsSync({ store: createPipelineStore(), getRecords: () => cache.records, platform: 'meta' });
+app.get('/api/pipeline/meta-sync', requireAuth, (req, res) => res.json(metaSync.summary()));
+app.get('/api/pipeline/meta-sync/log', requireAuth, (req, res) => res.json({ summary: metaSync.summary(), rows: metaSync.logRows() }));
+app.post('/api/pipeline/meta-sync/retry', requireAuth, async (req, res) => {
+    try { res.json({ retried: await metaSync.retry((req.body && req.body.keys) || []) }); metaSync.run().catch(() => {}); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/pipeline/meta-sync/run', requireAuth, async (req, res) => {
+    try { await metaSync.run(); res.json(metaSync.summary()); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// n8n asks before sending anything to Meta: is this request really from the Hub (key) and is the
+// deal + tier one the Hub just queued? So n8n stores no secret and a forged webhook call sends nothing.
+app.post('/api/pipeline/meta-sync/verify', (req, res) => {
+    if (!metaSync.checkKey(req.get('x-hub-key'))) return res.status(401).json({ ok: false, error: 'bad key' });
+    const b = req.body || {};
+    const row = metaSync.logRows().find((x) => x.key === `${b.deal_id}:${b.tier}`);
+    res.json({ ok: !!row && ['queued', 'pending'].includes(row.status) });
+});
+app.post('/api/pipeline/meta-sync/result', async (req, res) => {
+    if (!metaSync.checkKey(req.get('x-hub-key'))) return res.status(401).json({ error: 'bad key' });
+    try { const row = await metaSync.recordResult(req.body || {}); res.json({ ok: true, status: row.status }); } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+});
+if (client) metaSync.start();
 
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body || {};
@@ -817,9 +887,23 @@ app.post('/api/refresh', requireAuth, (req, res) => {
 });
 
 // Enrollments: won deals in the enrollment pipelines, by conversion date.
+// Each enrollment carries its lead's channel (paid / organic, incl. no-source leads via Google Analytics).
+const { recordedChannel } = require('./lib/attribution/lead-channel');
+function withChannels(rows) {
+  const byId = new Map(); const byEmail = new Map();
+  (cache.records || []).forEach((r) => { byId.set(String(r.id), r); if (r.email) byEmail.set(String(r.email).trim().toLowerCase(), r); });
+  return rows.map((e) => {
+    const lead = (e.id && byId.get(String(e.id))) || (e.email && byEmail.get(String(e.email).trim().toLowerCase())) || null;
+    const c = lead && lead.channel ? { channel: lead.channel, channelType: lead.channelType, channelLabel: lead.channelLabel, channelBy: lead.channelBy } : (() => {
+      const x = recordedChannel({ source: e.source, medium: e.medium, campaign: e.campaign });
+      return { channel: x.channel, channelType: x.channelType, channelLabel: x.channelSource && x.channel !== 'Organic · no source' ? `${x.channel} · ${x.channelSource}` : x.channel, channelBy: x.channelBy };
+    })();
+    return { ...e, ...c, leadId: lead ? lead.id : null, leadScore: lead ? lead.admissionsScore || null : null };
+  });
+}
 app.get('/api/enrollments', requireAuth, (req, res) => {
   const st = enrollments.get();
-  res.json({ meta: enrollments.meta(), rows: st.rows, acAppUrl: AC_APP_URL });
+  res.json({ meta: enrollments.meta(), rows: withChannels(st.rows), acAppUrl: AC_APP_URL });
 });
 app.post('/api/enrollments/refresh', requireAuth, (req, res) => {
   refreshEnrollments();

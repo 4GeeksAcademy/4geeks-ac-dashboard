@@ -17,6 +17,10 @@
     pi_scope: 'Follows the filters above: {n} leads.',
     pi_wonOpen: 'In a Won stage, still open', pi_wonOpenSub: 'mark them Won in ActiveCampaign so they count',
     pi_whyOpen: 'Open leads that raised it', pi_whyWon: 'Enrolled who raised it anyway',
+    mv_title: 'Score changes: first rating vs rating at enrollment', mv_sum: 'Of {n} enrolled leads with a dated score, {u} moved up before enrolling (e.g. Good → Very Good), {d} moved down and {s} kept their first score.',
+    mv_none: 'No enrolled leads with a dated score yet in these filters.', mv_lead: 'Lead', mv_move: 'Change', mv_first: 'First rated', mv_changed: 'Changed', mv_enrolledAt: 'Enrolled / now', mv_program: 'Program',
+    mv_before: 'before tracking', mv_open: 'Leads that changed score and have not enrolled ({n})',
+    mv_note: 'Dates come from the score history the Hub records after every refresh (since {d}) and from the Google Ads sync log (each time a lead was sent as Good or Very Good). Changes before that are not known: ActiveCampaign keeps only the current score.',
     sc_title: 'Lead score → real enrollment', sc_sub: 'Enrolled = matched to the Enrollments section (USA attribution sheet, Spain/LATAM won deals) by deal or email, not ActiveCampaign\'s Won stage.',
     sc_line: '{s}: {e} of {n} enrolled ({r})',
     sc_score: 'Score', sc_leads: 'Leads', sc_enrolled: 'Enrolled', sc_rate: 'Enrolled %', sc_decided: '% of decided', sc_decidedHint: 'enrolled ÷ (enrolled + lost): leaves out leads still open, so recent leads don\'t drag it down',
@@ -73,6 +77,10 @@
     pi_scope: 'Sigue los filtros de arriba: {n} leads.',
     pi_wonOpen: 'En etapa Won, aún abiertos', pi_wonOpenSub: 'márcalos como ganados en ActiveCampaign para que cuenten',
     pi_whyOpen: 'Abiertos que lo plantearon', pi_whyWon: 'Matriculados que lo plantearon igual',
+    mv_title: 'Cambios de score: primera calificación vs al matricularse', mv_sum: 'De {n} leads matriculados con score fechado, {u} subieron antes de matricularse (p. ej. Good → Very Good), {d} bajaron y {s} mantuvieron su primer score.',
+    mv_none: 'Aún no hay leads matriculados con score fechado con estos filtros.', mv_lead: 'Lead', mv_move: 'Cambio', mv_first: 'Primera calificación', mv_changed: 'Cambió', mv_enrolledAt: 'Matrícula / ahora', mv_program: 'Programa',
+    mv_before: 'antes del seguimiento', mv_open: 'Leads que cambiaron de score y no se han matriculado ({n})',
+    mv_note: 'Las fechas salen del historial de scores que el Hub guarda en cada actualización (desde {d}) y del registro de envíos a Google Ads (cada vez que un lead se envió como Good o Very Good). Los cambios anteriores no se conocen: ActiveCampaign solo guarda el score actual.',
     sc_title: 'Score del lead → matrícula real', sc_sub: 'Matriculado = cruzado con la sección Matrículas (hoja de atribución USA, deals ganados España/LATAM) por deal o email, no la etapa Won de ActiveCampaign.',
     sc_line: '{s}: {e} de {n} matriculados ({r})',
     sc_score: 'Score', sc_leads: 'Leads', sc_enrolled: 'Matriculados', sc_rate: '% matriculados', sc_decided: '% de decididos', sc_decidedHint: 'matriculados ÷ (matriculados + perdidos): deja fuera los abiertos, así los leads recientes no bajan la tasa',
@@ -370,7 +378,29 @@ function scoresHtml(sc) {
         ${hyg.length ? `<h3>${esc(t('sc_hygiene'))}</h3><ul class="sc-list bad">${hyg.map((h) => `<li>${esc(h)}</li>`).join('')}</ul>` : ''}
         </div>
       </div>
-    </div></div>`;
+    </div>
+    ${movesHtml(sc.moves)}</div>`;
+}
+
+// Leads whose score changed: first rating vs rating at enrollment (or now).
+function movesHtml(m) {
+  if (!m) return '';
+  const e = m.enrolled || {};
+  const lbl = (p) => p.split(' → ').map(sbLabel).join(' → ');
+  const ups = (m.leads || []).filter((l) => l.enrolled);
+  const others = (m.leads || []).filter((l) => !l.enrolled);
+  const row = (l) => `<tr><td><a href="#" data-lead-link="${esc(l.id)}">${esc(l.namePartial || l.name || '#' + l.id)}</a></td>
+    <td><span class="mv mv-${l.dir}">${esc(sbLabel(l.from))} → ${esc(sbLabel(l.to))}</span></td>
+    <td>${esc(l.firstAt || t('mv_before'))}</td><td>${esc(l.changedAt || '—')}</td><td>${l.enrolled ? `<strong>${esc(l.enrolledAt || t('sc_enrolled'))}</strong>` : `<span class="muted">${esc(sbLabel(l.now))}</span>`}</td><td class="truncate">${esc(l.course || '—')}</td></tr>`;
+  const head = `<thead><tr><th>${esc(t('mv_lead'))}</th><th>${esc(t('mv_move'))}</th><th>${esc(t('mv_first'))}</th><th>${esc(t('mv_changed'))}</th><th>${esc(t('mv_enrolledAt'))}</th><th>${esc(t('mv_program'))}</th></tr></thead>`;
+  return `<div class="mv-box">
+    <h3>${icon('gauge')} ${esc(t('mv_title'))}</h3>
+    <p class="mv-sum">${e.tracked ? t('mv_sum', { n: `<b>${fmtInt(e.tracked)}</b>`, u: `<b class="mv-up">${fmtInt(e.up)}</b>`, d: `<b class="mv-down">${fmtInt(e.down)}</b>`, s: `<b>${fmtInt(e.same)}</b>` }) : esc(t('mv_none'))}</p>
+    ${(e.matrix || []).length ? `<div class="mv-chips">${e.matrix.map((x) => `<span class="count-tag ${x.path.split(' → ')[0] === x.path.split(' → ')[1] ? '' : 'mv-hl'}">${esc(lbl(x.path))} · ${fmtInt(x.n)}</span>`).join('')}</div>` : ''}
+    ${ups.length ? `<div class="table-wrap" style="max-height:360px"><table class="pi-table">${head}<tbody>${ups.map(row).join('')}</tbody></table></div>` : ''}
+    ${others.length ? `<details class="mv-more"><summary>${esc(t('mv_open', { n: fmtInt(others.length) }))}</summary><div class="table-wrap" style="max-height:360px"><table class="pi-table">${head}<tbody>${others.map(row).join('')}</tbody></table></div></details>` : ''}
+    <p class="muted sc-note">${esc(t('mv_note', { d: m.since || '—' }))}</p>
+  </div>`;
 }
 
 function recCardHtml(g, list) {
@@ -799,7 +829,7 @@ function leadIntelHtml(r, data) {
 // Google Ads: pending → queued (handed to n8n) → uploaded / failed.
 (function addAdsSyncStrings() {
   const en = {
-    nav_adsync: 'Google Ads sync', sub_adsync: 'Every Good / Very Good lead sent to Google Ads as a conversion — uploaded, waiting, pending or failed',
+    nav_adsync: 'Ads sync (Google + Meta)', sub_adsync: 'Every Good / Very Good lead sent to Google Ads and Meta as a conversion — uploaded, waiting, pending or failed',
     as_uploaded: 'Uploaded', as_queued: 'Waiting for Google', as_pending: 'Pending', as_failed: 'Failed', as_no_id: 'Can’t be matched', as_all: 'All',
     as_uploadedSub: '{v} in conversion value', as_queuedSub: 'handed to n8n, no answer yet', as_pendingSub: 'goes out within a minute', as_failedSub: 'rejected — retry or check the reason', as_no_idSub: 'no click ID and no email in the CRM',
     as_on: 'Sync is on · {r} · leads created in the last {d} days · last run {t}', as_off: 'Sync is off. Set ADS_SYNC_WEBHOOK_URL and ADS_SYNC_KEY on Railway to turn it on.',
@@ -809,9 +839,15 @@ function leadIntelHtml(r, data) {
     as_retried: '{n} queued again', as_sent2: 'Sent {n} pending leads', as_lastErr: 'Last error: {e}', as_attempts: '{n} attempts',
     as_note: 'Every market has its own Very Good and Good conversion actions (LATAM in its own Ads account). They are secondary: reported, but they do not steer bidding until you make one primary.',
     as_market: 'Market', as_allMarkets: 'All markets', as_valueEach: 'Very Good {vg} · Good {g}',
+    as_pf_google: 'Google Ads', as_pf_meta: 'Meta',
+    as_queued_m: 'Waiting for Meta', as_queuedSub_m: 'handed to n8n, no answer from Meta yet', as_answer_m: 'Meta answer', as_no_idSub_m: 'no email, phone or Meta click in the CRM',
+    as_on_m: 'Meta sync is on · {r} · leads created in the last {d} days · last run {t}',
+    as_off_m: 'Meta sync is off. It turns on when META_SYNC_WEBHOOK_URL is set on Railway (the n8n workflow "Qualified Leads → Meta").',
+    as_note_m: 'Each lead is sent once per tier to the Meta pixel as a CRM event, VeryGoodLead or GoodLead, with the expected value. Meta matches it by hashed email and phone, plus the Meta click when the lead came from an ad. Use them in Ads Manager as custom conversions to report and optimize on quality.',
+    as_fbc: 'Meta click + email', as_emailPhone: 'Email / phone',
   };
   const es = {
-    nav_adsync: 'Sync con Google Ads', sub_adsync: 'Cada lead Good / Very Good enviado a Google Ads como conversión — subido, en espera, pendiente o fallido',
+    nav_adsync: 'Sync de anuncios (Google + Meta)', sub_adsync: 'Cada lead Good / Very Good enviado a Google Ads y Meta como conversión — subido, en espera, pendiente o fallido',
     as_uploaded: 'Subidos', as_queued: 'Esperando a Google', as_pending: 'Pendientes', as_failed: 'Fallidos', as_no_id: 'Sin forma de cruzar', as_all: 'Todos',
     as_uploadedSub: '{v} en valor de conversión', as_queuedSub: 'entregados a n8n, sin respuesta aún', as_pendingSub: 'salen en menos de un minuto', as_failedSub: 'rechazados — reintentar o revisar el motivo', as_no_idSub: 'sin click ID ni email en el CRM',
     as_on: 'Sync activo · {r} · leads creados en los últimos {d} días · última corrida {t}', as_off: 'Sync apagado. Configura ADS_SYNC_WEBHOOK_URL y ADS_SYNC_KEY en Railway para activarlo.',
@@ -821,12 +857,21 @@ function leadIntelHtml(r, data) {
     as_retried: '{n} reenviados a la cola', as_sent2: 'Enviados {n} pendientes', as_lastErr: 'Último error: {e}', as_attempts: '{n} intentos',
     as_note: 'Cada mercado tiene sus propias acciones de conversión Very Good y Good (LATAM en su propia cuenta de Ads). Son secundarias: se reportan, pero no guían la puja hasta que marques una como principal.',
     as_market: 'Mercado', as_allMarkets: 'Todos los mercados', as_valueEach: 'Very Good {vg} · Good {g}',
+    as_pf_google: 'Google Ads', as_pf_meta: 'Meta',
+    as_queued_m: 'Esperando a Meta', as_queuedSub_m: 'entregados a n8n, sin respuesta de Meta aún', as_answer_m: 'Respuesta de Meta', as_no_idSub_m: 'sin email, teléfono ni clic de Meta en el CRM',
+    as_on_m: 'Sync con Meta activo · {r} · leads creados en los últimos {d} días · última corrida {t}',
+    as_off_m: 'Sync con Meta apagado. Se activa al configurar META_SYNC_WEBHOOK_URL en Railway (el workflow de n8n "Qualified Leads → Meta").',
+    as_note_m: 'Cada lead se envía una vez por nivel al píxel de Meta como evento de CRM, VeryGoodLead o GoodLead, con el valor esperado. Meta lo cruza por email y teléfono hasheados, más el clic de Meta si el lead vino de un anuncio. Úsalos en el Administrador de anuncios como conversiones personalizadas para medir y optimizar por calidad.',
+    as_fbc: 'Clic de Meta + email', as_emailPhone: 'Email / teléfono',
   };
   window.I18N.en = { ...window.I18N.en, ...en };
   window.I18N.es = { ...window.I18N.es, ...es };
 })();
 
-const ADS = { data: null, loading: false, status: 'all', tier: 'all', region: 'all', q: '', shown: 100 };
+const ADS = { data: null, loading: false, status: 'all', tier: 'all', region: 'all', q: '', shown: 100, platform: (() => { try { return localStorage.getItem('adsPlatform') || 'google'; } catch (e) { return 'google'; } })() };
+// Same page for both platforms; Meta-specific wording uses the "_m" strings.
+const asApi = () => (ADS.platform === 'meta' ? '/api/pipeline/meta-sync' : '/api/pipeline/ads-sync');
+const tp = (k, v) => (ADS.platform === 'meta' && ((window.I18N[LANG] || {})[k + '_m'] || window.I18N.en[k + '_m']) ? t(k + '_m', v) : t(k, v));
 const AS_FLAG = { USA: '🇺🇸', Spain: '🇪🇸', LATAM: '🌎' };
 const asMoneyByCur = (m) => Object.entries(m || {}).map(([cur, v]) => fmtMoney(v, cur)).join(' + ') || fmtMoney(0);
 const AS_ORDER = ['uploaded', 'queued', 'pending', 'failed', 'no_id'];
@@ -836,9 +881,11 @@ const asStale = (r) => r.status === 'queued' && r.sentAt && Date.now() - Date.pa
 async function loadAdsSync() {
   ADS.loading = true;
   try {
-    const res = await api('/api/pipeline/ads-sync/log');
+    const pf = ADS.platform;
+    const res = await api(`${asApi()}/log`);
     const d = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(d.error || res.statusText);
+    if (pf !== ADS.platform) { ADS.loading = false; return; }
     ADS.data = d; ADS.error = null; ADS.at = Date.now();
   } catch (e) { ADS.error = e.message; ADS.at = Date.now(); }
   ADS.loading = false;
@@ -864,42 +911,45 @@ function renderAdsSync(el) {
     && (ADS.tier === 'all' || r.tier === ADS.tier)
     && (!q || String(r.dealId).includes(q) || String((r.lead && (r.lead.namePartial || '')) || '').toLowerCase().includes(q)));
   const failedKeys = all.filter((r) => r.status === 'failed' || asStale(r)).map((r) => r.key);
-  const kpi = (k, val, sub, cls = '') => `<button class="kpi as-kpi ${cls} ${ADS.status === k ? 'sel' : ''}" data-as-status="${k}"><div class="k-lbl"><span class="dot" style="background:var(${k === 'uploaded' ? '--good' : k === 'failed' ? '--bad' : k === 'pending' ? '--warn' : '--s-active'})"></span>${esc(t('as_' + k))}</div><div class="k-val">${fmtInt(val || 0)}</div><div class="k-sub">${esc(sub)}</div></button>`;
+  const kpi = (k, val, sub, cls = '') => `<button class="kpi as-kpi ${cls} ${ADS.status === k ? 'sel' : ''}" data-as-status="${k}"><div class="k-lbl"><span class="dot" style="background:var(${k === 'uploaded' ? '--good' : k === 'failed' ? '--bad' : k === 'pending' ? '--warn' : '--s-active'})"></span>${esc(tp('as_' + k))}</div><div class="k-val">${fmtInt(val || 0)}</div><div class="k-sub">${esc(sub)}</div></button>`;
   el.innerHTML = `
+    <div class="seg as-pf">${['google', 'meta'].map((k) => `<button data-as-pf="${k}" class="${ADS.platform === k ? 'active' : ''}">${esc(t('as_pf_' + k))}</button>`).join('')}</div>
     <div class="panel as-head">
-      <div class="as-line">${s.enabled ? `<span class="as-dot on"></span>${esc(t('as_on', { r: (s.regions || []).join(', '), d: s.lookbackDays, t: s.lastRunAt ? fmtDT(s.lastRunAt) : '—' }))}` : `<span class="as-dot"></span>${esc(t('as_off'))}`}
+      <div class="as-line">${s.enabled ? `<span class="as-dot on"></span>${esc(tp('as_on', { r: (s.regions || []).join(', '), d: s.lookbackDays, t: s.lastRunAt ? fmtDT(s.lastRunAt) : '—' }))}` : `<span class="as-dot"></span>${esc(tp('as_off'))}`}
         ${s.lastError ? `<span class="as-err" title="${esc(s.lastError)}">${esc(t('as_lastErr', { e: s.lastError.slice(0, 80) }))}</span>` : ''}</div>
       <div class="as-actions">
         <button class="btn soft sm" data-as-run ${s.enabled ? '' : 'disabled'}>${icon('upload')}${esc(t('as_sendNow'))}</button>
         ${failedKeys.length ? `<button class="btn ghost sm" data-as-retry-all>${icon('refresh')}${esc(t('as_retryFailed', { n: fmtInt(failedKeys.length) }))}</button>` : ''}
       </div>
-      <p class="as-note">${esc(t('as_note'))}${vals ? ` <span class="muted">· ${esc(ADS.region)}: ${esc(t('as_valueEach', { vg: fmtMoney(vals.very_good, vals.currency), g: fmtMoney(vals.good, vals.currency) }))}</span>` : ''}</p>
+      <p class="as-note">${esc(tp('as_note'))}${vals ? ` <span class="muted">· ${esc(ADS.region)}: ${esc(t('as_valueEach', { vg: fmtMoney(vals.very_good, vals.currency), g: fmtMoney(vals.good, vals.currency) }))}</span>` : ''}</p>
     </div>
     <div class="kpis k8">
       ${kpi('uploaded', c.uploaded, t('as_uploadedSub', { v: asMoneyByCur(upByCur) }), 'hl-good')}
-      ${kpi('queued', c.queued, t('as_queuedSub'))}
+      ${kpi('queued', c.queued, tp('as_queuedSub'))}
       ${kpi('pending', c.pending, t('as_pendingSub'))}
       ${kpi('failed', c.failed, t('as_failedSub'), c.failed ? 'hl-bad' : '')}
-      ${kpi('no_id', c.no_id, t('as_no_idSub'))}
+      ${kpi('no_id', c.no_id, tp('as_no_idSub'))}
     </div>
     <div class="panel">
       <div class="as-filters">
         ${regionsSeen.length > 1 ? `<div class="seg seg-sm">${['all', ...regionsSeen].map((k) => `<button data-as-region="${esc(k)}" class="${ADS.region === k ? 'active' : ''}">${k === 'all' ? esc(t('as_allMarkets')) : `${AS_FLAG[k] || ''} ${esc(k)}`}</button>`).join('')}</div>` : ''}
-        <div class="seg seg-sm">${['all', ...AS_ORDER].map((k) => `<button data-as-status="${k}" class="${ADS.status === k ? 'active' : ''}">${esc(t('as_' + k))}</button>`).join('')}</div>
+        <div class="seg seg-sm">${['all', ...AS_ORDER].map((k) => `<button data-as-status="${k}" class="${ADS.status === k ? 'active' : ''}">${esc(tp('as_' + k))}</button>`).join('')}</div>
         <div class="seg seg-sm">${['all', 'very_good', 'good'].map((k) => `<button data-as-tier="${k}" class="${ADS.tier === k ? 'active' : ''}">${esc(k === 'all' ? t('as_all') : t(k === 'very_good' ? 'as_vg' : 'as_good'))}</button>`).join('')}</div>
         <input type="search" class="as-search" placeholder="${esc(t('as_search'))}" value="${esc(ADS.q)}">
       </div>
       ${rows.length ? `<div class="as-wrap"><table class="as-table"><thead><tr>
-        <th>${esc(t('as_lead'))}</th><th>${esc(t('as_market'))}</th><th>${esc(t('as_tier'))}</th><th>${esc(t('as_status'))}</th><th>${esc(t('as_match'))}</th><th class="num">${esc(t('as_value'))}</th><th>${esc(t('as_sent'))}</th><th>${esc(t('as_answer'))}</th><th>${esc(t('as_reason'))}</th><th></th></tr></thead><tbody>
+        <th>${esc(t('as_lead'))}</th><th>${esc(t('as_market'))}</th><th>${esc(t('as_tier'))}</th><th>${esc(t('as_status'))}</th><th>${esc(t('as_match'))}</th><th class="num">${esc(t('as_value'))}</th><th>${esc(t('as_sent'))}</th><th>${esc(tp('as_answer'))}</th><th>${esc(t('as_reason'))}</th><th></th></tr></thead><tbody>
         ${rows.slice(0, ADS.shown).map((r) => {
           const L = r.lead || {};
           const stale = asStale(r);
-          const match = r.identifier ? (r.identifier === 'gclid' ? t('as_gclid') : t('as_email')) : (r.status === 'no_id' ? '—' : (r.viaGclid || L.hasGclid ? t('as_gclid') : t('as_email')));
+          const match = ADS.platform === 'meta'
+            ? (r.status === 'no_id' ? '—' : r.viaFbc ? t('as_fbc') : t('as_emailPhone'))
+            : r.identifier ? (r.identifier === 'gclid' ? t('as_gclid') : t('as_email')) : (r.status === 'no_id' ? '—' : (r.viaGclid || L.hasGclid ? t('as_gclid') : t('as_email')));
           return `<tr>
             <td><button class="q-name" data-open="${esc(r.dealId)}">${L.namePartial ? esc(L.namePartial) : '#' + esc(r.dealId)}</button><div class="muted" style="font-size:11px">#${esc(r.dealId)}${L.owner ? ' · ' + esc(L.owner) : ''}${L.stage ? ' · ' + esc(L.stage) : ''}</div></td>
             <td><span class="as-market">${AS_FLAG[r.region] || ''} ${esc(r.region || '—')}</span></td>
             <td>${scoreBadge(r.tier === 'very_good' ? 'Very Good' : 'Good')}</td>
-            <td><span class="badge ${AS_BADGE[r.status] || 'b-neutral'}">${esc(t('as_' + r.status))}</span>${stale ? `<div class="as-warn">${esc(t('as_stale'))}</div>` : ''}${r.attempts > 1 ? `<div class="muted" style="font-size:11px">${esc(t('as_attempts', { n: r.attempts }))}</div>` : ''}</td>
+            <td><span class="badge ${AS_BADGE[r.status] || 'b-neutral'}">${esc(tp('as_' + r.status))}</span>${stale ? `<div class="as-warn">${esc(t('as_stale'))}</div>` : ''}${r.attempts > 1 ? `<div class="muted" style="font-size:11px">${esc(t('as_attempts', { n: r.attempts }))}</div>` : ''}</td>
             <td>${esc(match)}</td>
             <td class="num">${r.value != null ? fmtMoney(r.value, r.currency) : '—'}</td>
             <td>${r.sentAt ? fmtDT(r.sentAt) : '—'}</td>
@@ -909,6 +959,7 @@ function renderAdsSync(el) {
         }).join('')}</tbody></table></div>
         ${rows.length > ADS.shown ? `<button class="btn ghost sm" data-as-more style="margin-top:10px">${esc(t('q_showMore', { n: fmtInt(Math.min(100, rows.length - ADS.shown)) }))}</button>` : ''}` : `<p class="muted">${esc(t('as_none'))}</p>`}
     </div>`;
+  $$('[data-as-pf]', el).forEach((b) => b.addEventListener('click', () => { if (ADS.platform === b.dataset.asPf) return; ADS.platform = b.dataset.asPf; try { localStorage.setItem('adsPlatform', ADS.platform); } catch (e) { /* private */ } ADS.data = null; ADS.status = 'all'; ADS.region = 'all'; renderAdsSync(el); loadAdsSync(); }));
   $$('[data-as-status]', el).forEach((b) => b.addEventListener('click', () => { ADS.status = ADS.status === b.dataset.asStatus && b.classList.contains('as-kpi') ? 'all' : b.dataset.asStatus; ADS.shown = 100; renderAdsSync(el); }));
   $$('[data-as-tier]', el).forEach((b) => b.addEventListener('click', () => { ADS.tier = b.dataset.asTier; renderAdsSync(el); }));
   $$('[data-as-region]', el).forEach((b) => b.addEventListener('click', () => { ADS.region = b.dataset.asRegion; ADS.status = 'all'; ADS.shown = 100; renderAdsSync(el); }));
@@ -921,12 +972,12 @@ function renderAdsSync(el) {
   if (run) run.addEventListener('click', async () => {
     run.disabled = true;
     const before = c.pending || 0;
-    const res = await api('/api/pipeline/ads-sync/run', { method: 'POST' }).catch(() => null);
+    const res = await api(`${asApi()}/run`, { method: 'POST' }).catch(() => null);
     if (res && res.ok) showToast(t('as_sent2', { n: fmtInt(before) }));
     loadAdsSync();
   });
   const retryKeys = async (keys) => {
-    const res = await api('/api/pipeline/ads-sync/retry', { method: 'POST', body: { keys } }).catch(() => null);
+    const res = await api(`${asApi()}/retry`, { method: 'POST', body: { keys } }).catch(() => null);
     const d = res ? await res.json().catch(() => ({})) : {};
     showToast(t('as_retried', { n: fmtInt(d.retried || 0) }));
     setTimeout(loadAdsSync, 1500);
