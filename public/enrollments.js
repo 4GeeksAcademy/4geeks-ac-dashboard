@@ -10,8 +10,8 @@ const EN_STR = {
   en: {
     region: 'Region', all: 'All', period: 'Converted', p_thisMonth: 'This month', p_lastMonth: 'Last month', p_30d: 'Last 30 days', p_90d: 'Last 90 days', p_ytd: 'This year', p_all: 'All', from: 'From', to: 'To',
     byWeek: 'By week', byMonth: 'By month', currency: 'Show money in', native: 'Native', usd: 'USD', refresh: 'Refresh from AC',
-    k_enrollments: 'Enrollments', k_tuition: 'Tuition sold', k_avg: 'Avg ticket', k_dropped: 'Dropped', k_dropRate: 'drop rate', k_days: 'Days to convert', k_daysSub: 'median, lead created → won', k_topSource: 'Top source', k_vsPrev: 'vs previous period', k_net: 'net of drops',
-    trend: 'Enrollments over time', trendSub: 'By conversion date — click a bar to filter the table', byProgram: 'By program', bySource: 'By source', byLocation: 'By location', byRep: 'By admissions rep', byCampaign: 'By campaign', byRegion: 'By region',
+    k_enrollments: 'Enrollments', k_tuition: 'Tuition sold', k_avg: 'Avg ticket', k_dropped: 'Dropped', k_dropRate: 'drop rate', k_days: 'Days to convert', k_daysSub: 'median, lead created → won', k_topSource: 'Top channel', k_vsPrev: 'vs previous period', k_net: 'net of drops',
+    trend: 'Enrollments over time', trendSub: 'By conversion date — click a bar to filter the table', byProgram: 'By program', byChannel: 'By channel', byChannelSub: 'Paid vs organic first, then the channel. Leads with no UTM source are organic (from Google Analytics when linked).', c_channel: 'Channel', bySource: 'By source', byLocation: 'By location', byRep: 'By admissions rep', byCampaign: 'By campaign', byRegion: 'By region',
     clickHint: 'Click any bar or row to filter everything below.', table: 'Enrollments', tableSub: '{n} shown · newest first', csv: 'Download CSV', openAC: 'Open in ActiveCampaign',
     c_converted: 'Converted', c_created: 'Lead created', c_student: 'Student', c_region: 'Region', c_program: 'Program', c_cohort: 'Cohort / plan', c_location: 'Location', c_rep: 'Rep', c_source: 'Source', c_campaign: 'Campaign', c_price: 'Ticket price', c_days: 'Days', c_status: 'Status',
     enrolled: 'Enrolled', dropped: 'Dropped', b2b: 'B2B', notSet: 'Not set', loading: 'Loading enrollments from ActiveCampaign… the first pull takes about a minute after a deploy.', empty: 'No enrollments match these filters.',
@@ -20,8 +20,8 @@ const EN_STR = {
   es: {
     region: 'Región', all: 'Todas', period: 'Convertido', p_thisMonth: 'Este mes', p_lastMonth: 'Mes pasado', p_30d: 'Últimos 30 días', p_90d: 'Últimos 90 días', p_ytd: 'Este año', p_all: 'Todo', from: 'Desde', to: 'Hasta',
     byWeek: 'Por semana', byMonth: 'Por mes', currency: 'Mostrar dinero en', native: 'Original', usd: 'USD', refresh: 'Actualizar desde AC',
-    k_enrollments: 'Matrículas', k_tuition: 'Matrícula vendida', k_avg: 'Ticket medio', k_dropped: 'Bajas', k_dropRate: 'tasa de baja', k_days: 'Días para convertir', k_daysSub: 'mediana, lead creado → ganado', k_topSource: 'Fuente top', k_vsPrev: 'vs periodo anterior', k_net: 'sin contar bajas',
-    trend: 'Matrículas en el tiempo', trendSub: 'Por fecha de conversión — haz clic en una barra para filtrar la tabla', byProgram: 'Por programa', bySource: 'Por fuente', byLocation: 'Por ubicación', byRep: 'Por asesor', byCampaign: 'Por campaña', byRegion: 'Por región',
+    k_enrollments: 'Matrículas', k_tuition: 'Matrícula vendida', k_avg: 'Ticket medio', k_dropped: 'Bajas', k_dropRate: 'tasa de baja', k_days: 'Días para convertir', k_daysSub: 'mediana, lead creado → ganado', k_topSource: 'Canal top', k_vsPrev: 'vs periodo anterior', k_net: 'sin contar bajas',
+    trend: 'Matrículas en el tiempo', trendSub: 'Por fecha de conversión — haz clic en una barra para filtrar la tabla', byProgram: 'Por programa', byChannel: 'Por canal', byChannelSub: 'Primero pago vs orgánico, luego el canal. Los leads sin UTM source son orgánicos (de Google Analytics si están vinculados).', c_channel: 'Canal', bySource: 'Por fuente', byLocation: 'Por ubicación', byRep: 'Por asesor', byCampaign: 'Por campaña', byRegion: 'Por región',
     clickHint: 'Haz clic en cualquier barra o fila para filtrar todo lo de abajo.', table: 'Matrículas', tableSub: '{n} mostradas · más recientes primero', csv: 'Descargar CSV', openAC: 'Abrir en ActiveCampaign',
     c_converted: 'Convertido', c_created: 'Lead creado', c_student: 'Alumno', c_region: 'Región', c_program: 'Programa', c_cohort: 'Cohorte / plan', c_location: 'Ubicación', c_rep: 'Asesor', c_source: 'Fuente', c_campaign: 'Campaña', c_price: 'Precio', c_days: 'Días', c_status: 'Estado',
     enrolled: 'Matriculado', dropped: 'Baja', b2b: 'B2B', notSet: 'Sin dato', loading: 'Cargando matrículas desde ActiveCampaign… la primera carga tarda cerca de un minuto tras un despliegue.', empty: 'No hay matrículas con estos filtros.',
@@ -32,7 +32,7 @@ const et = (k, v) => { let s = (EN_STR[LANG] || EN_STR.en)[k] ?? EN_STR.en[k] ??
 
 const ENR_REGIONS = ['USA', 'Spain', 'LATAM'];
 const ENR_REGION_VAR = { USA: '--c-a', Spain: '--c-b', LATAM: '--c-c' };
-const ENR_DIMS = { program: 'byProgram', source: 'bySource', location: 'byLocation', assignTo: 'byRep', campaign: 'byCampaign' };
+const ENR_DIMS = { program: 'byProgram', channelType: 'byChannel', channel: 'byChannel', source: 'bySource', location: 'byLocation', assignTo: 'byRep', campaign: 'byCampaign' };
 const enr = { data: null, loading: false, region: 'all', preset: 'ytd', from: '', to: '', gran: 'month', cur: 'native', filters: {}, status: 'all', sort: { k: 'converted', dir: -1 }, page: 1 };
 
 function enrRange() {
@@ -119,7 +119,7 @@ function renderEnrollments(loadingOnly) {
   const priced = enrolled.filter((r) => enrPrice(r));
   const prevEnrolled = prev ? prev.filter((r) => r.status === 'enrolled') : null;
   const prevTuition = prevEnrolled ? prevEnrolled.reduce((a, r) => a + (enrPrice(r) || 0), 0) : null;
-  const srcCount = {}; rows.forEach((r) => { if (r.source) srcCount[r.source] = (srcCount[r.source] || 0) + 1; });
+  const srcCount = {}; rows.forEach((r) => { const k = r.channel || r.source; if (k) srcCount[k] = (srcCount[k] || 0) + 1; });
   const topSrc = Object.entries(srcCount).sort((a, b) => b[1] - a[1])[0];
   const [ra, rb] = enrRange();
   const presets = ['thisMonth', 'lastMonth', '30d', '90d', 'ytd', 'all'];
@@ -159,7 +159,7 @@ function renderEnrollments(loadingOnly) {
     <p class="muted enr-hint">${esc(et('clickHint'))}</p>
     <div class="grid2">
       <div class="panel"><div class="panel-head"><h2>${esc(et('byProgram'))}</h2></div>${enrBars(enrApplyFilters(base, 'program'), 'program')}</div>
-      <div class="panel"><div class="panel-head"><h2>${esc(et('bySource'))}</h2></div>${enrBars(enrApplyFilters(base, 'source'), 'source')}</div>
+      <div class="panel"><div class="panel-head"><div><h2>${esc(et('byChannel'))}</h2><div class="panel-sub">${esc(et('byChannelSub'))}</div></div></div>${enrBars(enrApplyFilters(base, 'channelType'), 'channelType', 3)}<div class="enr-split"></div>${enrBars(enrApplyFilters(base, 'channel'), 'channel', 10)}</div>
     </div>
     <div class="grid2">
       <div class="panel"><div class="panel-head"><h2>${esc(et('byLocation'))}</h2></div>${enrBars(enrApplyFilters(base, 'location'), 'location')}</div>
@@ -169,7 +169,7 @@ function renderEnrollments(loadingOnly) {
     <div class="panel">
       <div class="panel-head"><div><h2>${esc(et('table'))}</h2><div class="panel-sub">${esc(et('tableSub', { n: fmtInt(rows.length) }))}</div></div><button class="btn ghost sm" id="enr-csv">${icon('download')}${esc(et('csv'))}</button></div>
       ${rows.length ? `<div class="tablewrap"><table class="enr-table"><thead><tr>
-        ${[['converted', 'c_converted'], ['created', 'c_created'], ['name', 'c_student'], ['region', 'c_region'], ['program', 'c_program'], ['cohort', 'c_cohort'], ['location', 'c_location'], ['assignTo', 'c_rep'], ['source', 'c_source'], ['campaign', 'c_campaign'], ['price', 'c_price'], ['daysToConvert', 'c_days'], ['status', 'c_status']]
+        ${[['converted', 'c_converted'], ['created', 'c_created'], ['name', 'c_student'], ['region', 'c_region'], ['program', 'c_program'], ['cohort', 'c_cohort'], ['location', 'c_location'], ['assignTo', 'c_rep'], ['channelLabel', 'c_channel'], ['campaign', 'c_campaign'], ['price', 'c_price'], ['daysToConvert', 'c_days'], ['status', 'c_status']]
           .map(([k, l]) => `<th data-esort="${k}" class="${['price', 'daysToConvert'].includes(k) ? 'num' : ''}">${esc(et(l))}${enr.sort.k === k ? (enr.sort.dir < 0 ? ' ▼' : ' ▲') : ''}</th>`).join('')}</tr></thead><tbody>
         ${shown.map((r) => `<tr>
           <td>${esc(fmtDate(r.converted, { day: 'numeric', month: 'short', year: '2-digit' }))}</td>
@@ -180,7 +180,7 @@ function renderEnrollments(loadingOnly) {
           <td class="truncate" title="${esc(r.stage || r.plan || '')}">${esc(r.cohort || r.plan || r.stage || '—')}</td>
           <td>${esc(r.location || '—')}</td>
           <td>${esc(r.assignTo || '—')}</td>
-          <td>${esc(r.source || '—')}</td>
+          <td>${esc(r.channelLabel || r.source || '—')}</td>
           <td class="truncate" title="${esc(r.campaign || '')}">${esc(r.campaign || '—')}</td>
           <td class="num">${esc(enrFmtMoney(enrPrice(r)))}</td>
           <td class="num">${r.daysToConvert == null ? '—' : fmtInt(r.daysToConvert)}</td>
@@ -233,7 +233,7 @@ function enrSort(rows) {
   return rows.slice().sort((a, b) => { const x = v(a); const y = v(b); return (x < y ? -1 : x > y ? 1 : 0) * dir; });
 }
 function enrCsv(rows) {
-  const cols = ['converted', 'created', 'namePartial', 'emailPartial', 'region', 'b2b', 'program', 'course', 'cohort', 'stage', 'location', 'assignTo', 'source', 'medium', 'campaign', 'price', 'currency', 'priceUsd', 'daysToConvert', 'financing', 'status', 'id'];
+  const cols = ['converted', 'created', 'namePartial', 'emailPartial', 'region', 'b2b', 'program', 'course', 'cohort', 'stage', 'location', 'assignTo', 'channelType', 'channel', 'channelBy', 'leadScore', 'source', 'medium', 'campaign', 'price', 'currency', 'priceUsd', 'daysToConvert', 'financing', 'status', 'id'];
   const q = (x) => { const s = x == null ? '' : String(x); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
   const csv = [cols.join(','), ...rows.map((r) => cols.map((c) => q(r[c])).join(','))].join('\n');
   const a = document.createElement('a');

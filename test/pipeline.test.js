@@ -201,3 +201,27 @@ test('ads-sync sends every market by default, each with its own currency and exp
   assert.strictEqual(got.length, before + 1);
   assert.strictEqual(got[got.length - 1].dealId, by.LATAM.dealId);
 });
+
+test('meta sync: same qualified leads, own log, matched by email / phone / Meta click', async () => {
+  const { createAdsSync, metaPhone } = require('../lib/pipeline/ads-sync');
+  const today = new Date().toISOString().slice(0, 10);
+  const store = { _d: new Map(), async all(ns) { return [...(this._d.get(ns) || new Map()).entries()].map(([id, v]) => ({ id, ...v })); }, async put(ns, k, v) { (this._d.get(ns) || this._d.set(ns, new Map()).get(ns)).set(k, v); } };
+  const recs = [
+    { id: 1, region: 'USA', admissionsScore: 'Very Good', bucket: 'Active / Other', date: today, email: 'a@x.com' },
+    { id: 2, region: 'LATAM', admissionsScore: 'Good', bucket: 'Active / Other', date: today, phone: '+57 300 123 4567' },
+    { id: 3, region: 'Spain', admissionsScore: 'Good', bucket: 'Active / Other', date: today },
+    { id: 4, region: 'USA', admissionsScore: 'Bad', bucket: 'Active / Other', date: today, email: 'b@x.com' },
+  ];
+  Object.defineProperty(recs[2], 'gclid', { value: 'IwAR0abc', enumerable: false });
+  const meta = createAdsSync({ store, getRecords: () => recs, platform: 'meta', env: { META_SYNC_WEBHOOK_URL: 'https://n8n/x', ADS_SYNC_KEY: 'k' }, log: { log() {}, warn() {} } });
+  const google = createAdsSync({ store, getRecords: () => recs, env: { ADS_SYNC_WEBHOOK_URL: 'https://n8n/g', ADS_SYNC_KEY: 'k' }, log: { log() {}, warn() {} } });
+  assert.deepEqual(meta.due().map((x) => x.r.id).sort(), [1, 2, 3]); // Meta can match the phone-only and fbclid-only leads
+  assert.deepEqual(google.due().map((x) => x.r.id).sort(), [1]);
+  assert.equal(meta.logRows().find((x) => x.dealId === '3').viaFbc, true);
+  assert.equal(meta.summary().platform, 'meta');
+  assert.equal(metaPhone('+57 300 123 4567'), '573001234567');
+  assert.equal(meta.checkKey('k'), true);
+  await meta.recordResult({ deal_id: '1', tier: 'very_good', ok: true, identifier_used: 'email+phone' });
+  assert.equal((await store.all('metasync')).length, 1);
+  assert.equal((await store.all('adsync')).length, 0);
+});

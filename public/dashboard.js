@@ -180,11 +180,16 @@ const isActive = (r) => r.bucket === 'Active / Other';
 // Filter definitions. `primary` ones sit in the bar; the rest live in the
 // "More filters" drawer. `vals(r)` returns the record's values (arrays let
 // multi-valued fields like lost reasons match any of their values).
+// Every lead has a channel (lib/attribution/lead-channel.js): from its UTMs / click IDs, else from the
+// Google Analytics visits linked to it, else "Organic · no source". Nothing is dropped from the charts.
+const CHANNEL_ORDER = ['Paid Search', 'Paid Social', 'Paid Display/Video', 'Organic Search', 'Organic Social', 'AI Assistant', 'Referral', 'Organic · no source', 'Email', 'Messaging', 'Partner', 'Other campaign'];
 const FILTERS = [
   { key: 'bucket', icon: 'status', primary: true, order: BUCKETS, label: (v) => t('b_' + v) },
   { key: 'assignTo', icon: 'user', primary: true },
   { key: 'admissionsScore', icon: 'star', primary: true, order: SCORE_ORDER, label: scoreLabel },
   { key: 'reason', icon: 'xcircle', primary: true, vals: (r) => r.reasons || [] },
+  { key: 'channelType', icon: 'target', primary: true, order: ['Paid', 'Organic', 'Owned & other'], label: (v) => t('ct_' + v) },
+  { key: 'channel', group: 'grpAttribution', order: CHANNEL_ORDER },
   { key: 'leadSentiment', group: 'grpAdmissions' },
   { key: 'classification', group: 'grpAdmissions' },
   { key: 'admissionsConversationType', group: 'grpAdmissions' },
@@ -595,6 +600,29 @@ function wireBarLists(root) {
     if (FILTER_BY_KEY[f]) { if (!state[f].includes(v)) state[f] = [...state[f], v]; onFiltersChanged(); }
   }));
 }
+// Paid vs organic at a glance: leads, qualified (Good / Very Good), enrolled (Won), win rate.
+function paidOrganicHtml(rows) {
+  const types = ['Paid', 'Organic', 'Owned & other'];
+  const qual = (r) => r.admissionsScore === 'Very Good' || r.admissionsScore === 'Good';
+  const tot = rows.length || 1;
+  const won = rows.filter((r) => r.bucket === 'Won').length || 1;
+  const cells = types.map((ty) => {
+    const rs = rows.filter((r) => (r.channelType || 'Organic') === ty);
+    if (!rs.length) return '';
+    const w = rs.filter((r) => r.bucket === 'Won').length;
+    const q = rs.filter(qual).length;
+    const noSrc = ty === 'Organic' ? rs.filter((r) => r.channel === 'Organic · no source').length : 0;
+    const byGa = ty === 'Organic' ? rs.filter((r) => r.channelBy === 'GA4').length : 0;
+    return `<div class="po-cell po-${ty === 'Paid' ? 'paid' : ty === 'Organic' ? 'org' : 'own'}" data-field="channelType" data-value="${esc(ty)}">
+      <div class="po-h">${esc(t('ct_' + ty))}</div>
+      <div class="po-big">${fmtInt(rs.length)} <span>${esc(t('poLeads'))} · ${pct(rs.length, tot)}</span></div>
+      <div class="po-row"><span>${esc(t('poQual'))}</span><b>${fmtInt(q)}</b> <i>${pct(q, rs.length)}</i></div>
+      <div class="po-row"><span>${esc(t('poWon'))}</span><b>${fmtInt(w)}</b> <i>${esc(t('poOfWon', { p: pct(w, won) }))}</i></div>
+      ${ty === 'Organic' ? `<div class="po-note">${esc(t('poNoSrc', { n: fmtInt(noSrc), g: fmtInt(byGa) }))}</div>` : ''}
+    </div>`;
+  }).join('');
+  return `<div class="panel"><div class="panel-head"><div><h2>${esc(t('poTitle'))}</h2><div class="panel-sub">${esc(t('poSub'))}</div></div></div><div class="po-grid">${cells}</div></div>`;
+}
 function renderOverview(rows) {
   const el = $('#tab-overview');
   const g = resolveGran(rows);
@@ -606,6 +634,7 @@ function renderOverview(rows) {
   const rPeak = reasons.length ? reasons[0][1] : 1;
   el.innerHTML = `
     ${kpiCards(rows)}
+    ${paidOrganicHtml(rows)}
     <div class="panel">
       <div class="panel-head">
         <div><h2>${esc(t('trendTitle'))}</h2><div class="panel-sub">${esc(t('trendSub', { g: gl }))}</div></div>
@@ -629,7 +658,7 @@ function renderOverview(rows) {
     </div>
     <div class="grid2">
       <div class="panel"><div class="panel-head"><h2>${esc(t('campaignsTitle'))}</h2></div>${barList(groupStats(rows, (r) => (r.campaign ? [r.campaign] : [])), { field: 'campaign' })}</div>
-      <div class="panel"><div class="panel-head"><h2>${esc(t('sourcesTitle'))}</h2></div>${barList(groupStats(rows, (r) => (r.source ? [r.source] : [])), { field: 'source' })}</div>
+      <div class="panel"><div class="panel-head"><div><h2>${esc(t('channelsTitle'))}</h2><div class="panel-sub">${esc(t('channelsSub'))}</div></div></div>${barList(groupStats(rows, (r) => [r.channel || 'Organic · no source']), { field: 'channel', max: 12 })}</div>
     </div>
     <div class="grid2">
       <div class="panel"><div class="panel-head"><div><h2>${esc(t('reasonsTitle'))}</h2><div class="panel-sub">${esc(t('reasonsSub'))}</div></div></div>
@@ -645,6 +674,7 @@ function renderOverview(rows) {
   $$('#gran-seg button').forEach((b) => b.addEventListener('click', () => { state.gran = b.dataset.g; renderAll(); }));
   $$('tr[data-owner]', el).forEach((tr) => tr.addEventListener('click', () => { const v = tr.dataset.owner; if (v !== t('unassigned') && !state.assignTo.includes(v)) { state.assignTo = [...state.assignTo, v]; onFiltersChanged(); } }));
   wireBarLists(el);
+  $$('.po-cell[data-field]', el).forEach((c) => c.addEventListener('click', () => { const v = c.dataset.value; if (!state.channelType.includes(v)) { state.channelType = [...state.channelType, v]; onFiltersChanged(); } }));
 
   // Trend: stacked outcome bars per period (one axis, counts).
   const keys = periodKeys(rows, g);
@@ -694,7 +724,7 @@ function renderIndividual(rows) {
     ${rows.length ? `<div class="tablewrap"><table><thead><tr>${LEAD_COLS.map(([f, l]) => `<th data-sort="${f}" class="${f === 'dealValue' ? 'num' : ''}">${esc(t(l))}${state.sort.field === f ? (state.sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr></thead>
     <tbody>${slice.map((r) => `<tr class="clickrow" data-id="${esc(r.id)}">
       <td><div class="cell-lead"><span class="avatar">${esc(leadInitials(r))}</span><div><div class="nm">${leadField(r, 'name')}</div><div class="em">${r.email ? leadField(r, 'email') : ''}</div></div></div></td>
-      <td>${fmtDate(r.date)}</td><td>${esc(r.region || '—')}</td><td class="truncate">${esc(r.course || '—')}</td><td>${esc(r.source || '—')}</td><td class="truncate" title="${esc(r.campaign || '')}">${esc(r.campaign || '—')}</td>
+      <td>${fmtDate(r.date)}</td><td>${esc(r.region || '—')}</td><td class="truncate">${esc(r.course || '—')}</td><td>${r.source ? esc(r.source) : `<span class="muted" title="${esc(t('derivedTip'))}">${esc(r.channelLabel || t('ct_Organic'))}</span>`}</td><td class="truncate" title="${esc(r.campaign || '')}">${esc(r.campaign || '—')}</td>
       <td>${r.assignTo ? esc(r.assignTo) : `<span class="muted">${esc(t('unassigned'))}</span>`}</td><td class="truncate">${esc(r.stage || '—')}</td>
       <td>${statusBadge(r.bucket)}</td><td class="truncate" title="${esc(r.reasons && r.reasons.length ? r.reasons.join(', ') : '')}">${r.reasons && r.reasons.length ? esc(r.reasons.join(', ')) : '<span class="muted">—</span>'}</td>
       <td>${scoreBadge(r.admissionsScore)}</td>
@@ -709,7 +739,7 @@ function renderIndividual(rows) {
   const pn = $('#pg-next'); if (pn) pn.addEventListener('click', () => { state.page++; renderIndividual(rows); el.scrollIntoView(); });
 }
 function exportCsv(rows) {
-  const cols = ['id', 'name', 'email', 'phone', 'date', 'region', 'course', 'source', 'medium', 'campaign', 'location', 'assignTo', 'stage', 'dealValue', 'bucket', 'reason', 'admissionsConversationType', 'admissionsScore', 'leadSentiment', 'classification', 'dealQuality', 'feedback'];
+  const cols = ['id', 'name', 'email', 'phone', 'date', 'region', 'course', 'channelType', 'channel', 'channelSource', 'channelBy', 'source', 'medium', 'campaign', 'location', 'assignTo', 'stage', 'dealValue', 'bucket', 'reason', 'admissionsConversationType', 'admissionsScore', 'leadSentiment', 'classification', 'dealQuality', 'feedback'];
   const lines = [cols.join(',')];
   rows.forEach((r) => lines.push(cols.map((c) => { let v = r[c] == null ? '' : String(r[c]).replace(/"/g, '""'); if (/[",\n]/.test(v)) v = `"${v}"`; return v; }).join(',')));
   const a = document.createElement('a');

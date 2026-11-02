@@ -14,7 +14,7 @@ const CMP_STR = {
     scorecard: 'Scorecard', best: 'best', vsA: 'vs A', metric: 'Metric',
     m_deals: 'Leads / deals', m_won: 'Won', m_winRate: 'Win rate', m_closeWin: 'Win rate of closed', m_lost: 'Lost', m_lossRate: 'Loss rate', m_active: 'Open', m_noReason: 'Lost without reason', m_good: 'Good test score', m_junk: 'Junk (invalid / fake / duplicate)', m_value: 'Won value', m_avgValue: 'Avg won deal', m_perDay: 'Leads per day',
     trend: 'Leads over time', trendWin: 'Win rate over time', mix: 'Outcome mix', breakdown: 'Side by side', share: 'share',
-    d_region: 'Region', d_campaign: 'Campaign', d_source: 'UTM source', d_medium: 'UTM medium', d_location: 'Location', d_course: 'Course', d_assignTo: 'Admissions rep', d_admissionsScore: 'Test score', d_reason: 'Lost reason', d_period: 'Period (date ranges)', d_stage: 'Stage',
+    d_region: 'Region', d_channelType: 'Paid / organic', d_channel: 'Channel', d_campaign: 'Campaign', d_source: 'UTM source', d_medium: 'UTM medium', d_location: 'Location', d_course: 'Course', d_assignTo: 'Admissions rep', d_admissionsScore: 'Test score', d_reason: 'Lost reason', d_period: 'Period (date ranges)', d_stage: 'Stage',
     from: 'From', to: 'To', note: 'Uses every filter above except the one you compare by. For periods, the dates come from each set.',
     askAI: 'Explain the difference with AI', aiQ: 'Compare these sets ({dim}): {sets}. Using the scorecard below, explain the most important differences, the likely reasons and one action for each set. Max 6 bullets.',
   },
@@ -25,14 +25,14 @@ const CMP_STR = {
     scorecard: 'Comparativa', best: 'mejor', vsA: 'vs A', metric: 'Métrica',
     m_deals: 'Leads / deals', m_won: 'Ganados', m_winRate: 'Tasa de cierre', m_closeWin: 'Cierre sobre cerrados', m_lost: 'Perdidos', m_lossRate: 'Tasa de pérdida', m_active: 'Abiertos', m_noReason: 'Perdidos sin motivo', m_good: 'Test score bueno', m_junk: 'Basura (inválido / falso / duplicado)', m_value: 'Valor ganado', m_avgValue: 'Deal medio ganado', m_perDay: 'Leads por día',
     trend: 'Leads en el tiempo', trendWin: 'Tasa de cierre en el tiempo', mix: 'Mix de resultados', breakdown: 'Lado a lado', share: 'peso',
-    d_region: 'Región', d_campaign: 'Campaña', d_source: 'UTM source', d_medium: 'UTM medium', d_location: 'Ubicación', d_course: 'Curso', d_assignTo: 'Asesor de admisiones', d_admissionsScore: 'Test score', d_reason: 'Motivo de pérdida', d_period: 'Periodo (rangos de fechas)', d_stage: 'Etapa',
+    d_region: 'Región', d_channelType: 'Pago / orgánico', d_channel: 'Canal', d_campaign: 'Campaña', d_source: 'UTM source', d_medium: 'UTM medium', d_location: 'Ubicación', d_course: 'Curso', d_assignTo: 'Asesor de admisiones', d_admissionsScore: 'Test score', d_reason: 'Motivo de pérdida', d_period: 'Periodo (rangos de fechas)', d_stage: 'Etapa',
     from: 'Desde', to: 'Hasta', note: 'Usa todos los filtros de arriba menos el que comparas. En periodos, las fechas salen de cada grupo.',
     askAI: 'Explicar la diferencia con IA', aiQ: 'Compara estos grupos ({dim}): {sets}. Con la comparativa de abajo, explica las diferencias más importantes, las causas probables y una acción para cada grupo. Máximo 6 viñetas.',
   },
 };
 const ct = (k, vars) => { let s = (CMP_STR[LANG] || CMP_STR.en)[k] ?? CMP_STR.en[k] ?? k; if (vars) Object.entries(vars).forEach(([a, b]) => { s = s.split(`{${a}}`).join(b); }); return s; };
 
-const CMP_DIMS = ['region', 'campaign', 'source', 'medium', 'location', 'course', 'assignTo', 'admissionsScore', 'reason', 'stage', 'period'];
+const CMP_DIMS = ['region', 'channelType', 'channel', 'campaign', 'source', 'medium', 'location', 'course', 'assignTo', 'admissionsScore', 'reason', 'stage', 'period'];
 const CMP_COLORS = ['--c-a', '--c-b', '--c-c', '--c-d'];
 const CMP_LETTERS = ['A', 'B', 'C', 'D'];
 const cmp = { dim: 'region', by: 'course', sets: [], open: null, q: '' };

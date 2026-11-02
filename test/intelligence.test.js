@@ -89,3 +89,26 @@ test('marketing: quality, enrollments, change vs previous period, spend by campa
   assert.equal(byCampaign.totals.costPerEnrollment, 500);
   assert.match(mk.adviceContent({ region: 'USA', period: 'Oct', report: byCampaign, lang: 'es' }), /Spanish[\s\S]*aie search us: 2 leads/);
 });
+
+test('score moves: Good first, Very Good at enrollment counts as moved up (Ads log fills older history)', async () => {
+  const { createScoreJourneys } = require('../lib/pipeline/scores');
+  const recs = [
+    { id: 1, email: 'a@x.com', admissionsScore: 'Very Good', date: '2026-10-01', bucket: 'Won' },
+    { id: 2, email: 'b@x.com', admissionsScore: 'Very Good', date: '2026-10-01', bucket: 'Won' },
+    { id: 3, email: 'c@x.com', admissionsScore: 'Good', date: '2026-10-01', bucket: 'Active / Other' },
+  ];
+  const sj = createScoreJourneys({
+    store: null, getRecords: () => recs,
+    getEnrollments: () => ({ rows: [{ id: '1', email: 'a@x.com', converted: '2026-10-25' }, { id: '2', email: 'b@x.com', converted: '2026-10-25' }] }),
+    extraHistory: () => ({ 1: [['2026-10-05T10:00:00Z', 'Good'], ['2026-10-12T10:00:00Z', 'Very Good']], 3: [['2026-10-05', 'Very Good']] }),
+  });
+  await sj.snapshot(recs, '2026-10-20');
+  const m = sj.report(recs).moves;
+  assert.equal(m.enrolled.tracked, 2);
+  assert.equal(m.enrolled.up, 1);
+  assert.equal(m.enrolled.same, 1);
+  const l1 = m.leads.find((l) => l.id === 1);
+  assert.deepEqual([l1.from, l1.to, l1.changedAt, l1.enrolled], ['Good', 'Very Good', '2026-10-12', true]);
+  const l3 = m.leads.find((l) => l.id === 3);
+  assert.deepEqual([l3.dir, l3.enrolled], ['down', false]);
+});

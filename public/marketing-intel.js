@@ -8,7 +8,7 @@
 (function addMarketingStrings() {
   const en = {
     mk_title: 'Marketing intelligence', mk_sub: 'Which sources and campaigns bring leads that become students, and what they cost, compared with the previous period of the same length.',
-    mk_by: 'Group by', mk_source: 'Source', mk_campaign: 'Campaign', mk_medium: 'Medium',
+    mk_by: 'Group by', mk_channel: 'Channel', mk_source: 'Source', mk_campaign: 'Campaign', mk_medium: 'Medium',
     mk_leads: 'Leads', mk_qualified: 'Qualified', mk_qualifiedSub: 'scored Good or Very Good by admissions', mk_junk: 'Junk', mk_junkSub: 'invalid, fake or duplicate', mk_enrolled: 'Enrolled', mk_enrolledSub: 'matched to the Enrollments section; recent leads may still enroll',
     mk_cpq: 'Cost per qualified lead', mk_cpe: 'Cost per enrollment', mk_spendSub: '{s} spent (4Geeks Center)', mk_noSpend: 'Pick a date range in the filters to bring in spend from 4Geeks Center',
     mk_vsPrev: 'previous period: {n}', mk_noPrev: 'Pick a date range to compare with the previous period',
@@ -19,7 +19,7 @@
   };
   const es = {
     mk_title: 'Inteligencia de marketing', mk_sub: 'Qué fuentes y campañas traen leads que se convierten en estudiantes, y cuánto cuestan, comparado con el periodo anterior de la misma duración.',
-    mk_by: 'Agrupar por', mk_source: 'Fuente', mk_campaign: 'Campaña', mk_medium: 'Medio',
+    mk_by: 'Agrupar por', mk_channel: 'Canal', mk_source: 'Fuente', mk_campaign: 'Campaña', mk_medium: 'Medio',
     mk_leads: 'Leads', mk_qualified: 'Calificados', mk_qualifiedSub: 'con score Good o Very Good de admisiones', mk_junk: 'Basura', mk_junkSub: 'inválidos, falsos o duplicados', mk_enrolled: 'Matriculados', mk_enrolledSub: 'cruzados con la sección Matrículas; los leads recientes aún pueden matricularse',
     mk_cpq: 'Coste por lead calificado', mk_cpe: 'Coste por matrícula', mk_spendSub: '{s} invertidos (4Geeks Center)', mk_noSpend: 'Elige un rango de fechas en los filtros para traer la inversión de 4Geeks Center',
     mk_vsPrev: 'periodo anterior: {n}', mk_noPrev: 'Elige un rango de fechas para comparar con el periodo anterior',
@@ -32,7 +32,7 @@
   window.I18N.es = { ...window.I18N.es, ...es };
 })();
 
-const MK = { dim: (() => { try { return localStorage.getItem('mkDim') || 'source'; } catch (e) { return 'source'; } })(), cache: new Map(), advice: {} };
+const MK = { dim: (() => { try { return localStorage.getItem('mkDim') || 'channel'; } catch (e) { return 'channel'; } })(), cache: new Map(), advice: {} };
 
 const mkPct = (x) => (x == null ? '—' : `${Math.round(x * 100)}%`);
 function mkDelta(cur, prev) {
@@ -83,10 +83,10 @@ function mkHtml(d, rows, prev) {
   const kpi = (cls, label, val, sub) => `<div class="kpi ${cls}"><div class="k-lbl">${esc(label)}</div><div class="k-val">${val}</div><div class="k-sub">${sub}</div></div>`;
   const prevTxt = (n) => (prev ? esc(t('mk_vsPrev', { n: fmtInt(n) })) : esc(t('mk_noPrev')));
   const adv = MK.advice[`${state.region}:${d.dim}`];
-  const dimLabel = { source: t('mk_source'), campaign: t('mk_campaign'), medium: t('mk_medium') }[d.dim];
+  const dimLabel = { channel: t('mk_channel'), source: t('mk_source'), campaign: t('mk_campaign'), medium: t('mk_medium') }[d.dim];
   return `<div class="panel mk-panel">
     <div class="panel-head"><div><h2>${icon('ads')} ${esc(t('mk_title'))}</h2><div class="panel-sub">${esc(t('mk_sub'))} · <strong>${esc(t('pi_scope', { n: fmtInt(rows.length) }))}</strong></div></div>
-      <div class="seg" id="mk-dim"><span class="mk-by">${esc(t('mk_by'))}</span>${['source', 'campaign', 'medium'].map((k) => `<button data-d="${k}" class="${d.dim === k ? 'active' : ''}">${esc(t('mk_' + k))}</button>`).join('')}</div></div>
+      <div class="seg" id="mk-dim"><span class="mk-by">${esc(t('mk_by'))}</span>${['channel', 'source', 'campaign', 'medium'].map((k) => `<button data-d="${k}" class="${d.dim === k ? 'active' : ''}">${esc(t('mk_' + k))}</button>`).join('')}</div></div>
     <div class="kpis k8" style="margin-bottom:14px">
       ${kpi('', t('mk_leads'), `${fmtInt(T.leads)} ${prev ? mkDelta(T.leads, T.prevLeads) : ''}`, prevTxt(T.prevLeads))}
       ${kpi('hl-blue', t('mk_qualified'), `${fmtInt(T.qualified)} <span class="pi-vs">${mkPct(T.leads ? T.qualified / T.leads : null)}</span>`, `${esc(t('mk_qualifiedSub'))} · ${prevTxt(T.prevQualified)}`)}
