@@ -6,11 +6,20 @@ const { createAttribution, cleanEvents, credit, emailHash, keyPagesOf } = requir
 const { memStore } = require('../lib/attribution/store');
 
 test('channels: paid vs organic, branded search, AI assistants, fbclid nuance', () => {
-  assert.deepEqual(classify({ clickType: 'gclid', utm: { term: '4geeks academy' } }), { group: 'Paid Search', source: 'Google', branded: true });
+  assert.deepEqual(classify({ clickType: 'gclid', utm: { term: '4geeks academy' } }), { group: 'Paid Search', source: 'Google', branded: true, platform: 'Google Ads' });
   assert.equal(classify({ clickType: 'gclid', utm: { term: 'ai bootcamp' } }).branded, false);
   assert.equal(classify({ clickType: 'fbclid' }).group, 'Organic Social');
   assert.equal(classify({ clickType: 'fbclid', utm: { source: 'facebook', medium: 'paid_social', campaign: 'AIE' } }).group, 'Paid Social');
   assert.equal(classify({ utm: { source: 'fb', medium: 'cpc' } }).group, 'Paid Social');
+  // Paid is named by platform: Instagram / Facebook apart when the source says so.
+  const { channelName } = require('../lib/attribution/channel');
+  assert.equal(channelName(classify({ utm: { source: 'instagram', medium: 'paid_social' } })), 'Paid · Instagram');
+  assert.equal(channelName(classify({ utm: { source: 'facebook', medium: 'paid' } })), 'Paid · Facebook');
+  assert.equal(channelName(classify({ utm: { source: 'meta', medium: 'paid_social' } })), 'Paid · Meta (IG/FB)');
+  assert.equal(channelName(classify({ utm: { source: 'tiktok', medium: 'paid_social' } })), 'Paid · TikTok');
+  assert.equal(channelName(classify({ utm: { source: 'chatgpt', medium: 'cpc' } })), 'Paid · ChatGPT');
+  assert.equal(channelName(classify({ clickType: 'gclid' })), 'Paid · Google Ads');
+  assert.equal(channelName(classify({ referrer: 'https://www.google.com/' })), 'Organic Search');
   assert.deepEqual(classify({ referrer: 'https://chatgpt.com/' }), { group: 'AI Assistant', source: 'ChatGPT' });
   assert.deepEqual(classify({ referrer: 'https://www.google.com/' }), { group: 'Organic Search', source: 'Google' });
   assert.deepEqual(classify({ referrer: 'https://l.instagram.com/' }), { group: 'Organic Social', source: 'Instagram' });
@@ -73,10 +82,10 @@ test('journey: Meta ad → a week later branded Google search → form; report c
   assert.equal(rep.coverage.multiTouch, 1);
   assert.equal(rep.coverage.paidThenSearchOrDirect, 1);
   const first = Object.fromEntries(rep.models.first.groups.map((g) => [g.key, g]));
-  assert.equal(first['Paid Social'].enrolled, 1);
+  assert.equal(first['Paid · Facebook'].enrolled, 1);
   assert.equal(first['AI Assistant'].leads, 1);
   const last = Object.fromEntries(rep.models.last.groups.map((g) => [g.key, g]));
-  assert.equal(last['Paid Search (brand)'].leads, 1);
+  assert.equal(last['Paid · Google Ads (brand)'].leads, 1);
   assert.equal(rep.paths[0].path.includes('→') || rep.paths[1].path.includes('→'), true);
   const ad = rep.ads.find((a) => a.ad === 'Reel 3 - salary');
   assert.equal(ad.firstTouch, 1); assert.equal(ad.enrolled, 1);

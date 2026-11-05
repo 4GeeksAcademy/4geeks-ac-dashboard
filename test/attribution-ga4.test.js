@@ -163,10 +163,10 @@ test('share: enrolled leads in %, GA path when linked, CRM channel otherwise', a
   const d = await attr.share(recs, { who: 'won', by: 'channel', model: 'linear' });
   assert.deepEqual([d.total, d.withGa, d.crmOnly], [3, 1, 2]);
   const by = Object.fromEntries(d.rows.map((r) => [r.key, r.credit]));
-  assert.deepEqual(by, { 'Paid Search': 1, 'Organic · no source': 1, 'Paid Social': 0.5, 'Organic Search': 0.5 });
+  assert.deepEqual(by, { 'Paid · Google Ads': 1, 'Organic · no source': 1, 'Paid · Facebook': 0.5, 'Organic Search': 0.5 });
   const t = await attr.share(recs, { who: 'won', by: 'type', model: 'first' });
   assert.deepEqual(Object.fromEntries(t.rows.map((r) => [r.key, r.credit])), { Paid: 2, Organic: 1 });
-  assert.equal(d.leads.find((l) => l.id === 1).path.join(' → '), 'Paid Social · Meta → Organic Search · Google');
+  assert.equal(d.leads.find((l) => l.id === 1).path.join(' → '), 'Paid · Facebook → Organic Search · Google');
   assert.equal(d.leads.find((l) => l.id === 3).by, 'crm');
 });
 
@@ -175,6 +175,6 @@ test('lead channel: no source is organic, never dropped; GA fills it when linked
   const recs = applyChannels([{ id: 1 }, { id: 2, source: 'website' }, { id: 3, source: 'google', medium: 'cpc' }, { id: 4, gclid: 'IwAR1' }],
     new Map([['2', gaChannel([{ group: 'Organic Search', source: 'Google' }, { group: 'Direct', source: '' }])]]));
   assert.deepEqual(recs.map((r) => [r.channel, r.channelType, r.channelBy]), [
-    ['Organic · no source', 'Organic', 'none'], ['Organic Search', 'Organic', 'GA4'], ['Paid Search', 'Paid', 'CRM'], ['Organic Social', 'Organic', 'CRM'],
+    ['Organic · no source', 'Organic', 'none'], ['Organic Search', 'Organic', 'GA4'], ['Paid · Google Ads', 'Paid', 'CRM'], ['Organic Social', 'Organic', 'CRM'],
   ]);
 });

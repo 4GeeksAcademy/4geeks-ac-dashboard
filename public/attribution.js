@@ -98,7 +98,8 @@ const AT_TEMPLATES = {
   tiktok: 'utm_source=tiktok&utm_medium=paid_social&utm_campaign=__CAMPAIGN_NAME__&utm_term=__AID_NAME__&utm_content=__CID_NAME__',
 };
 const AT_GROUP_TONE = { 'Paid Search': 'blue', 'Paid Search (brand)': 'blue', 'Paid Social': 'blue', 'Paid Display/Video': 'blue', 'Organic Search': 'green', 'AI Assistant': 'amber', 'Organic Social': 'green', Email: 'gray', Referral: 'gray', Partner: 'gray', Messaging: 'gray', Direct: 'gray', 'Other campaign': 'gray' };
-const atChip = (g, src, branded) => `<span class="at-chip t-${AT_GROUP_TONE[branded && g === 'Paid Search' ? 'Paid Search (brand)' : g] || 'gray'}">${esc(g)}${branded ? ` · ${esc(t('at_brand'))}` : ''}${src ? ` · ${esc(src)}` : ''}</span>`;
+// Paid touches show their platform (Paid · Instagram); others show channel · where.
+const atChip = (g, src, branded, platform) => `<span class="at-chip t-${AT_GROUP_TONE[branded && g === 'Paid Search' ? 'Paid Search (brand)' : g] || 'gray'}">${/^Paid/.test(g) ? esc(`Paid · ${platform || src || 'Other'}`) : esc(g)}${branded ? ` · ${esc(t('at_brand'))}` : ''}${!/^Paid/.test(g) && src ? ` · ${esc(src)}` : ''}</span>`;
 const atDate = (iso) => (iso ? new Date(iso).toLocaleString(LANG === 'es' ? 'es-ES' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—');
 
 // ---------------- lead drawer ----------------
@@ -110,7 +111,7 @@ function atTouchHtml(x) {
     `<span><b>${esc(t('at_landing'))}:</b> ${esc(x.landing || '—')}</span>`,
   ].filter(Boolean).join('');
   return `<li class="at-touch"><div class="at-when">${esc(atDate(x.at))}${x.device ? ` · ${esc(x.device)}` : ''}</div>
-    <div class="at-what">${atChip(x.group, x.source, x.branded)} <span class="muted">${esc(t('at_pages', { n: x.pages }))}</span>${(x.keyPages || []).map((k) => `<span class="at-kp">${esc(k)}</span>`).join('')}</div>
+    <div class="at-what">${atChip(x.group, x.source, x.branded, x.platform)} <span class="muted">${esc(t('at_pages', { n: x.pages }))}</span>${(x.keyPages || []).map((k) => `<span class="at-kp">${esc(k)}</span>`).join('')}</div>
     <div class="at-meta">${meta}</div></li>`;
 }
 async function loadLeadJourney(r) {
