@@ -182,14 +182,17 @@ const isActive = (r) => r.bucket === 'Active / Other';
 // multi-valued fields like lost reasons match any of their values).
 // Every lead has a channel (lib/attribution/lead-channel.js): from its UTMs / click IDs, else from the
 // Google Analytics visits linked to it, else "Organic · no source". Nothing is dropped from the charts.
-const CHANNEL_ORDER = ['Paid Search', 'Paid Social', 'Paid Display/Video', 'Organic Search', 'Organic Social', 'AI Assistant', 'Referral', 'Organic · no source', 'Email', 'Messaging', 'Partner', 'Other campaign'];
+// Paid leads are named by platform: "Paid · Instagram", "Paid · TikTok", "Paid · Google Ads"…
+const CHANNEL_ORDER = ['Organic Search', 'Organic Social', 'AI Assistant', 'Referral', 'Organic · no source', 'Email', 'Messaging', 'Partner', 'Other campaign'];
+// Paid platforms first, then organic in a fixed order, then anything else.
+const channelRank = (v) => (/^Paid · /.test(v) ? 0 : CHANNEL_ORDER.indexOf(v) >= 0 ? 1 + CHANNEL_ORDER.indexOf(v) : 50);
 const FILTERS = [
   { key: 'bucket', icon: 'status', primary: true, order: BUCKETS, label: (v) => t('b_' + v) },
   { key: 'assignTo', icon: 'user', primary: true },
   { key: 'admissionsScore', icon: 'star', primary: true, order: SCORE_ORDER, label: scoreLabel },
   { key: 'reason', icon: 'xcircle', primary: true, vals: (r) => r.reasons || [] },
   { key: 'channelType', icon: 'target', primary: true, order: ['Paid', 'Organic', 'Owned & other'], label: (v) => t('ct_' + v) },
-  { key: 'channel', group: 'grpAttribution', order: CHANNEL_ORDER },
+  { key: 'channel', icon: 'target', primary: true, rank: channelRank },
   { key: 'leadSentiment', group: 'grpAdmissions' },
   { key: 'classification', group: 'grpAdmissions' },
   { key: 'admissionsConversationType', group: 'grpAdmissions' },
@@ -448,6 +451,7 @@ function facetOptions(f) {
   state[f.key].forEach((v) => { if (!counts.has(v)) counts.set(v, 0); });
   let opts = [...counts.entries()];
   if (f.order) opts.sort((a, b) => { const ia = f.order.indexOf(a[0]); const ib = f.order.indexOf(b[0]); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
+  else if (f.rank) opts.sort((a, b) => f.rank(a[0]) - f.rank(b[0]) || b[1] - a[1]);
   else opts.sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])));
   return opts;
 }
@@ -658,7 +662,7 @@ function renderOverview(rows) {
     </div>
     <div class="grid2">
       <div class="panel"><div class="panel-head"><h2>${esc(t('campaignsTitle'))}</h2></div>${barList(groupStats(rows, (r) => (r.campaign ? [r.campaign] : [])), { field: 'campaign' })}</div>
-      <div class="panel"><div class="panel-head"><div><h2>${esc(t('channelsTitle'))}</h2><div class="panel-sub">${esc(t('channelsSub'))}</div></div></div>${barList(groupStats(rows, (r) => [r.channel || 'Organic · no source']), { field: 'channel', max: 12 })}</div>
+      <div class="panel"><div class="panel-head"><div><h2>${esc(t('channelsTitle'))}</h2><div class="panel-sub">${esc(t('channelsSub'))}</div></div></div>${barList(groupStats(rows, (r) => [r.channel || 'Organic · no source']), { field: 'channel', max: 16 })}</div>
     </div>
     <div class="grid2">
       <div class="panel"><div class="panel-head"><div><h2>${esc(t('reasonsTitle'))}</h2><div class="panel-sub">${esc(t('reasonsSub'))}</div></div></div>

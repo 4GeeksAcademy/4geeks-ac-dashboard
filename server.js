@@ -896,7 +896,7 @@ function withChannels(rows) {
     const lead = (e.id && byId.get(String(e.id))) || (e.email && byEmail.get(String(e.email).trim().toLowerCase())) || null;
     const c = lead && lead.channel ? { channel: lead.channel, channelType: lead.channelType, channelLabel: lead.channelLabel, channelBy: lead.channelBy } : (() => {
       const x = recordedChannel({ source: e.source, medium: e.medium, campaign: e.campaign });
-      return { channel: x.channel, channelType: x.channelType, channelLabel: x.channelSource && x.channel !== 'Organic · no source' ? `${x.channel} · ${x.channelSource}` : x.channel, channelBy: x.channelBy };
+      return { channel: x.channel, channelType: x.channelType, channelLabel: x.channelType !== 'Paid' && x.channelSource && x.channel !== 'Organic · no source' ? `${x.channel} · ${x.channelSource}` : x.channel, channelBy: x.channelBy };
     })();
     return { ...e, ...c, leadId: lead ? lead.id : null, leadScore: lead ? lead.admissionsScore || null : null };
   });
