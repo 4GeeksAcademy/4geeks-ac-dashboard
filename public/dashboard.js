@@ -207,7 +207,7 @@ const FILTER_BY_KEY = Object.fromEntries(FILTERS.map((f) => [f.key, f]));
 const fVals = (f, r) => (f.vals ? f.vals(r) : (r[f.key] != null && r[f.key] !== '' ? [String(r[f.key])] : []));
 const fLabel = (f, v) => (f.label ? f.label(v) : v);
 
-const VIEWS = ['overview', 'enrollments', 'recommendations', 'compare', 'individual', 'ads', 'adsync', 'ai', 'press', 'events', 'social', 'social_analytics', 'social_settings', 'proposals', 'settings'];
+const VIEWS = ['overview', 'enrollments', 'recommendations', 'compare', 'individual', 'ads', 'adsync', 'ai', 'press', 'events', 'social', 'social_analytics', 'social_inbox', 'social_settings', 'proposals', 'settings'];
 const state = { view: 'overview', region: 'all', q: '', dateFrom: '', dateTo: '', preset: '', gran: 'auto', page: 1, sort: { field: 'date', dir: 'desc' }, groupBy: 'assignTo', aiScope: 'both', adsRegion: 'US', recUsePeriod: '0' };
 FILTERS.forEach((f) => { state[f.key] = []; });
 
@@ -361,6 +361,7 @@ const NAV = [
   // Social: Meta analytics (public/social-*.js, lib/social).
   { section: 'navSectionSocial' },
   { view: 'social_analytics', icon: 'overview' },
+  { view: 'social_inbox', icon: 'doc' },
   { view: 'social_settings', icon: 'settings' },
   { section: 'navSectionB2B' },
   { view: 'proposals', icon: 'doc' },
@@ -1261,9 +1262,9 @@ function renderAll(o = {}) {
   // Google Ads sync log has its own toolbar (lib/pipeline/ads-sync.js, public/pipeline.js).
   if (state.view === 'adsync') { $('#filterbar').hidden = true; $('#active-chips').hidden = true; renderAdsSync(el); return; }
   // Social has its own period bar; it doesn't use the lead filters or ActiveCampaign data.
-  if (state.view === 'social_analytics' || state.view === 'social_settings') {
+  if (['social_analytics', 'social_inbox', 'social_settings'].includes(state.view)) {
     $('#filterbar').hidden = true; $('#active-chips').hidden = true;
-    (state.view === 'social_analytics' ? window.renderSocialAnalytics : window.renderSocialSettings)(el);
+    ({ social_analytics: window.renderSocialAnalytics, social_inbox: window.renderSocialInbox, social_settings: window.renderSocialSettings })[state.view](el);
     return;
   }
   const isProposals = state.view === 'proposals';

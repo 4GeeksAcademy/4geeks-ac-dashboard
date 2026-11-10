@@ -315,3 +315,136 @@ test('TikTok: no change vs a previous period that has no data loaded', async () 
   assert.ok(k.spend.current > 0);
   assert.deepStrictEqual([k.spend.previous, k.spend.change_pct], [null, null]);
 });
+
+// ---------------- inbox: comments, DMs, webhook (lib/social/meta/comments|messages, inbox, webhook) ----------------
+const { createInbox } = require('../lib/social/inbox');
+const { mountSocialWebhook } = require('../lib/social/webhook');
+const crypto = require('crypto');
+
+async function inboxSetup() {
+  const store = memoryStore();
+  await seedSocial(store);
+  const fake = createFakeMeta();
+  const sync = createSocialSync({ store, makeClient: () => client(fake), log: quiet });
+  await sync.prepareInitialLoad(3);
+  await sync.processRequests();
+  const audits = [];
+  const inbox = createInbox(store, { audit: async (...a) => audits.push(a) });
+  return { store, fake, sync, inbox, audits };
+}
+const byExt = async (store, table, external_id) => (await store.find(table, { external_id }))[0];
+
+test('inbox: new comments come in; own replies stay out and mark the comment as replied', async () => {
+  const { sync, inbox } = await inboxSetup();
+  await sync.inbox();
+  const list = await inbox.listComments({});
+  assert.deepStrictEqual(list.items.map((c) => c.author_name).sort(), ['ana', 'luis', null], 'own reply not listed; FB author unknown');
+  const ana = list.items.find((c) => c.author_name === 'ana');
+  assert.strictEqual(ana.status, 'replied');
+  assert.ok(ana.replied_at);
+  assert.strictEqual(ana.object.permalink, 'https://www.instagram.com/reel/AAA/');
+  assert.strictEqual((await inbox.listComments({ status: 'open' })).total, 2);
+  const detail = await inbox.commentDetail(ana.id);
+  assert.deepStrictEqual(detail.thread.map((x) => x.own), [false, true]);
+});
+
+test('inbox: the sync never overwrites a status or category; only changed posts are downloaded', async () => {
+  const { store, fake, sync, inbox, audits } = await inboxSetup();
+  await sync.inbox();
+  const [cat] = await store.find('categories', { name: 'Queja' });
+  const luis = await byExt(store, 'comments', 'c-2');
+  await inbox.classify('comment', luis.id, { status: 'in_review', category_id: cat.id }, 'marcelo');
+  const reelCalls = () => fake.calls.filter((c) => c.path === 'm-reel/comments').length;
+  const before = reelCalls();
+  await sync.inbox();
+  assert.strictEqual(reelCalls(), before, 'same total: not downloaded again');
+  fake.inbox.reelComments.push({ id: 'c-3', user: 'eva', text: 'Hola' });
+  await sync.inbox();
+  assert.strictEqual(reelCalls(), before + 1);
+  const after = await byExt(store, 'comments', 'c-2');
+  assert.deepStrictEqual([after.status, after.category_id, after.handled_by], ['in_review', cat.id, 'marcelo']);
+  assert.strictEqual((await byExt(store, 'comments', 'c-3')).status, 'new');
+  assert.ok(audits.every((a) => !JSON.stringify(a).includes('Me interesa')), 'audit never holds texts');
+  await assert.rejects(inbox.classify('comment', luis.id, { status: 'deleted' }, 'x'), /Invalid status/);
+  const bulk = await inbox.classifyBulk('comment', [luis.id, (await byExt(store, 'comments', 'c-3')).id, 99999], { status: 'closed' }, 'marcelo');
+  assert.deepStrictEqual(bulk, { updated: 2, ignored: 1 });
+});
+
+const metaTime = (ms) => new Date(Date.now() + ms).toISOString().slice(0, 19) + '+0000';
+
+test('DMs: a new message reopens a closed conversation; the account answering marks it replied', async () => {
+  const { fake, sync, inbox } = await inboxSetup();
+  await sync.inbox();
+  let [conv] = (await inbox.listConversations({})).items;
+  assert.deepStrictEqual([conv.participant_name, conv.status, conv.unanswered, conv.window_open], ['pedro', 'new', true, true]);
+  assert.ok(conv.link.includes('asset_id=100000000000001'));
+  await inbox.classify('conversation', conv.id, { status: 'closed' }, 'marcelo');
+  fake.inbox.dms.push({ text: 'Sigue abierto?', at: metaTime(500), mine: false });
+  fake.inbox.convUpdated = metaTime(60000);
+  await sync.inbox();
+  [conv] = (await inbox.listConversations({})).items;
+  assert.strictEqual(conv.status, 'new', 'reopened');
+  fake.inbox.dms.push({ text: 'Si, te escribimos', at: metaTime(2000), mine: true });
+  fake.inbox.convUpdated = metaTime(120000);
+  await sync.inbox();
+  [conv] = (await inbox.listConversations({})).items;
+  assert.deepStrictEqual([conv.status, conv.unanswered], ['replied', false]);
+  assert.strictEqual((await inbox.conversationDetail(conv.id)).messages.length, 3);
+});
+
+test('DMs: texts are erased after 60 days, the message stays', async () => {
+  const { store, sync } = await inboxSetup();
+  await sync.inbox();
+  const [m] = await store.find('messages', {});
+  await store.update('messages', { id: m.id }, { written_at: new Date(Date.now() - 61 * 86400000).toISOString() });
+  assert.strictEqual(await require('../lib/social/meta/messages').purgeTexts(store), 1);
+  const [after] = await store.find('messages', { id: m.id });
+  assert.deepStrictEqual([after.text, !!after.text_deleted_at], [null, true]);
+});
+
+test('inbox: notifications only for what arrived after the mark', async () => {
+  const { fake, sync, inbox } = await inboxSetup();
+  await sync.inbox();
+  const marks = await inbox.news({});
+  assert.strictEqual(marks.comments.total, 0, 'no marks given: only the current marks');
+  fake.inbox.reelComments.push({ id: 'c-9', user: 'sofia', text: 'Info porfa' });
+  await sync.inbox();
+  const n = await inbox.news({ after_comment: marks.after_comment, after_message: marks.after_message });
+  assert.deepStrictEqual(n.comments.items.map((c) => c.author_name), ['sofia']);
+  assert.strictEqual(n.messages.total, 0);
+});
+
+test('webhook: signed notices queue one request per account with the people who wrote', async () => {
+  const express = require('express');
+  const { store } = await inboxSetup();
+  const app = express();
+  process.env.META_APP_SECRET = 'test-secret'; process.env.META_WEBHOOK_VERIFY_TOKEN = 'verify-me';
+  mountSocialWebhook(app, { store });
+  const srv = app.listen(0); const base = `http://127.0.0.1:${srv.address().port}/api/social/webhook/meta`;
+  try {
+    const send = (payload, secret = 'test-secret') => {
+      const body = JSON.stringify(payload);
+      return fetch(base, { method: 'POST', headers: { 'content-type': 'application/json', 'X-Hub-Signature-256': 'sha256=' + crypto.createHmac('sha256', secret).update(body).digest('hex') }, body });
+    };
+    const notice = (sender) => ({ object: 'instagram', entry: [{ id: 'ig-usa', messaging: [{ sender: { id: sender }, recipient: { id: 'ig-usa' }, message: { text: 'secreto' } }] }, { id: 'ig-eu', messaging: [{ sender: { id: 'x' } }] }] });
+    assert.strictEqual(await fetch(`${base}?hub.mode=subscribe&hub.verify_token=verify-me&hub.challenge=42`).then((r) => r.text()), '42');
+    assert.strictEqual((await fetch(`${base}?hub.mode=subscribe&hub.verify_token=nope&hub.challenge=42`)).status, 403);
+    assert.strictEqual((await send(notice('u9'), 'wrong')).status, 403);
+    assert.deepStrictEqual(await (await send(notice('u9'))).json(), { queued: 1 }, 'ig-eu is switched off: ignored');
+    assert.deepStrictEqual(await (await send(notice('u7'))).json(), { queued: 0 }, 'joined to the pending one');
+    const reqs = await store.find('requests', { type: 'messages' });
+    assert.strictEqual(reqs.length, 1);
+    assert.deepStrictEqual(reqs[0].params, { origin: 'webhook', users: ['u7', 'u9'] });
+    assert.ok(!JSON.stringify(reqs).includes('secreto'), 'the DM text is never stored');
+  } finally { srv.close(); delete process.env.META_APP_SECRET; delete process.env.META_WEBHOOK_VERIFY_TOKEN; }
+});
+
+test('webhook request: only those conversations are synced', async () => {
+  const { store, fake, sync } = await inboxSetup();
+  const [ig] = await store.find('accounts', { username: '4geeksacademy' });
+  await store.insert('requests', { type: 'messages', account_id: ig.id, params: { origin: 'webhook', users: ['u9'] }, user_name: 'webhook', status: 'pending', progress: null, error: null });
+  await sync.processRequests();
+  const call = fake.calls.find((c) => c.path === '100000000000001/conversations');
+  assert.strictEqual(call.params.user_id, 'u9');
+  assert.strictEqual((await store.find('conversations', {})).length, 1);
+});

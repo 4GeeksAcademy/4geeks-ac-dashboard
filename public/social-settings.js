@@ -8,8 +8,8 @@ const SOC_REQ_CLASS = { pending: 'b-neutral', running: 'b-other', ok: 'b-won', e
 
 async function renderSocialSettings(el) {
   el.innerHTML = '<div class="panel"><div class="skeleton" style="height:220px"></div></div>';
-  let s;
-  try { s = await hubJson('/api/social/status'); } catch (e) { socError(el, e); return; }
+  let s; let cats;
+  try { [s, cats] = await Promise.all([hubJson('/api/social/status'), hubJson('/api/social/categories')]); } catch (e) { socError(el, e); return; }
   if (state.view !== 'social_settings') return;
   const sites = [...s.sites].sort((a, b) => a.sort - b.sort);
   const siteOpts = (cur) => `<option value="">—</option>${sites.map((x) => `<option value="${x.id}" ${x.id === cur ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}`;
@@ -64,6 +64,15 @@ async function renderSocialSettings(el) {
       </div>
     </div>
 
+    <div class="panel"><div class="panel-head"><h2>${esc(ss('categories'))}</h2></div>
+      <div class="tablewrap"><table><thead><tr><th>${esc(ss('active'))}</th><th>${esc(ss('categoryName'))}</th><th>${esc(ss('color'))}</th></tr></thead><tbody>
+        ${cats.categories.map((c) => `<tr><td><input type="checkbox" data-cat-active="${c.id}" ${c.active ? 'checked' : ''} title="${esc(ss('categoryOff'))}"></td>
+          <td><input type="text" class="ps-select" data-cat-name="${c.id}" value="${esc(c.name)}"></td>
+          <td><select class="ps-select" data-cat-color="${c.id}">${cats.colors.map((x) => `<option ${x === c.color ? 'selected' : ''}>${x}</option>`).join('')}</select></td></tr>`).join('')}
+      </tbody></table></div>
+      <div class="hub-toolbar"><input type="text" class="ps-select" id="soc-cat-new" placeholder="${esc(ss('categoryName'))}"><button class="btn primary sm" id="soc-cat-add">${esc(ss('addCategory'))}</button></div>
+    </div>
+
     <div class="panel"><div class="panel-head"><h2>${esc(ss('requests'))}</h2></div>
       ${s.requests.length ? `<div class="tablewrap"><table><tbody>${s.requests.map((r) => `<tr><td>#${r.id}</td><td>${esc(r.type)}${r.account_id ? ' · ' + esc(accName.get(r.account_id) || r.account_id) : ''}</td>
         <td><span class="badge ${SOC_REQ_CLASS[r.status] || 'b-neutral'}">${esc(ss('r_' + r.status))}</span>${r.progress && r.progress.total && r.status === 'running' ? ` ${r.progress.done}/${r.progress.total}` : ''}</td>
@@ -90,6 +99,10 @@ async function renderSocialSettings(el) {
   $$('[data-site-name]', el).forEach((i) => i.addEventListener('change', () => send(`/api/social/sites/${i.dataset.siteName}`, 'PATCH', { name: i.value })));
   $$('[data-site-market]', el).forEach((c) => c.addEventListener('change', () => send(`/api/social/sites/${c.dataset.siteMarket}`, 'PATCH', { market: c.value || null })));
   $$('[data-site-del]', el).forEach((b) => b.addEventListener('click', () => { if (confirm(ss('confirmRemoveSite'))) send(`/api/social/sites/${b.dataset.siteDel}`, 'DELETE'); }));
+  $('[data-cat-active]', el).forEach((c) => c.addEventListener('change', () => send(`/api/social/categories/${c.dataset.catActive}`, 'PATCH', { active: c.checked })));
+  $('[data-cat-name]', el).forEach((i) => i.addEventListener('change', () => send(`/api/social/categories/${i.dataset.catName}`, 'PATCH', { name: i.value })));
+  $('[data-cat-color]', el).forEach((c) => c.addEventListener('change', () => send(`/api/social/categories/${c.dataset.catColor}`, 'PATCH', { color: c.value })));
+  $('#soc-cat-add', el).addEventListener('click', () => { const name = $('#soc-cat-new', el).value.trim(); if (name) send('/api/social/categories', 'POST', { name }); });
   $('#soc-site-add', el).addEventListener('click', () => { const name = $('#soc-site-new', el).value.trim(); if (name) send('/api/social/sites', 'POST', { name }); });
   $('#soc-discover', el).addEventListener('click', () => send('/api/social/requests', 'POST', { type: 'discover' }, ss('discoverQueued')));
   $('#soc-calendar', el).addEventListener('click', () => send('/api/social/requests', 'POST', { type: 'calendar' }, ss('calendarQueued')));

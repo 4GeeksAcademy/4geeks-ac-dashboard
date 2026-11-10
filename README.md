@@ -381,6 +381,22 @@ Instagram profiles are synced from Meta into Postgres and shown in the sidebar s
   row so totals match TikTok; it never counts per post. Analytics → a TikTok account: Ads and
   Promoted posts. Env: `TIKTOK_ACCESS_TOKEN`, `TIKTOK_APP_ID`, `TIKTOK_APP_SECRET` (without the
   token TikTok is skipped).
+- **Inbox (admins only)** (`lib/social/inbox.js`, `public/social-inbox.js`): comments (organic and
+  on ads with impressions in the last 14 days) and Instagram DMs of the accounts switched on,
+  refreshed every 5 minutes (only posts whose comment count changed are downloaded again). Status
+  new / in review / replied / closed and a category, one by one or in bulk; the sync never
+  overwrites them. The account's own comments stay out, and its replies mark a comment as replied;
+  a DM conversation reopens when the person writes again. Replies are written in Instagram /
+  Business Suite (link in the detail). Browser notifications while the Hub is open ("Turn on
+  notifications"). DM texts are erased after 60 days; texts are never logged or audited. Inbox
+  categories are managed in Social settings (never deleted, switched off). FB comments on ads
+  come without author (Meta doesn't give it).
+- **DM webhook** (`lib/social/webhook.js`, `/api/social/webhook/meta`, mounted before
+  `express.json()`): Meta's notice only queues the conversations of the people who wrote; the
+  5-minute refresh stays as a safety net. Big inboxes time out when listed: after a timeout the
+  5-minute refresh skips that account for an hour and its DMs come through the webhook. Env:
+  `META_APP_SECRET` (signature), `META_WEBHOOK_VERIFY_TOKEN`. In the Meta app the callback URL
+  becomes `https://<hub domain>/api/social/webhook/meta`.
 - **Social calendar filled in** (`lib/social/calendar-fill.js`, after every hourly and daily
   sync, or *Fill Social calendar* in Social settings): calendar posts with a post URL get
   views, likes, comments, saves and shares from Meta (DMs are never touched; follows only when

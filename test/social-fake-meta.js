@@ -16,6 +16,12 @@ const endTime = (daysAgo) => `${addDays(today(), 1 - daysAgo)}T07:00:00+0000`;
 function createFakeMeta({ failFirst = {} } = {}) {
   const calls = [];
   const fails = { ...failFirst }; // path → number of transient errors to return first
+  // Inbox data; tests change it to simulate new comments / DMs.
+  const inbox = {
+    reelComments: [{ id: 'c-1', user: 'ana', text: '¿Precio? Escríbeme a ana@example.com' }, { id: 'c-2', user: 'luis', text: 'Me interesa' }],
+    convUpdated: iso(0),
+    dms: [{ text: 'Hola, quiero info', at: iso(0), mine: false }],
+  };
 
   function answer(path, p) {
     if (fails[path] > 0) { fails[path]--; return [500, { error: { code: -2, message: 'Timeout' } }]; }
@@ -27,7 +33,7 @@ function createFakeMeta({ failFirst = {} } = {}) {
 
     // Instagram media and its insights
     if (path === 'ig-usa/media') return [200, { data: [
-      { id: 'm-reel', timestamp: iso(2), caption: 'A reel', media_type: 'VIDEO', media_product_type: 'REELS', permalink: 'https://www.instagram.com/reel/AAA/', boost_ads_list: { data: [{ ad_id: 'ad-1' }] } },
+      { id: 'm-reel', timestamp: iso(2), caption: 'A reel', media_type: 'VIDEO', media_product_type: 'REELS', permalink: 'https://www.instagram.com/reel/AAA/', boost_ads_list: { data: [{ ad_id: 'ad-1' }] }, comments_count: inbox.reelComments.length + 1 },
       { id: 'm-story', timestamp: iso(1), media_type: 'IMAGE', media_product_type: 'STORY' },
     ] }];
     if (path === 'm-reel/insights') {
@@ -61,6 +67,13 @@ function createFakeMeta({ failFirst = {} } = {}) {
       return [200, { data: path.startsWith('act_200000000000001') ? [{ ad_id: 'ad-1', ad_name: 'Reel boost', campaign_name: 'Boost', spend: '12.50', impressions: '1000', reach: '900', clicks: '20', account_currency: 'USD', date_start: iso(1).slice(0, 10) }] : [] }];
     }
     if (path === 'ad-1') return [200, { creative: { source_instagram_media_id: 'm-reel' } }];
+
+    // Inbox: comments (the account's reply answers the first one) and Instagram DMs
+    if (path === 'm-reel/comments') return [200, { data: inbox.reelComments.map((c, i) => ({ id: c.id, text: c.text, timestamp: iso(0), username: c.user, from: { id: 'u' + i, username: c.user }, like_count: 1,
+      replies: { data: i === 0 ? [{ id: 'c-reply', text: 'Te escribimos por DM', timestamp: iso(0), username: '4geeksacademy', from: { id: 'ig-usa', username: '4geeksacademy' }, parent_id: c.id }] : [] } })) }];
+    if (path === 'fb-1/comments') return [200, { data: [{ id: 'fb-c1', message: 'Nice', created_time: iso(1), like_count: 0, comment_count: 0, is_hidden: false, permalink_url: 'https://facebook.com/c1' }] }];
+    if (path === '100000000000001/conversations') return [200, { data: [{ id: 'conv-1', updated_time: inbox.convUpdated }] }];
+    if (path === 'conv-1/messages') return [200, { data: inbox.dms.map((m, i) => ({ id: 'msg-' + i, created_time: m.at, message: m.text, from: m.mine ? { id: 'ig-usa', username: '4geeksacademy' } : { id: 'u9', username: 'pedro' }, to: { data: [m.mine ? { id: 'u9', username: 'pedro' } : { id: 'ig-usa', username: '4geeksacademy' }] } })) }];
     return [404, { error: { code: 100, message: `fake: no answer for ${path}` } }];
   }
 
@@ -73,7 +86,7 @@ function createFakeMeta({ failFirst = {} } = {}) {
     return { status, json: async () => body };
   }
 
-  return { fetch, calls };
+  return { fetch, calls, inbox, iso };
 }
 
 module.exports = { createFakeMeta, PAGES };

@@ -36,7 +36,20 @@ const SOC_STR = {
     sites: 'Sites', addSite: 'Add site', siteName: 'Site name', noMarket: 'No market', remove: 'Remove', confirmRemoveSite: 'Remove this site? Its accounts are left without a site.',
     saved: 'Saved', requests: 'Recent requests', r_pending: 'Pending', r_running: 'Running', r_ok: 'Done', r_error: 'Error', currency: 'Currency',
     storageMemory: 'No DATABASE_URL: Social data lives in memory and is lost on restart.',
-    adminOnly: 'Read-only: only admins can change these settings.', withPaidViews: 'Posts with paid views', noPosts: 'No posts in this period.',
+    adminOnly: 'Read-only: only admins can change these settings.',
+    // inbox
+    inboxAdminOnly: 'The inbox shows who wrote and what: only admins can open it.', openComments: 'Open comments', unansweredComments: 'Comments not answered',
+    openDms: 'Open DMs', unansweredDms: 'DMs not answered', dms: 'Instagram DMs', category: 'Category', noCategory: 'No category',
+    st_open: 'Open', st_new: 'New', st_in_review: 'In review', st_replied: 'Replied', st_closed: 'Closed', st_all: 'All',
+    unansweredOnly: 'Not answered only', searchInbox: 'Search text or person', notifyOn: 'Notifications on', notifyEnable: 'Turn on notifications',
+    selectedN: '{n} selected', setCategory: 'Set category…', selectAll: 'Select all', author: 'Author', person: 'Person', comment: 'Comment',
+    lastMessage: 'Last message', status: 'Status', fbUser: 'Facebook user', fromAd: 'Ad', fromPost: 'Post', answered: 'answered', unanswered: 'Not answered',
+    you: 'Us', erased: 'Text erased (older than 60 days)', windowOpen: 'can reply', inboxEmpty: 'Nothing here with these filters.', bulkDone: '{n} updated',
+    openPost: 'Open the post', hidden: 'hidden', openComment: 'Open the comment', only20: 'Meta only gives the last 20 messages.',
+    windowUntil: 'Replies allowed until {d}.', windowClosed: 'The 24 h reply window is closed.', openBusinessSuite: 'Reply in Business Suite',
+    classify: 'Status and category', handledBy: 'Last change: {u}, {d}', notifyUnsupported: 'This browser has no notifications',
+    notifyDenied: 'Notifications are blocked for this site', notifyMany: '{n} new in the Social inbox', notifyComment: 'New comment', notifyDm: 'New Instagram DM',
+    categories: 'Inbox categories', categoryName: 'Category name', addCategory: 'Add category', color: 'Color', categoryOff: 'Switched off (kept on what is already classified)', withPaidViews: 'Posts with paid views', noPosts: 'No posts in this period.',
     calendar: 'Fill Social calendar', calendarQueued: 'Social calendar fill queued',
     calendarHelp: 'Copies Meta results into the Social calendar posts that have a post URL, and fills the weekly account metrics. It also runs every hour.',
   },
@@ -71,7 +84,19 @@ const SOC_STR = {
     sites: 'Sedes', addSite: 'Añadir sede', siteName: 'Nombre de la sede', noMarket: 'Sin mercado', remove: 'Quitar', confirmRemoveSite: '¿Quitar esta sede? Sus cuentas quedan sin sede.',
     saved: 'Guardado', requests: 'Solicitudes recientes', r_pending: 'Pendiente', r_running: 'En curso', r_ok: 'Hecha', r_error: 'Error', currency: 'Moneda',
     storageMemory: 'Sin DATABASE_URL: los datos de Social viven en memoria y se pierden al reiniciar.',
-    adminOnly: 'Solo lectura: solo los admins pueden cambiar estos ajustes.', withPaidViews: 'Publicaciones con views pagadas', noPosts: 'No hay publicaciones en este periodo.',
+    adminOnly: 'Solo lectura: solo los admins pueden cambiar estos ajustes.',
+    inboxAdminOnly: 'La bandeja muestra quién escribió y qué: solo los admins pueden abrirla.', openComments: 'Comentarios abiertos', unansweredComments: 'Comentarios sin responder',
+    openDms: 'DMs abiertos', unansweredDms: 'DMs sin responder', dms: 'DMs de Instagram', category: 'Categoría', noCategory: 'Sin categoría',
+    st_open: 'Abiertos', st_new: 'Nuevo', st_in_review: 'En revisión', st_replied: 'Respondido', st_closed: 'Cerrado', st_all: 'Todos',
+    unansweredOnly: 'Solo sin responder', searchInbox: 'Buscar texto o persona', notifyOn: 'Avisos activados', notifyEnable: 'Activar avisos',
+    selectedN: '{n} seleccionados', setCategory: 'Poner categoría…', selectAll: 'Seleccionar todo', author: 'Autor', person: 'Persona', comment: 'Comentario',
+    lastMessage: 'Último mensaje', status: 'Estado', fbUser: 'Usuario de Facebook', fromAd: 'Anuncio', fromPost: 'Publicación', answered: 'respondido', unanswered: 'Sin responder',
+    you: 'Nosotros', erased: 'Texto borrado (más de 60 días)', windowOpen: 'se puede responder', inboxEmpty: 'No hay nada con estos filtros.', bulkDone: '{n} actualizados',
+    openPost: 'Abrir la publicación', hidden: 'oculto', openComment: 'Abrir el comentario', only20: 'Meta solo da los 20 últimos mensajes.',
+    windowUntil: 'Se puede responder hasta {d}.', windowClosed: 'La ventana de 24 h para responder está cerrada.', openBusinessSuite: 'Responder en Business Suite',
+    classify: 'Estado y categoría', handledBy: 'Último cambio: {u}, {d}', notifyUnsupported: 'Este navegador no tiene avisos',
+    notifyDenied: 'Los avisos están bloqueados para este sitio', notifyMany: '{n} novedades en la bandeja de Social', notifyComment: 'Comentario nuevo', notifyDm: 'DM de Instagram nuevo',
+    categories: 'Categorías de la bandeja', categoryName: 'Nombre de la categoría', addCategory: 'Añadir categoría', color: 'Color', categoryOff: 'Desactivada (se mantiene en lo ya clasificado)', withPaidViews: 'Publicaciones con views pagadas', noPosts: 'No hay publicaciones en este periodo.',
     calendar: 'Rellenar Calendario social', calendarQueued: 'Relleno del Calendario social en cola',
     calendarHelp: 'Copia los resultados de Meta en los posts del Calendario social que tienen URL, y rellena las métricas semanales de cuenta. También se hace cada hora.',
   },
@@ -81,11 +106,13 @@ const ss = (k, vars) => { let s = (SOC_STR[LANG] || SOC_STR.en)[k] ?? SOC_STR.en
 // Sidebar and page titles live in window.I18N (dashboard.js reads them with t()).
 Object.assign(window.I18N.en, {
   navSectionSocial: 'Social', nav_social_analytics: 'Analytics', sub_social_analytics: 'Facebook and Instagram, synced from Meta every hour',
-  nav_social_settings: 'Social settings', sub_social_settings: 'Accounts on/off, sites and the Meta sync',
+  nav_social_settings: 'Social settings', sub_social_settings: 'Accounts on/off, sites, inbox categories and the sync',
+  nav_social_inbox: 'Inbox', sub_social_inbox: 'Comments and Instagram DMs, every 5 minutes (admins)',
 });
 Object.assign(window.I18N.es, {
   navSectionSocial: 'Social', nav_social_analytics: 'Analítica', sub_social_analytics: 'Facebook e Instagram, sincronizados con Meta cada hora',
-  nav_social_settings: 'Ajustes de Social', sub_social_settings: 'Cuentas encendidas, sedes y la sincronización con Meta',
+  nav_social_settings: 'Ajustes de Social', sub_social_settings: 'Cuentas encendidas, sedes, categorías de la bandeja y la sincronización',
+  nav_social_inbox: 'Bandeja', sub_social_inbox: 'Comentarios y DMs de Instagram, cada 5 minutos (admins)',
 });
 
 // ---------- period (shared by every Social screen) ----------

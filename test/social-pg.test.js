@@ -39,6 +39,20 @@ test('Postgres: initial load, snapshots and switches', { skip: !URL_ && 'set SOC
   assert.ok(metrics.every((m) => m.day === today() && typeof m.metrics === 'object'));
   assert.strictEqual(typeof (await store.find('ad_metrics', {}))[0].impressions, 'number');
 
+  // Inbox on Postgres: timestamps come back as Date objects here.
+  await sync.inbox();
+  const inbox = require('../lib/social/inbox').createInbox(store);
+  const comments = await inbox.listComments({});
+  assert.deepStrictEqual(comments.items.map((c) => c.author_name).sort(), ['ana', 'luis', null]);
+  assert.strictEqual(comments.items.find((c) => c.author_name === 'ana').status, 'replied');
+  const [conv] = (await inbox.listConversations({})).items;
+  assert.deepStrictEqual([conv.participant_name, conv.unanswered, conv.window_open], ['pedro', true, true]);
+  await inbox.classify('conversation', conv.id, { status: 'closed' }, 'qa');
+  await sync.inbox();
+  assert.strictEqual((await inbox.conversationDetail(conv.id)).status, 'closed', 'sync keeps the status');
+  const s = await inbox.summary();
+  assert.deepStrictEqual([s.comments.open, s.messages.open], [2, 0]);
+
   const eu = (await store.find('accounts', { username: '4geekseurope' }))[0];
   assert.strictEqual(eu.active, false);
   assert.strictEqual(await store.update('accounts', { id: eu.id }, { active: true }), 1);

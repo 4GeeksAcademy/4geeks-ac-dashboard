@@ -437,14 +437,18 @@ app.post('/t/c', express.text({ type: () => true, limit: '24kb' }), async (req, 
     try { await attribution.collect(body); res.status(204).end(); } catch (e) { console.warn('[attribution] collect failed:', e.message); res.status(500).end(); }
 });
 
+// Social: Meta webhook for Instagram DMs (lib/social/webhook.js). Before express.json(): its signature needs the raw body.
+require('./lib/social/routes').mountSocialWebhook(app);
+
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json({ limit: '2mb' }));
 // Personal data (lead names, emails, phones, deal titles...) never leaves the
 // server in clear: every JSON response under /api is redacted to SHA-256 (see
 // lib/pii.js). Excluded: login, the dashboard's own users and Proposal Studio
 // (B2B documents that must carry the client's contact) and the Marketing Hub
-// (events + social content, no lead data).
-app.use('/api', redactJsonResponses({ exempt: /^\/api\/(login|me|users|proposals|proposal-library|proposal-archive|proposal-references|proposal-playbook|proposal-styles|proposal-brand|proposal-team-rules|hub)(\/|$)/ }));
+// (events + social content, no lead data). Social is excluded too: its inbox must show
+// who commented and what (admins only; DM texts erased after 60 days, see lib/social).
+app.use('/api', redactJsonResponses({ exempt: /^\/api\/(login|me|users|proposals|proposal-library|proposal-archive|proposal-references|proposal-playbook|proposal-styles|proposal-brand|proposal-team-rules|hub|social)(\/|$)/ }));
 
 // ---------------------------------------------------------------------------
 // Auth — one login per person, roles admin/editor (see lib/auth.js).
