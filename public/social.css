@@ -1,0 +1,6 @@
+/* Social section (social-*.js). Only what the Hub's styles.css / brand.css don't already have. */
+.soc-period{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.soc-acc{display:flex;align-items:center;gap:8px;margin:0;font-size:17px;font-weight:800;}
+.soc-acc .muted{font-size:13px;font-weight:600;}
+.soc-net{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:18px;padding:0 4px;border-radius:5px;font-size:10px;font-weight:800;color:#fff;background:var(--blue);vertical-align:1px;}
+.soc-net.soc-facebook{background:var(--ink);}

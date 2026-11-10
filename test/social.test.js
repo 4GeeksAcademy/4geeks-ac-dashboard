@@ -132,3 +132,65 @@ test('sync: requests left running by a restart go back to the queue; one syncer 
   assert.strictEqual((await store.find('requests', { id: req.id }))[0].status, 'ok');
   await assert.rejects(sync.enqueue('delete-everything'), /type must be/);
 });
+
+// ---------------- analytics (lib/social/analytics.js) ----------------
+const { createAnalytics, periods } = require('../lib/social/analytics');
+
+async function loaded() {
+  const { store, fake } = await setup();
+  const sync = createSocialSync({ store, makeClient: () => client(fake), log: quiet });
+  await sync.prepareInitialLoad(3);
+  await sync.processRequests();
+  return { store, analytics: createAnalytics(store) };
+}
+
+test('periods: default last 28 days vs the 28 before; bad ranges refused', () => {
+  const p = periods({ from: '2026-10-01', to: '2026-10-28' });
+  assert.deepStrictEqual(p.compare, { from: '2026-09-03', to: '2026-09-30' });
+  assert.deepStrictEqual(periods({ from: '2026-10-01', to: '2026-10-28', compare: 'year' }).compare, { from: '2025-10-01', to: '2025-10-28' });
+  assert.strictEqual(periods({ compare: 'none' }).compare, null);
+  assert.throws(() => periods({ from: '2026-10-28', to: '2026-10-01' }), /after/);
+  assert.throws(() => periods({ from: '2020-01-01', to: '2026-10-01' }), /2 years/);
+});
+
+test('store: range filters work the same in memory', async () => {
+  const store = memoryStore();
+  await store.upsert('sites', [{ slug: 'a', name: 'A', market: null, sort: 1 }, { slug: 'b', name: 'B', market: null, sort: 5 }]);
+  assert.deepStrictEqual((await store.find('sites', { sort: { gte: 2, lte: 9 } })).map((s) => s.slug), ['b']);
+});
+
+test('analytics: overview only shows accounts switched on', async () => {
+  const { analytics } = await loaded();
+  const o = await analytics.overview({});
+  assert.deepStrictEqual(o.accounts.map((a) => a.username || a.name).sort(), ['4Geeks Academy', '4geeksacademy']);
+  const ig = o.accounts.find((a) => a.username === '4geeksacademy');
+  assert.strictEqual(ig.market, 'USA');
+  assert.strictEqual(ig.posts, 1);
+  assert.strictEqual(o.totals.posts, 2);
+});
+
+test('analytics: KPIs hide the change when the previous period has no data', async () => {
+  const { store, analytics } = await loaded();
+  const [ig] = await store.find('accounts', { username: '4geeksacademy' });
+  const k = (await analytics.accountKpis(ig.id, {})).kpis;
+  assert.strictEqual(k.followers.current, 6950);
+  assert.ok(k.views.current > 0);
+  assert.strictEqual(k.views.change_pct, null, 'no data in the previous 28 days');
+  assert.strictEqual(k.avg_post_engagement.current, 0.0862, 'interactions / reach of the one reel (69 / 800)');
+  await assert.rejects(analytics.accountKpis((await store.find('accounts', { username: '4geekseurope' }))[0].id, {}), /switched off/);
+});
+
+test('analytics: posts carry their latest metrics and the spend of their ads', async () => {
+  const { store, analytics } = await loaded();
+  const [usa] = await store.find('ad_accounts', { id: 'act_200000000000001' });
+  await syncAds(client(createFakeMeta()), store, usa, D.addDays(D.today(), -1), D.today());
+  await linkAdsToPosts(store);
+  const [ig] = await store.find('accounts', { username: '4geeksacademy' });
+  const [reel] = await analytics.posts(ig.id, { format: 'REELS' });
+  assert.strictEqual(reel.metrics.views, 1300);
+  assert.strictEqual(reel.metrics.paid_share, 0.2308);
+  assert.deepStrictEqual(reel.ads.spend, { USD: 12.5 });
+  assert.strictEqual((await analytics.postSeries(reel.id)).length, 1);
+  const demo = await analytics.demographics(ig.id);
+  assert.deepStrictEqual(demo.dimensions.country, [{ key: 'ES', value: 300 }]);
+});

@@ -363,8 +363,17 @@ Channels (`lib/attribution/channel.js`): gclid = Google Ads even without UTMs; f
 
 ## Social analytics (Nov 2026, in progress)
 
-Central RRSS moving into the Hub (`lib/social/`). Step 1: the data. Facebook pages and
-Instagram profiles are synced from Meta into Postgres; the screens come next.
+Central RRSS moving into the Hub (`lib/social/`, `public/social-*.js`). Facebook pages and
+Instagram profiles are synced from Meta into Postgres and shown in the sidebar section **Social**.
+
+- **Analytics:** every account switched on side by side (followers, growth, views, % organic,
+  interactions, posts, engagement), then per account: Community, Account, Posts, Reels (IG),
+  Organic vs paid and Demographics (IG). Period of 7 / 28 / 90 days or custom, compared with the
+  previous period or a year before; a change is hidden when the earlier period has too few days
+  with data. Instagram paid views are an estimate (total views − organic views).
+- **Social settings:** accounts and ad accounts on/off and their site; sites (add, rename,
+  market USA / Spain / LATAM, remove); sync status, failed steps and requests (refresh,
+  discover, load history). Changes are admin-only (editors see it read-only) and audited.
 
 - **What is synced:** accounts (discovered from the token), posts of the last 30 days
   with a daily snapshot of their metrics, daily account metrics, Instagram follower
@@ -375,11 +384,9 @@ Instagram profiles are synced from Meta into Postgres; the screens come next.
   First boot with no accounts: discover + 30 days of history.
 - **Accounts on/off:** only accounts switched on are synced. New accounts start off,
   except @4geeksacademy, @4geeksacademyes and @4geeksacademylatam and their Facebook
-  pages (`lib/social/defaults.js`). Admins switch them with
-  `PATCH /api/social/accounts/:id {active}`; switching one on loads its last 30 days.
-- **API:** `GET /api/social/status`, `PATCH /api/social/accounts/:id`,
-  `PATCH /api/social/ad-accounts/:id`, `POST /api/social/requests` (refresh / history /
-  discover, admin), `GET /api/social/requests/:id`.
+  pages (`lib/social/defaults.js`). Admins switch them in Social settings; switching one on
+  loads its last 30 days.
+- **API:** listed at the top of `lib/social/routes.js` (status, switches, sites, requests, analytics).
 - **Storage:** tables `social_*` in the same Postgres (`DATABASE_URL`); without it, memory only.
 - **Env:** `META_ACCESS_TOKEN` (required to turn it on), optional `META_GRAPH_API_VERSION`,
   `SOCIAL_SYNC_DISABLED=true`, `SOCIAL_TZ`.

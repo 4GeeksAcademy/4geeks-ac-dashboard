@@ -35,11 +35,13 @@ function createFakeMeta({ failFirst = {} } = {}) {
       return [200, { data: p.metric.split(',').map((name) => ({ name, period: 'lifetime', values: [{ value: vals[name] }] })) }];
     }
     // Instagram account insights
+    // Demographics first: it also sends metric_type=total_value.
+    if (path === 'ig-usa/insights' && p.metric === 'follower_demographics') {
+      const key = { country: 'ES', city: 'Madrid', 'age,gender': '25-34|M' }[p.breakdown];
+      return [200, { data: [{ name: 'follower_demographics', total_value: { breakdowns: [{ results: [{ dimension_values: key.split('|'), value: 300 }] }] } }] }];
+    }
     if (path === 'ig-usa/insights' && p.metric_type === 'total_value') {
       return [200, { data: p.metric.split(',').map((name) => ({ name, period: 'day', total_value: { value: 10 } })) }];
-    }
-    if (path === 'ig-usa/insights' && p.metric === 'follower_demographics') {
-      return [200, { data: [{ name: 'follower_demographics', total_value: { breakdowns: [{ results: [{ dimension_values: ['ES'], value: 300 }] }] } }] }];
     }
     if (path === 'ig-usa/insights') return [200, { data: [{ name: p.metric, period: 'day', values: [{ value: 7, end_time: endTime(1) }] }] }];
 
