@@ -374,6 +374,12 @@ Instagram profiles are synced from Meta into Postgres and shown in the sidebar s
 - **Social settings:** accounts and ad accounts on/off and their site; sites (add, rename,
   market USA / Spain / LATAM, remove); sync status, failed steps and requests (refresh,
   discover, load history). Changes are admin-only (editors see it read-only) and audited.
+- **Social calendar filled in** (`lib/social/calendar-fill.js`, after every hourly and daily
+  sync, or *Fill Social calendar* in Social settings): calendar posts with a post URL get
+  views, likes, comments, saves and shares from Meta (DMs are never touched; follows only when
+  empty), and every calendar account gets its weekly metrics for complete weeks (Monday–Sunday,
+  all 7 days with data) as `meta sync` rows. Weeks typed by hand are never changed. Calendar
+  accounts are matched by network and @handle, or by market when the handle is empty.
 
 - **What is synced:** accounts (discovered from the token), posts of the last 30 days
   with a daily snapshot of their metrics, daily account metrics, Instagram follower

@@ -26,7 +26,8 @@ async function renderSocialSettings(el) {
       <div class="panel-sub">${esc(s.sync.enabled ? ss('syncOn') : ss('syncOff'))}${s.sync.running ? ' · ' + esc(ss('running', { t: s.sync.running })) : ''} · ${esc(last || ss('neverRun'))}</div></div>
       <div class="hub-toolbar" style="margin:0"><button class="btn ghost sm" id="soc-discover">${esc(ss('discover'))}</button>
         <label class="hub-small">${esc(ss('historyDays'))} <input type="number" id="soc-days" class="ps-select" value="90" min="1" max="365" style="width:72px"></label>
-        <button class="btn ghost sm" id="soc-history">${esc(ss('history'))}</button></div></div>
+        <button class="btn ghost sm" id="soc-history">${esc(ss('history'))}</button>
+        <button class="btn ghost sm" id="soc-calendar" title="${esc(ss('calendarHelp'))}">${esc(ss('calendar'))}</button></div></div>
       ${s.sync.lastError ? `<p class="hub-small" style="color:var(--bad-ink)">${esc(s.sync.lastError)}</p>` : ''}
       <h3 class="hub-small">${esc(failed.length ? ss('failedSteps') : ss('allGood'))}</h3>
       ${failed.length ? `<ul class="hub-small">${failed.map((x) => `<li><strong>${esc(x.task)}</strong>${x.account_id ? ' · ' + esc(accName.get(x.account_id) || x.account_id) : ''} — ${esc(x.error || '')} <span class="muted">(${esc(when(x.finished_at))})</span></li>`).join('')}</ul>` : ''}
@@ -88,6 +89,7 @@ async function renderSocialSettings(el) {
   $$('[data-site-del]', el).forEach((b) => b.addEventListener('click', () => { if (confirm(ss('confirmRemoveSite'))) send(`/api/social/sites/${b.dataset.siteDel}`, 'DELETE'); }));
   $('#soc-site-add', el).addEventListener('click', () => { const name = $('#soc-site-new', el).value.trim(); if (name) send('/api/social/sites', 'POST', { name }); });
   $('#soc-discover', el).addEventListener('click', () => send('/api/social/requests', 'POST', { type: 'discover' }, ss('discoverQueued')));
+  $('#soc-calendar', el).addEventListener('click', () => send('/api/social/requests', 'POST', { type: 'calendar' }, ss('calendarQueued')));
   $('#soc-history', el).addEventListener('click', () => send('/api/social/requests', 'POST', { type: 'history', params: { days: Number($('#soc-days', el).value) || 30 } }, ss('historyQueued')));
 }
 

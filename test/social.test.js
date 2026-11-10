@@ -194,3 +194,59 @@ test('analytics: posts carry their latest metrics and the spend of their ads', a
   const demo = await analytics.demographics(ig.id);
   assert.deepStrictEqual(demo.dimensions.country, [{ key: 'ES', value: 300 }]);
 });
+
+// ---------------- Social calendar fill (lib/social/calendar-fill.js) ----------------
+const os = require('os');
+const fs = require('fs');
+const path = require('path');
+const { fillCalendar, postKey, weekStart } = require('../lib/social/calendar-fill');
+
+function hubFileStore() {
+  // The Social calendar's own store (lib/hub/store.js), on a throwaway folder.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hub-social-'));
+  const prev = { url: process.env.DATABASE_URL, dir: process.env.HUB_DATA_DIR };
+  delete process.env.DATABASE_URL; process.env.HUB_DATA_DIR = dir;
+  delete require.cache[require.resolve('../lib/hub/store')];
+  const store = require('../lib/hub/store').createHubStore();
+  if (prev.url !== undefined) process.env.DATABASE_URL = prev.url;
+  if (prev.dir === undefined) delete process.env.HUB_DATA_DIR; else process.env.HUB_DATA_DIR = prev.dir;
+  return store;
+}
+
+test('calendar fill: post URLs match however they were pasted; weeks start on Monday', () => {
+  assert.strictEqual(postKey('https://www.instagram.com/reel/AAA/'), 'ig:AAA');
+  assert.strictEqual(postKey('instagram.com/4geeksacademy/p/AAA?igsh=x'), 'ig:AAA', 'without https too');
+  assert.strictEqual(postKey('https://instagram.com/4geeksacademy/reel/AAA?igsh=x'), 'ig:AAA');
+  assert.strictEqual(postKey('https://m.facebook.com/1/posts/2/'), postKey('https://www.facebook.com/1/posts/2'));
+  assert.strictEqual(weekStart('2026-11-15'), '2026-11-09');
+  assert.strictEqual(weekStart('2026-11-09'), '2026-11-09');
+});
+
+test('calendar fill: results come from Meta, hand-typed dms and weeks are kept', async () => {
+  const { store } = await loaded();
+  const hub = hubFileStore();
+  const post = await hub.create('post', { account: 'usa_ig', date: D.today(), status: 'published', post_url: 'https://www.instagram.com/reel/AAA/?igsh=abc', results: { views: 1, dms: 3 } }, 'tester');
+  await hub.create('post', { account: 'usa_ig', date: D.today(), status: 'idea' }, 'tester');
+  const manual = await hub.create('metric', { account: 'usa_ig', week_start: '2026-09-01', views: 9079, source: 'weekly report' }, 'tester');
+  // A full week of daily views for yesterday's week, and half of the week before (must be skipped).
+  const [ig] = await store.find('accounts', { username: '4geeksacademy' });
+  const ws = weekStart(D.addDays(D.today(), -1));
+  const day = (d, i) => ({ account_id: ig.id, day: D.addDays(d, i), metric: 'views', breakdown: '', value: 100 });
+  await store.upsert('account_metrics', [...Array(7)].map((_, i) => day(ws, i)));
+  await store.upsert('account_metrics', [...Array(3)].map((_, i) => day(D.addDays(ws, -7), i)));
+  const nextWeek = new Date(D.addDays(ws, 7) + 'T12:00:00Z'); // the Monday after: that week is now complete
+
+  const res = await fillCalendar(store, hub, { now: nextWeek });
+  assert.ok(res.accounts_matched.includes('usa_ig'));
+  assert.strictEqual(res.posts_filled, 1);
+  const p = await hub.get('post', post.id);
+  assert.deepStrictEqual([p.results.views, p.results.likes, p.results.dms, p.results_source], [1300, 50, 3, 'meta']);
+  assert.strictEqual(res.weeks_filled, 1, 'only the complete week');
+  const metrics = (await hub.list('metric')).filter((m) => m.source === 'meta sync');
+  assert.ok(metrics.every((m) => m.id.startsWith('meta-usa_ig-') && weekStart(m.week_start) === m.week_start));
+  assert.deepStrictEqual([metrics[0].week_start, metrics[0].views, metrics[0].followers], [ws, 700, 6950]);
+  assert.deepStrictEqual(await hub.get('metric', manual.id), manual, 'hand-typed week untouched');
+
+  const again = await fillCalendar(store, hub, { now: nextWeek });
+  assert.deepStrictEqual([again.posts_filled, again.weeks_filled], [0, 0], 'nothing rewritten when nothing changed');
+});

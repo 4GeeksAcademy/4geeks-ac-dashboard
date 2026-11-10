@@ -33,6 +33,8 @@ const SOC_STR = {
     saved: 'Saved', requests: 'Recent requests', r_pending: 'Pending', r_running: 'Running', r_ok: 'Done', r_error: 'Error', currency: 'Currency',
     storageMemory: 'No DATABASE_URL: Social data lives in memory and is lost on restart.',
     adminOnly: 'Read-only: only admins can change these settings.', withPaidViews: 'Posts with paid views', noPosts: 'No posts in this period.',
+    calendar: 'Fill Social calendar', calendarQueued: 'Social calendar fill queued',
+    calendarHelp: 'Copies Meta results into the Social calendar posts that have a post URL, and fills the weekly account metrics. It also runs every hour.',
   },
   es: {
     analytics: 'Analítica', allAccounts: 'Todas las cuentas', back: 'Todas las cuentas', account: 'Cuenta', site: 'Sede', market: 'Mercado',
@@ -62,6 +64,8 @@ const SOC_STR = {
     saved: 'Guardado', requests: 'Solicitudes recientes', r_pending: 'Pendiente', r_running: 'En curso', r_ok: 'Hecha', r_error: 'Error', currency: 'Moneda',
     storageMemory: 'Sin DATABASE_URL: los datos de Social viven en memoria y se pierden al reiniciar.',
     adminOnly: 'Solo lectura: solo los admins pueden cambiar estos ajustes.', withPaidViews: 'Publicaciones con views pagadas', noPosts: 'No hay publicaciones en este periodo.',
+    calendar: 'Rellenar Calendario social', calendarQueued: 'Relleno del Calendario social en cola',
+    calendarHelp: 'Copia los resultados de Meta en los posts del Calendario social que tienen URL, y rellena las métricas semanales de cuenta. También se hace cada hora.',
   },
 };
 const ss = (k, vars) => { let s = (SOC_STR[LANG] || SOC_STR.en)[k] ?? SOC_STR.en[k] ?? k; if (vars) Object.entries(vars).forEach(([a, b]) => { s = s.replace(`{${a}}`, b); }); return s; };
