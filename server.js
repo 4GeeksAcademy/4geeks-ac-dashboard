@@ -660,6 +660,9 @@ require('./lib/proposals/routes').mountProposals(app, requireAuth, proposalStore
 // Marketing Hub: Events tracker (Luma) + Social organic calendar.
 require('./lib/hub/routes').mountHub(app, requireAuth);
 
+// Social: Meta analytics synced into Postgres (lib/social). Pauses during the AC refresh.
+require('./lib/social/routes').mountSocial(app, { requireAuth, requireAdmin: auth.requireAdmin, isBusy: () => refreshing });
+
 
 app.get('/api/status', (req, res) => {
   res.json({
