@@ -18,7 +18,10 @@ async function renderSocialSettings(el) {
   const accName = new Map(s.accounts.map((a) => [a.id, socAccName(a)]));
   const when = (d) => (d ? new Date(d).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—');
   const last = Object.entries(s.sync.lastRun || {}).map(([k, v]) => `${k} ${when(v.at)} (${v.seconds} s)`).join(' · ');
-  const meta = s.accounts.filter((a) => a.platform === 'meta');
+  // Every account (Meta and TikTok) has one on/off switch. The ad accounts listed are Meta's:
+  // a TikTok ad account is switched with its TikTok account above.
+  const meta = s.accounts;
+  const metaAds = s.adAccounts.filter((a) => a.platform === 'meta');
 
   el.innerHTML = `
     ${s.storage === 'memory' ? `<div class="ps-warn">${icon('alert')}<span>${esc(ss('storageMemory'))}</span></div>` : ''}
@@ -46,7 +49,7 @@ async function renderSocialSettings(el) {
     <div class="grid2">
       <div class="panel"><div class="panel-head"><h2>${esc(ss('adAccounts'))}</h2></div>
         <div class="tablewrap"><table><thead><tr><th>${esc(ss('active'))}</th><th>${esc(ss('account'))}</th><th>${esc(ss('site'))}</th><th>${esc(ss('currency'))}</th></tr></thead><tbody>
-          ${s.adAccounts.map((a) => `<tr><td><input type="checkbox" data-ad-active="${esc(a.id)}" ${a.active ? 'checked' : ''} aria-label="${esc(ss('active'))}"></td>
+          ${metaAds.map((a) => `<tr><td><input type="checkbox" data-ad-active="${esc(a.id)}" ${a.active ? 'checked' : ''} aria-label="${esc(ss('active'))}"></td>
             <td><strong>${esc(a.name || a.id)}</strong><div class="muted hub-small">${esc(a.id)}</div></td>
             <td><select class="ps-select" data-ad-site="${esc(a.id)}">${siteOpts(a.site_id)}</select></td><td>${esc(a.currency || '—')}</td></tr>`).join('')}
         </tbody></table></div></div>

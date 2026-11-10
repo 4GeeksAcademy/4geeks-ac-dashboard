@@ -1,12 +1,14 @@
 'use strict';
 /* Social → Analytics. Every account switched on side by side, and one account's detail:
-   Community, Account, Posts, Reels (IG), Organic vs paid, Demographics (IG).
+   Community, Account, Posts, Reels (IG), Organic vs paid, Demographics (IG); TikTok: ads and promoted posts.
    Data: /api/social/analytics/* (lib/social/analytics.js). */
 
 const soc = { accountId: null, tab: 'community', sort: 'recent', overview: null };
 const SOC_TABS = {
   instagram: ['community', 'account', 'posts', 'reels', 'paid', 'demographics'],
   facebook: ['community', 'account', 'posts', 'paid'],
+  // Ads only, until TikTok approves access to the organic account.
+  tiktok: ['ads', 'promoted'],
 };
 
 async function renderSocialAnalytics(el) {
@@ -46,7 +48,7 @@ function socOverview(el) {
 async function socDetail(el, acc) {
   const tabs = SOC_TABS[acc.network] || SOC_TABS.facebook;
   if (!tabs.includes(soc.tab)) soc.tab = tabs[0];
-  const bar = socPeriodBar(() => renderSocialAnalytics(el), { compare: ['community', 'account'].includes(soc.tab) });
+  const bar = socPeriodBar(() => renderSocialAnalytics(el), { compare: ['community', 'account', 'ads'].includes(soc.tab) });
   el.innerHTML = `
     <div class="hub-toolbar">
       <button class="btn ghost sm" id="soc-back">← ${esc(ss('back'))}</button>
@@ -62,7 +64,7 @@ async function socDetail(el, acc) {
   $$('#soc-tabs button', el).forEach((b) => b.addEventListener('click', () => { soc.tab = b.dataset.v; renderSocialAnalytics(el); }));
   const body = $('#soc-body', el);
   try {
-    await ({ community: socCommunity, account: socAccount, posts: socPosts, reels: socReels, paid: socPaid, demographics: socDemographics })[soc.tab](body, acc);
+    await ({ community: socCommunity, account: socAccount, posts: socPosts, reels: socReels, paid: socPaid, demographics: socDemographics, ads: socTikTokAds, promoted: socTikTokPosts })[soc.tab](body, acc);
   } catch (e) { socError(body, e); }
 }
 
@@ -221,6 +223,46 @@ async function socDemographics(body, acc) {
   body.innerHTML = `<p class="muted hub-small">${esc(ss('demoAsOf', { d: fmtDay(d.day) }))}</p>
     <div class="grid2">${list(d.dimensions.country, ss('countries'))}${list(d.dimensions.city, ss('cities'))}</div>
     ${list(d.dimensions.age_gender, ss('ageGender'))}`;
+}
+
+// ---------------- TikTok (ads) ----------------
+const socTtMoney = (v, cur) => (v == null ? '—' : `${Number(v).toLocaleString(locale(), { maximumFractionDigits: 2 })} ${cur || ''}`.trim());
+/** Note shown when the period has no spend (campaigns paused), with the last day that had some. */
+const socNoSpend = (d) => (d.kpis.spend.current ? '' : `<div class="ps-warn">${icon('alert')}<span>${esc(ss('ttNoSpend', { d: d.last_spend_day ? fmtDay(d.last_spend_day, { day: 'numeric', month: 'short', year: 'numeric' }) : '—' }))}</span></div>`);
+
+async function socTikTokAds(body, acc) {
+  const d = await socApi(acc, 'tiktok-ads'); const K = d.kpis; const cur = d.currency;
+  body.innerHTML = `${socNoSpend(d)}
+    <div class="kpis k8">
+      ${socKpi(ss('spend'), K.spend, { fmt: (v) => socTtMoney(v, cur) })}
+      ${socKpi(ss('ttImpressions'), K.impressions)}
+      ${socKpi(ss('ttPlays'), K.plays)}
+      ${socKpi(ss('ttClicks'), K.clicks)}
+      ${socKpi('CTR', K.ctr, { fmt: socPct })}
+      ${socKpi('CPM', K.cpm, { fmt: (v) => socTtMoney(v, cur) })}
+      ${socKpi(ss('ttFollows'), K.follows)}
+      ${socKpi(ss('ttAdsWithSpend'), K.ads)}
+    </div>
+    <div class="panel"><div class="panel-head"><h2>${esc(ss('spend'))}</h2></div><div class="chart-box sm"><canvas id="soc-c-tt"></canvas></div></div>
+    <div class="panel"><div class="panel-head"><div><h2>${esc(ss('ttIdentities'))}</h2><div class="panel-sub">${esc(ss('ttIdentitiesHelp'))}</div></div></div>
+      ${d.identities.length ? `<div class="tablewrap"><table><thead><tr><th>${esc(ss('ttIdentity'))}</th><th>${esc(ss('ttType'))}</th><th class="num">${esc(ss('spend'))}</th><th class="num">${esc(ss('ttImpressions'))}</th><th class="num">${esc(ss('ttPlays'))}</th><th class="num">CTR</th></tr></thead><tbody>
+        ${d.identities.map((x) => `<tr><td>${esc(x.identity || '—')}</td><td class="muted">${esc(x.type || '—')}</td><td class="num">${socTtMoney(x.spend, cur)}</td><td class="num">${fmtN(x.impressions)}</td><td class="num">${fmtN(x.plays)}</td><td class="num">${socPct(x.ctr)}</td></tr>`).join('')}
+      </tbody></table></div>` : '<p class="muted">—</p>'}</div>`;
+  socChart('soc-c-tt', 'bar', d.series.map((x) => x.day), [{ label: ss('spend'), data: d.series.map((x) => x.spend), backgroundColor: cssVar('--blue') }]);
+}
+
+async function socTikTokPosts(body, acc) {
+  const d = await socApi(acc, 'tiktok-ads'); const cur = d.currency;
+  const onPosts = d.posts.reduce((a, p) => a + (p.spend || 0), 0);
+  body.innerHTML = `${socNoSpend(d)}
+    <div class="kpis">
+      ${socKpi(ss('ttPromotedPosts'), d.posts.length, { compare: false })}
+      ${socKpi(ss('ttSpendOnPosts'), onPosts, { fmt: (v) => socTtMoney(v, cur), compare: false })}
+      ${socKpi(ss('ttShareOnPosts'), d.kpis.spend.current ? onPosts / d.kpis.spend.current : null, { fmt: socPct, compare: false, help: ss('ttShareHelp') })}
+    </div>
+    <div class="panel">${d.posts.length ? `<div class="tablewrap"><table><thead><tr><th>${esc(ss('ttPost'))}</th><th>${esc(ss('ttIdentity'))}</th><th>${esc(ss('ttDays'))}</th><th class="num">${esc(ss('spend'))}</th><th class="num">${esc(ss('ttImpressions'))}</th><th class="num">${esc(ss('ttPlays'))}</th><th class="num">${esc(ss('likes'))}</th><th class="num">${esc(ss('ttFollows'))}</th></tr></thead><tbody>
+      ${d.posts.map((p) => `<tr><td class="hub-small">${esc(p.item_id)}</td><td>${esc(p.identity || '—')}</td><td class="hub-small">${esc(fmtDay(p.first_day))} – ${esc(fmtDay(p.last_day))}</td><td class="num">${socTtMoney(p.spend, cur)}</td><td class="num">${fmtN(p.impressions)}</td><td class="num">${fmtN(p.plays)}</td><td class="num">${fmtN(p.likes)}</td><td class="num">${fmtN(p.follows)}</td></tr>`).join('')}
+    </tbody></table></div>` : `<p class="muted">${esc(ss('noPosts'))}</p>`}</div>`;
 }
 
 window.renderSocialAnalytics = renderSocialAnalytics;

@@ -250,3 +250,68 @@ test('calendar fill: results come from Meta, hand-typed dms and weeks are kept',
   const again = await fillCalendar(store, hub, { now: nextWeek });
   assert.deepStrictEqual([again.posts_filled, again.weeks_filled], [0, 0], 'nothing rewritten when nothing changed');
 });
+
+// ---------------- TikTok (lib/social/tiktok) ----------------
+const { createTikTokClient } = require('../lib/social/tiktok/client');
+const { createFakeTikTok, ADV_ES } = require('./social-fake-tiktok');
+
+async function withTikTok() {
+  const { store, fake } = await setup();
+  const tt = createFakeTikTok();
+  const ttClient = () => createTikTokClient({ token: 'tt-token', appId: 'app', secret: 's', fetch: tt.fetch, transientPauseMs: 0 });
+  const sync = createSocialSync({ store, makeClient: () => client(fake), makeTikTok: ttClient, log: quiet });
+  return { store, tt, sync };
+}
+
+test('TikTok: discovered accounts start off; nothing is called until one is switched on', async () => {
+  const { store, tt, sync } = await withTikTok();
+  await sync.enqueue('discover');
+  await sync.processRequests();
+  const accounts = await store.find('accounts', { platform: 'tiktok' });
+  assert.strictEqual(accounts.length, 2);
+  assert.ok(accounts.every((a) => a.active === false));
+  const sites = Object.fromEntries((await store.find('sites', {})).map((s) => [s.id, s.slug]));
+  assert.strictEqual(sites[accounts.find((a) => a.external_id === ADV_ES).site_id], 'espana');
+  assert.ok(!tt.calls.some((c) => c.path === 'report/integrated/get/'));
+  assert.ok(tt.calls.every((c) => c.token === 'tt-token'));
+});
+
+test('TikTok: spend per ad, unattributed campaign spend kept apart, totals match TikTok', async () => {
+  const { store, sync } = await withTikTok();
+  await sync.enqueue('discover');
+  await sync.processRequests();
+  const [es] = await store.find('accounts', { external_id: ADV_ES });
+  await store.update('accounts', { id: es.id }, { active: true });
+  await sync.enqueue('history', { params: { days: 1, account_ids: [es.id] } });
+  await sync.processRequests();
+  const ads = await store.find('ads', { ad_account_id: ADV_ES });
+  assert.ok(ads.some((a) => a.ad_id === 'A9'), 'deleted ad kept for its spend');
+  assert.ok(ads.some((a) => a.ad_id === 'cC1' && a.identity_type === 'UNATTRIBUTED'));
+  assert.ok(!ads.some((a) => a.ad_id === 'cC2'), 'no gap, no unattributed row');
+
+  const d = await createAnalytics(store).tiktokAds(es.id, { from: D.addDays(D.today(), -1), to: D.today() });
+  assert.strictEqual(d.kpis.spend.current, 2 * (10 + 5 + 2.5 + 0.5 + 4), 'two days, including unattributed');
+  assert.strictEqual(d.kpis.ads.current, 4, 'unattributed is not an ad');
+  const v1 = d.posts.find((p) => p.item_id === 'V1');
+  assert.deepStrictEqual([v1.spend, v1.ads, v1.identity], [30, 2, '4Geeks Academy ES']);
+  assert.deepStrictEqual(d.identities.map((x) => x.identity), ['4Geeks Academy ES', 'CreatorDev', null]);
+  assert.strictEqual(d.currency, 'EUR');
+
+  // Loading again replaces the gap instead of adding to it.
+  await sync.enqueue('refresh', { accountId: es.id });
+  await sync.processRequests();
+  assert.strictEqual((await createAnalytics(store).tiktokAds(es.id, { from: D.addDays(D.today(), -1), to: D.today() })).kpis.spend.current, 44);
+});
+
+test('TikTok: no change vs a previous period that has no data loaded', async () => {
+  const { store, sync } = await withTikTok();
+  await sync.enqueue('discover');
+  await sync.processRequests();
+  const [es] = await store.find('accounts', { external_id: ADV_ES });
+  await store.update('accounts', { id: es.id }, { active: true });
+  await sync.enqueue('history', { params: { days: 1, account_ids: [es.id] } });
+  await sync.processRequests();
+  const k = (await createAnalytics(store).tiktokAds(es.id, {})).kpis;
+  assert.ok(k.spend.current > 0);
+  assert.deepStrictEqual([k.spend.previous, k.spend.change_pct], [null, null]);
+});

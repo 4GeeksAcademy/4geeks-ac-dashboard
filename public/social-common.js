@@ -10,6 +10,10 @@ const SOC_STR = {
     clickAccount: 'Click an account to see its detail', comparison: 'Accounts side by side',
     last7: '7 days', last28: '28 days', last90: '90 days', custom: 'Custom', from: 'From', to: 'To',
     cmpPrev: 'vs previous period', cmpYear: 'vs a year before', cmpNone: 'No comparison', notComparable: 'not comparable',
+    tab_ads: 'Ads', tab_promoted: 'Promoted posts', ttImpressions: 'Impressions', ttPlays: 'Video plays', ttClicks: 'Clicks', ttFollows: 'Followers gained', ttAdsWithSpend: 'Ads with spend',
+    ttIdentities: 'Who signs the ads', ttIdentitiesHelp: 'The brand account, one authorised through Business Center, or a creator (Spark Ads).', ttIdentity: 'Signed by', ttType: 'Type',
+    ttPromotedPosts: 'Promoted posts', ttSpendOnPosts: 'Spend on posts', ttShareOnPosts: '% of spend on posts', ttShareHelp: 'TikTok does not split part of some campaigns\' spend by ad: that part counts in the total, not per post.', ttPost: 'TikTok post', ttDays: 'Days with spend',
+    ttNoSpend: 'No spend in this period. Last day with spend: {d}.',
     tab_community: 'Community', tab_account: 'Account', tab_posts: 'Posts', tab_reels: 'Reels', tab_paid: 'Organic vs paid', tab_demographics: 'Demographics',
     followers: 'Followers', followers_growth: 'Net growth', new_followers: 'New followers', unfollows: 'Unfollows', profile_visits: 'Profile visits',
     views: 'Views', views_organic: 'Organic views', views_paid: 'Paid views', organic_share: '% organic', avg_daily_reach: 'Avg daily reach',
@@ -42,6 +46,10 @@ const SOC_STR = {
     clickAccount: 'Haz clic en una cuenta para ver su detalle', comparison: 'Cuentas lado a lado',
     last7: '7 días', last28: '28 días', last90: '90 días', custom: 'Personalizado', from: 'Desde', to: 'Hasta',
     cmpPrev: 'vs periodo anterior', cmpYear: 'vs un año antes', cmpNone: 'Sin comparar', notComparable: 'no comparable',
+    tab_ads: 'Anuncios', tab_promoted: 'Posts promocionados', ttImpressions: 'Impresiones', ttPlays: 'Reproducciones', ttClicks: 'Clics', ttFollows: 'Seguidores ganados', ttAdsWithSpend: 'Anuncios con gasto',
+    ttIdentities: 'Quién firma los anuncios', ttIdentitiesHelp: 'La cuenta de la marca, otra autorizada por Business Center o un creador (Spark Ads).', ttIdentity: 'Firma', ttType: 'Tipo',
+    ttPromotedPosts: 'Posts promocionados', ttSpendOnPosts: 'Gasto en posts', ttShareOnPosts: '% del gasto en posts', ttShareHelp: 'TikTok no reparte entre anuncios parte del gasto de algunas campañas: cuenta en el total, no por post.', ttPost: 'Post de TikTok', ttDays: 'Días con gasto',
+    ttNoSpend: 'Sin gasto en este periodo. Último día con gasto: {d}.',
     tab_community: 'Comunidad', tab_account: 'Cuenta', tab_posts: 'Publicaciones', tab_reels: 'Reels', tab_paid: 'Orgánico vs pagado', tab_demographics: 'Demografía',
     followers: 'Seguidores', followers_growth: 'Crecimiento neto', new_followers: 'Seguidores nuevos', unfollows: 'Bajas', profile_visits: 'Visitas al perfil',
     views: 'Views', views_organic: 'Views orgánicas', views_paid: 'Views pagadas', organic_share: '% orgánico', avg_daily_reach: 'Alcance medio diario',
@@ -112,7 +120,7 @@ function socPeriodBar(onChange, { compare = true } = {}) {
 const socPct = (x) => (x == null ? '—' : `${(x * 100).toLocaleString(locale(), { maximumFractionDigits: 1 })}%`);
 const socSigned = (n) => (n == null ? '—' : `${n > 0 ? '+' : ''}${fmtN(n)}`);
 const socAccName = (a) => (a.username ? `@${a.username}` : a.name);
-const socNet = (n) => `<span class="soc-net soc-${esc(n)}">${esc(n === 'instagram' ? 'IG' : n === 'facebook' ? 'FB' : n)}</span>`;
+const socNet = (n) => `<span class="soc-net soc-${esc(n)}">${esc({ instagram: 'IG', facebook: 'FB', tiktok: 'TT' }[n] || n)}</span>`;
 const socMoney = (spend) => (spend ? Object.entries(spend).map(([cur, v]) => `${Number(v).toLocaleString(locale(), { maximumFractionDigits: 0 })} ${cur}`).join(' · ') : '—');
 
 /** KPI tile. k = {current, previous, change_pct} from the API, or a plain number. */

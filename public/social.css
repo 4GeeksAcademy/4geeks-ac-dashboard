@@ -4,3 +4,4 @@
 .soc-acc .muted{font-size:13px;font-weight:600;}
 .soc-net{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:18px;padding:0 4px;border-radius:5px;font-size:10px;font-weight:800;color:#fff;background:var(--blue);vertical-align:1px;}
 .soc-net.soc-facebook{background:var(--ink);}
+.soc-net.soc-tiktok{background:#000;}

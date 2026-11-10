@@ -374,6 +374,13 @@ Instagram profiles are synced from Meta into Postgres and shown in the sidebar s
 - **Social settings:** accounts and ad accounts on/off and their site; sites (add, rename,
   market USA / Spain / LATAM, remove); sync status, failed steps and requests (refresh,
   discover, load history). Changes are admin-only (editors see it read-only) and audited.
+- **TikTok (ads only**, until TikTok approves access to the organic account; `lib/social/tiktok/`):
+  ad accounts are discovered daily and appear as TikTok accounts (they start off). For the ones
+  switched on: daily spend, impressions, plays, clicks and follows per ad, the TikTok post each ad
+  uses and who signs it. Campaign spend TikTok doesn't split by ad is kept as an "Unattributed"
+  row so totals match TikTok; it never counts per post. Analytics → a TikTok account: Ads and
+  Promoted posts. Env: `TIKTOK_ACCESS_TOKEN`, `TIKTOK_APP_ID`, `TIKTOK_APP_SECRET` (without the
+  token TikTok is skipped).
 - **Social calendar filled in** (`lib/social/calendar-fill.js`, after every hourly and daily
   sync, or *Fill Social calendar* in Social settings): calendar posts with a post URL get
   views, likes, comments, saves and shares from Meta (DMs are never touched; follows only when
