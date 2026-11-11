@@ -512,6 +512,7 @@ const scoreJourneys = createScoreJourneys({
         try {
             adsSync.logRows().forEach((x) => {
                 if (!x.sentAt || !['uploaded', 'queued', 'failed'].includes(x.status)) return;
+                if (x.basis === 'stage') return; // sent on its pipeline stage (Spain): not a rating a rep gave
                 const sc = { very_good: 'Very Good', good: 'Good' }[x.tier]; if (!sc) return;
                 (out[String(x.dealId)] || (out[String(x.dealId)] = [])).push([x.sentAt, sc]);
             });
