@@ -207,7 +207,7 @@ const FILTER_BY_KEY = Object.fromEntries(FILTERS.map((f) => [f.key, f]));
 const fVals = (f, r) => (f.vals ? f.vals(r) : (r[f.key] != null && r[f.key] !== '' ? [String(r[f.key])] : []));
 const fLabel = (f, v) => (f.label ? f.label(v) : v);
 
-const VIEWS = ['overview', 'enrollments', 'recommendations', 'compare', 'individual', 'ads', 'adsync', 'ai', 'press', 'events', 'social', 'proposals', 'settings'];
+const VIEWS = ['overview', 'enrollments', 'recommendations', 'compare', 'individual', 'ads', 'adsync', 'aifunnel', 'ai', 'press', 'events', 'social', 'proposals', 'settings'];
 const state = { view: 'overview', region: 'all', q: '', dateFrom: '', dateTo: '', preset: '', gran: 'auto', page: 1, sort: { field: 'date', dir: 'desc' }, groupBy: 'assignTo', aiScope: 'both', adsRegion: 'US', recUsePeriod: '0' };
 FILTERS.forEach((f) => { state[f.key] = []; });
 
@@ -353,6 +353,7 @@ const NAV = [
   { section: 'navSectionMarketing' },
   { view: 'ads', icon: 'ads' },
   { view: 'adsync', icon: 'upload' },
+  { view: 'aifunnel', icon: 'mail' },
   { view: 'ai', icon: 'ai' },
   { view: 'press', icon: 'press' },
   { section: 'navSectionContent' },
@@ -817,11 +818,15 @@ async function openLead(id) {
         ${kvRow(t('reasons'), r.reasons && r.reasons.length ? r.reasons.map((x) => `<span class="badge plain b-lostc" style="margin:0 4px 4px 0">${esc(x)}</span>`).join('') : null, true)}
         ${kvRow(t('offerSent'), r.offerSentDate ? fmtDate(r.offerSentDate, { day: 'numeric', month: 'short', year: 'numeric' }) : null)}${kvRow(r.bucket === 'Won' ? t('wonDate') : t('lostDate'), r.bucket === 'Won' ? (r.wonDate ? fmtDate(r.wonDate, { day: 'numeric', month: 'short', year: 'numeric' }) : null) : (r.lostDate ? fmtDate(r.lostDate, { day: 'numeric', month: 'short', year: 'numeric' }) : null))}
         ${kvRow(t('feedback'), r.feedback ? esc(r.feedback) : null, true)}</dl></div>
+      <div class="lsec" id="ld-cdp" data-deal="${esc(r.id)}"><h3>${icon('users')}${esc(t('cdp_title'))}</h3><div class="skeleton" style="width:55%"></div><div class="muted" style="font-size:12px">${esc(t('cdp_loading'))}</div></div>
       <div class="lsec" id="ld-eng"><h3>${icon('mail')}${esc(t('leadEngagement'))}</h3><div class="skeleton" style="width:60%"></div><div class="skeleton" style="width:85%"></div><div class="muted" style="font-size:12px">${esc(t('loadingEngagement'))}</div></div>
     </div>`;
   $('[data-close]', d).addEventListener('click', closeDrawers);
   openDrawer('#lead-drawer');
   d.querySelector('.dr-body').scrollTop = 0;
+
+  // What the CDP knows about this lead (background; public/sources.js).
+  if (window.loadLeadCdp) window.loadLeadCdp(r.id);
 
   // Engagement (background).
   const t0 = performance.now();
@@ -1256,6 +1261,8 @@ function renderAll(o = {}) {
   if (state.view === 'press') { $('#filterbar').hidden = true; $('#active-chips').hidden = true; renderPress(el); return; }
   // Google Ads sync log has its own toolbar (lib/pipeline/ads-sync.js, public/pipeline.js).
   if (state.view === 'adsync') { $('#filterbar').hidden = true; $('#active-chips').hidden = true; renderAdsSync(el); return; }
+  // AI Fluency funnel: leads that live in Brevo, not in the lead filters (lib/sources/brevo.js, public/sources.js).
+  if (state.view === 'aifunnel') { $('#filterbar').hidden = true; $('#active-chips').hidden = true; window.renderBrevo(el); return; }
   const isProposals = state.view === 'proposals';
   $('#filterbar').hidden = isProposals; $('#active-chips').hidden = isProposals;
   // Events and Social have their own toolbars; they don't use the lead filters or AC data.

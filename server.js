@@ -640,6 +640,33 @@ app.post('/api/pipeline/meta-sync/result', async (req, res) => {
 });
 if (client) metaSync.start();
 
+// ---------------------------------------------------------------------------
+// Other sources, both read-only (lib/sources/*):
+//   Brevo  the AI Fluency / AI Flex funnel: lists + automation emails, joined
+//          to CRM deals and enrollments by email. Own page ("AI Fluency funnel").
+//   CDP    what the 4Geeks CDP knows about one lead, shown in the lead drawer.
+// Each stays off until its key is set (BREVO_API_KEY, CDP_TOKEN).
+// ---------------------------------------------------------------------------
+const { createBrevo } = require('./lib/sources/brevo');
+const { createCdp } = require('./lib/sources/cdp');
+const brevo = createBrevo({ getRecords: () => cache.records, getEnrollments: () => enrollments.get() });
+const cdp = createCdp();
+app.get('/api/sources/brevo', requireAuth, (req, res) => {
+    const v = brevo.view();
+    if (req.query.summary) return res.json({ enabled: v.enabled, at: v.at, error: v.error, people: v.rows.length, lists: v.lists });
+    res.json(v);
+});
+app.post('/api/sources/brevo/refresh', requireAuth, (req, res) => { brevo.refresh(); res.json({ started: true }); });
+app.get('/api/sources/cdp', requireAuth, async (req, res) => res.json(await cdp.status()));
+app.get('/api/sources/cdp/lead/:id', requireAuth, async (req, res) => {
+    if (!cdp.enabled) return res.json({ enabled: false });
+    const rec = findRecord(req.params.id);
+    if (!rec) return res.status(404).json({ error: 'Lead not in the current data window' });
+    try { res.json({ enabled: true, ...(await cdp.person(rec.email)) }); } catch (e) { res.status(502).json({ error: e.message }); }
+});
+brevo.start();
+cdp.start();
+
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body || {};
   const r = await auth.login(username, password).catch(() => null);
