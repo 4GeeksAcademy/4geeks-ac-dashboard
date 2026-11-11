@@ -835,7 +835,7 @@ function leadIntelHtml(r, data) {
     as_on: 'Sync is on · {r} · leads created in the last {d} days · last run {t}', as_off: 'Sync is off. Set ADS_SYNC_WEBHOOK_URL and ADS_SYNC_KEY on Railway to turn it on.',
     as_sendNow: 'Send pending now', as_retryFailed: 'Retry all failed ({n})', as_retry: 'Retry', as_search: 'Search deal # or name…',
     as_lead: 'Lead', as_tier: 'Tier', as_status: 'Status', as_match: 'Matched by', as_value: 'Value', as_sent: 'Sent', as_answer: 'Google answer', as_reason: 'Reason',
-    as_gclid: 'Click ID', as_email: 'Hashed email', as_vg: 'Very Good', as_good: 'Good', as_none: 'Nothing here.', as_stale: 'no answer after 1h',
+    as_gclid: 'Click ID', as_email: 'Hashed email', as_vg: 'Very Good', as_good: 'Good', as_none: 'Nothing here.', as_stale: 'no answer after 1h', as_byStage: 'by stage', as_byStageTip: 'Spain: qualified by the pipeline stage it reached (strong feedback, offer sent or enrolled), not by the admissions score.',
     as_retried: '{n} queued again', as_sent2: 'Sent {n} pending leads', as_lastErr: 'Last error: {e}', as_attempts: '{n} attempts',
     as_note: 'Every market has its own Very Good and Good conversion actions (LATAM in its own Ads account). They are secondary: reported, but they do not steer bidding until you make one primary.',
     as_market: 'Market', as_allMarkets: 'All markets', as_valueEach: 'Very Good {vg} · Good {g}',
@@ -853,7 +853,7 @@ function leadIntelHtml(r, data) {
     as_on: 'Sync activo · {r} · leads creados en los últimos {d} días · última corrida {t}', as_off: 'Sync apagado. Configura ADS_SYNC_WEBHOOK_URL y ADS_SYNC_KEY en Railway para activarlo.',
     as_sendNow: 'Enviar pendientes ya', as_retryFailed: 'Reintentar fallidos ({n})', as_retry: 'Reintentar', as_search: 'Buscar deal # o nombre…',
     as_lead: 'Lead', as_tier: 'Nivel', as_status: 'Estado', as_match: 'Cruce por', as_value: 'Valor', as_sent: 'Enviado', as_answer: 'Respuesta de Google', as_reason: 'Motivo',
-    as_gclid: 'Click ID', as_email: 'Email hasheado', as_vg: 'Very Good', as_good: 'Good', as_none: 'Nada por aquí.', as_stale: 'sin respuesta tras 1h',
+    as_gclid: 'Click ID', as_email: 'Email hasheado', as_vg: 'Very Good', as_good: 'Good', as_none: 'Nada por aquí.', as_stale: 'sin respuesta tras 1h', as_byStage: 'por etapa', as_byStageTip: 'España: calificado por la etapa del pipeline que alcanzó (strong feedback, oferta enviada o inscrito), no por el score de admisiones.',
     as_retried: '{n} reenviados a la cola', as_sent2: 'Enviados {n} pendientes', as_lastErr: 'Último error: {e}', as_attempts: '{n} intentos',
     as_note: 'Cada mercado tiene sus propias acciones de conversión Very Good y Good (LATAM en su propia cuenta de Ads). Son secundarias: se reportan, pero no guían la puja hasta que marques una como principal.',
     as_market: 'Mercado', as_allMarkets: 'Todos los mercados', as_valueEach: 'Very Good {vg} · Good {g}',
@@ -948,7 +948,7 @@ function renderAdsSync(el) {
           return `<tr>
             <td><button class="q-name" data-open="${esc(r.dealId)}">${L.namePartial ? esc(L.namePartial) : '#' + esc(r.dealId)}</button><div class="muted" style="font-size:11px">#${esc(r.dealId)}${L.owner ? ' · ' + esc(L.owner) : ''}${L.stage ? ' · ' + esc(L.stage) : ''}</div></td>
             <td><span class="as-market">${AS_FLAG[r.region] || ''} ${esc(r.region || '—')}</span></td>
-            <td>${scoreBadge(r.tier === 'very_good' ? 'Very Good' : 'Good')}</td>
+            <td>${scoreBadge(r.tier === 'very_good' ? 'Very Good' : 'Good')}${r.basis === 'stage' ? `<div class="muted" style="font-size:11px" title="${esc(t('as_byStageTip'))}">${esc(t('as_byStage'))}</div>` : ''}</td>
             <td><span class="badge ${AS_BADGE[r.status] || 'b-neutral'}">${esc(tp('as_' + r.status))}</span>${stale ? `<div class="as-warn">${esc(t('as_stale'))}</div>` : ''}${r.attempts > 1 ? `<div class="muted" style="font-size:11px">${esc(t('as_attempts', { n: r.attempts }))}</div>` : ''}</td>
             <td>${esc(match)}</td>
             <td class="num">${r.value != null ? fmtMoney(r.value, r.currency) : '—'}</td>

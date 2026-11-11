@@ -225,3 +225,48 @@ test('meta sync: same qualified leads, own log, matched by email / phone / Meta 
   assert.equal((await store.all('metasync')).length, 1);
   assert.equal((await store.all('adsync')).length, 0);
 });
+
+test('ads-sync qualifies Spain leads by stage (strong feedback, offer sent, won) and lets a rep\'s Bad win', async (t) => {
+  const http = require('http');
+  const { createAdsSync, qualify } = require('../lib/pipeline/ads-sync');
+  const sp = (o) => ({ region: 'Spain', bucket: 'Active / Other', admissionsScore: '', ...o });
+  assert.deepStrictEqual(qualify(sp({ stage: 'Strong Feedback + 50% de que se inscriba (SQL)' })), { tier: 'very_good', basis: 'stage' });
+  assert.deepStrictEqual(qualify(sp({ stage: 'SOFT feedback -30% de que se inscriba (MQL) ' })), { tier: 'good', basis: 'stage' });
+  assert.deepStrictEqual(qualify(sp({ stage: 'super soft feedback - Oferta tirada sin más no sé qué esperar' })), { tier: 'good', basis: 'stage' });
+  assert.deepStrictEqual(qualify(sp({ stage: 'Seguimiento Activo - Inscripción máx. 3 meses', offerSentDate: '2026-10-20T10:00:00-04:00' })), { tier: 'good', basis: 'stage' });
+  assert.deepStrictEqual(qualify(sp({ stage: 'WON AI ENG TARDES (02 NOV - 12 MAY)', bucket: 'Won' })), { tier: 'very_good', basis: 'stage' });
+  assert.strictEqual(qualify(sp({ stage: 'Seguimiento Activo - Inscripción máx. 3 meses' })), null);
+  assert.strictEqual(qualify(sp({ stage: 'HOT LEADS - This leads have showed interest.' })), null);
+  // The rep's own call: Bad / junk is never sent; Good is kept, and upgraded when the stage says more.
+  assert.strictEqual(qualify(sp({ stage: 'Strong Feedback + 50%', admissionsScore: 'Bad' })), null);
+  assert.strictEqual(qualify(sp({ stage: 'SOFT feedback', offerSentDate: 'x', admissionsScore: 'Duplicate' })), null);
+  assert.deepStrictEqual(qualify(sp({ stage: 'HOT LEADS', admissionsScore: 'Good' })), { tier: 'good', basis: 'score' });
+  assert.deepStrictEqual(qualify(sp({ stage: 'SOFT feedback', admissionsScore: 'Very Good' })), { tier: 'very_good', basis: 'score' });
+  assert.deepStrictEqual(qualify(sp({ stage: 'Strong Feedback + 50%', admissionsScore: 'Good' })), { tier: 'very_good', basis: 'stage' });
+  // Other markets keep using the score only.
+  assert.strictEqual(qualify({ region: 'USA', stage: 'F3 — Strong Feedback', offerSentDate: 'x', admissionsScore: '' }), null);
+  assert.deepStrictEqual(qualify({ region: 'LATAM', stage: 'Won', bucket: 'Won', admissionsScore: 'Good' }), { tier: 'good', basis: 'score' });
+
+  const got = [];
+  const srv = http.createServer((req, res) => { let b = ''; req.on('data', (c) => { b += c; }); req.on('end', () => { got.push(JSON.parse(b)); res.end('ok'); }); });
+  await new Promise((r) => srv.listen(0, r));
+  t.after(() => srv.close());
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ads-stage-'));
+  const today = new Date().toISOString().slice(0, 10);
+  const records = [
+    sp({ id: 1, date: today, email: 'a@x.es', stage: 'Strong Feedback + 50% de que se inscriba (SQL)', offerSentDate: 'x' }),
+    sp({ id: 2, date: today, email: 'b@x.es', stage: 'SOFT feedback -30% de que se inscriba (MQL)', offerSentDate: 'x' }),
+    sp({ id: 3, date: today, email: 'c@x.es', stage: 'To Contact - Strong lead (clicked on apply)' }),
+    sp({ id: 4, date: today, email: 'd@x.es', stage: 'SOFT feedback', offerSentDate: 'x', bucket: 'Lost - Classified' }),
+    sp({ id: 5, date: today, email: 'e@x.es', stage: 'SOFT feedback', offerSentDate: 'x', admissionsScore: 'Bad' }),
+  ];
+  const store = fileStore(dir);
+  const sync = createAdsSync({ store, getRecords: () => records, log: { log() {}, warn() {} }, env: { ADS_SYNC_WEBHOOK_URL: `http://127.0.0.1:${srv.address().port}/hook`, ADS_SYNC_KEY: 'k' } });
+  await sync.run();
+  assert.deepStrictEqual(got.map((b) => `${b.dealId}:${b.tier}:${b.score}`).sort(), ['1:very_good:Very Good', '2:good:Good']);
+  assert.ok(sync.logRows().filter((x) => ['1', '2'].includes(x.dealId)).every((x) => x.basis === 'stage' && x.status === 'queued'));
+  // The lead moves up to Strong Feedback: sent once more, as Very Good. Nothing is ever sent twice.
+  records[1].stage = 'Strong Feedback + 50% de que se inscriba (SQL)';
+  await sync.run(); await sync.run();
+  assert.deepStrictEqual(got.map((b) => `${b.dealId}:${b.tier}`).sort(), ['1:very_good', '2:good', '2:very_good']);
+});
