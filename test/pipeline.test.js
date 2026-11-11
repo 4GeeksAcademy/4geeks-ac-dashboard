@@ -232,7 +232,8 @@ test('ads-sync qualifies Spain leads by stage (strong feedback, offer sent, won)
   const sp = (o) => ({ region: 'Spain', bucket: 'Active / Other', admissionsScore: '', ...o });
   assert.deepStrictEqual(qualify(sp({ stage: 'Strong Feedback + 50% de que se inscriba (SQL)' })), { tier: 'very_good', basis: 'stage' });
   assert.deepStrictEqual(qualify(sp({ stage: 'SOFT feedback -30% de que se inscriba (MQL) ' })), { tier: 'good', basis: 'stage' });
-  assert.deepStrictEqual(qualify(sp({ stage: 'super soft feedback - Oferta tirada sin más no sé qué esperar' })), { tier: 'good', basis: 'stage' });
+  assert.strictEqual(qualify(sp({ stage: 'super soft feedback - Oferta tirada sin más no sé qué esperar', offerSentDate: 'x' })), null);
+  assert.deepStrictEqual(qualify(sp({ stage: 'super soft feedback - Oferta tirada sin más no sé qué esperar', offerSentDate: 'x', admissionsScore: 'Good' })), { tier: 'good', basis: 'score' });
   assert.deepStrictEqual(qualify(sp({ stage: 'Seguimiento Activo - Inscripción máx. 3 meses', offerSentDate: '2026-10-20T10:00:00-04:00' })), { tier: 'good', basis: 'stage' });
   assert.deepStrictEqual(qualify(sp({ stage: 'WON AI ENG TARDES (02 NOV - 12 MAY)', bucket: 'Won' })), { tier: 'very_good', basis: 'stage' });
   assert.strictEqual(qualify(sp({ stage: 'Seguimiento Activo - Inscripción máx. 3 meses' })), null);
