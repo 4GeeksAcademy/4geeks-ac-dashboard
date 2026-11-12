@@ -13,6 +13,8 @@
     bv_ofLeads: '{p} of leads', bv_inCrm: 'Also in the CRM', bv_inCrmSub: 'have a deal in ActiveCampaign', bv_opened: 'Opened an email', bv_clicked: 'Clicked an email', bv_ofSent: 'of {n} who got one',
     bv_emails: 'Emails sent by the automations', bv_emailsSub: 'To these leads only. Opens and clicks are counted once per email and person.', bv_subject: 'Email', bv_sent: 'Sent', bv_delivered: 'Delivered', bv_openRate: 'Opened', bv_clickRate: 'Clicked', bv_last: 'Last sent', bv_noEmails: 'No emails to these leads in this window.',
     bv_people: 'People', bv_peopleSub: '{n} shown · newest first', bv_person: 'Lead', bv_program: 'Program', bv_step: 'Step', bv_entered: 'Entered', bv_source: 'Source', bv_mail: 'Emails (sent · opened · clicked)', bv_crm: 'In the CRM', bv_notInCrm: 'Not in the CRM', bv_unsub: 'unsubscribed', bv_none: 'Nobody matches these filters.', bv_more: 'Show {n} more', bv_lists: 'Brevo lists read: {l}',
+    bv_search: 'Search a lead…', bv_seeEmails: 'See emails', bv_hideEmails: 'Hide', bv_noneSent: 'Brevo has not sent this person any email in the last {d} days.', bv_tSent: 'Sent', bv_tDelivered: 'delivered', bv_tOpened: 'opened', bv_tClicked: 'clicked', bv_tBounced: 'bounced', bv_tNotOpened: 'not opened', bv_tUnsub: 'unsubscribed',
+    bvl_title: 'Emails from Brevo', bvl_off: 'Brevo is not connected.', bvl_none: 'Brevo has not sent this lead any email in the last {d} days.', bvl_inFunnel: 'In the Brevo funnel: {s}', bvl_err: 'Brevo could not be read: {e}',
     cdp_title: 'In the CDP', cdp_loading: 'Looking this lead up in the CDP…', cdp_off: 'The CDP is not connected (add CDP_TOKEN in Railway).', cdp_notFound: 'The CDP does not know this lead yet.', cdp_noEmail: 'This lead has no email to look up.', cdp_err: 'The CDP could not be read: {e}',
     cdp_since: 'Known since', cdp_personas: 'Personas', cdp_segments: 'Segments', cdp_consent: 'Marketing consent', cdp_allowed: 'allowed', cdp_blocked: 'blocked', cdp_traits: 'Traits', cdp_activity: 'Recent activity', cdp_nurture: 'Nurture', cdp_ids: 'Identified by',
     set_brevo: 'Brevo (AI Fluency)', set_brevoOn: '{n} people in {l} lists', set_srcOff: 'Not connected', set_cdp: '4Geeks CDP', set_cdpOn: 'Connected · {n} leads in the CDP', set_cdpBad: 'Token rejected or CDP unreachable',
@@ -25,6 +27,8 @@
     bv_ofLeads: '{p} de los leads', bv_inCrm: 'También en el CRM', bv_inCrmSub: 'tienen un deal en ActiveCampaign', bv_opened: 'Abrió un correo', bv_clicked: 'Hizo clic en un correo', bv_ofSent: 'de {n} que recibieron alguno',
     bv_emails: 'Correos enviados por las automatizaciones', bv_emailsSub: 'Solo a estos leads. Aperturas y clics se cuentan una vez por correo y persona.', bv_subject: 'Correo', bv_sent: 'Enviados', bv_delivered: 'Entregados', bv_openRate: 'Abiertos', bv_clickRate: 'Con clic', bv_last: 'Último envío', bv_noEmails: 'No hay correos a estos leads en este periodo.',
     bv_people: 'Personas', bv_peopleSub: '{n} mostradas · más recientes primero', bv_person: 'Lead', bv_program: 'Programa', bv_step: 'Paso', bv_entered: 'Entró', bv_source: 'Fuente', bv_mail: 'Correos (enviados · abiertos · clics)', bv_crm: 'En el CRM', bv_notInCrm: 'No está en el CRM', bv_unsub: 'dado de baja', bv_none: 'Nadie coincide con estos filtros.', bv_more: 'Mostrar {n} más', bv_lists: 'Listas de Brevo leídas: {l}',
+    bv_search: 'Buscar un lead…', bv_seeEmails: 'Ver correos', bv_hideEmails: 'Ocultar', bv_noneSent: 'Brevo no le ha enviado ningún correo a esta persona en los últimos {d} días.', bv_tSent: 'Enviado', bv_tDelivered: 'entregado', bv_tOpened: 'abierto', bv_tClicked: 'con clic', bv_tBounced: 'rebotado', bv_tNotOpened: 'sin abrir', bv_tUnsub: 'se dio de baja',
+    bvl_title: 'Correos de Brevo', bvl_off: 'Brevo no está conectado.', bvl_none: 'Brevo no le ha enviado ningún correo a este lead en los últimos {d} días.', bvl_inFunnel: 'En el embudo de Brevo: {s}', bvl_err: 'No se pudo leer Brevo: {e}',
     cdp_title: 'En el CDP', cdp_loading: 'Buscando este lead en el CDP…', cdp_off: 'El CDP no está conectado (añade CDP_TOKEN en Railway).', cdp_notFound: 'El CDP aún no conoce a este lead.', cdp_noEmail: 'Este lead no tiene email para buscarlo.', cdp_err: 'No se pudo leer el CDP: {e}',
     cdp_since: 'Conocido desde', cdp_personas: 'Personas (perfiles)', cdp_segments: 'Segmentos', cdp_consent: 'Consentimiento de marketing', cdp_allowed: 'permitido', cdp_blocked: 'bloqueado', cdp_traits: 'Rasgos', cdp_activity: 'Actividad reciente', cdp_nurture: 'Nurture', cdp_ids: 'Identificado por',
     set_brevo: 'Brevo (AI Fluency)', set_brevoOn: '{n} personas en {l} listas', set_srcOff: 'Sin conectar', set_cdp: 'CDP de 4Geeks', set_cdpOn: 'Conectado · {n} leads en el CDP', set_cdpBad: 'Token rechazado o CDP inaccesible',
@@ -33,7 +37,17 @@
   window.I18N.es = { ...window.I18N.es, ...es };
 })();
 
-const BV = { data: null, loading: false, error: null, at: 0, program: 'all', stage: 'all', shown: 100 };
+const BV = { data: null, loading: false, error: null, at: 0, program: 'all', stage: 'all', shown: 100, q: '', open: new Set() };
+
+// One person's emails, newest first: what was sent, when, and what they did with it.
+function brevoTimelineHtml(list, emptyText) {
+  if (!list || !list.length) return `<p class="muted" style="margin:6px 0">${esc(emptyText)}</p>`;
+  const tag = (on, label, cls) => (on ? `<span class="badge plain ${cls}" style="margin-left:4px">${esc(label)}</span>` : '');
+  return `<div class="bv-tl">${list.map((m) => `<div style="display:flex;gap:10px;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--line, #e7eaf0)">
+    <span class="muted" style="font-size:11.5px;white-space:nowrap;min-width:108px">${m.at ? fmtDT(m.at) : '—'}</span>
+    <span style="flex:1;font-size:12.5px">${esc(m.subject || '—')}</span>
+    <span style="white-space:nowrap">${m.bounced ? tag(true, t('bv_tBounced'), 'b-lostc') : m.clicked ? tag(true, t('bv_tClicked'), 'b-won') : m.opened ? tag(true, t('bv_tOpened'), 'b-won') : m.delivered ? tag(true, t('bv_tNotOpened'), 'b-neutral') : tag(true, t('bv_tSent'), 'b-neutral')}${tag(m.unsubscribed, t('bv_tUnsub'), 'b-lostc')}</span></div>`).join('')}</div>`;
+}
 
 async function loadBrevo(force) {
   BV.loading = true;
@@ -63,7 +77,8 @@ window.renderBrevo = function renderBrevo(el) {
   const reached = (s) => inProgram.filter((r) => idx(r.stage) >= idx(s)).length;
   const leads = reached('lead');
   const gotMail = inProgram.filter((r) => r.sent.sent > 0);
-  const rows = inProgram.filter((r) => BV.stage === 'all' || r.stage === BV.stage).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  const q = BV.q.trim().toLowerCase();
+  const rows = inProgram.filter((r) => (BV.stage === 'all' || r.stage === BV.stage) && (!q || `${r.namePartial || ''} ${r.emailPartial || ''} ${r.location || ''}`.toLowerCase().includes(q))).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
   const kpi = (label, val, sub, sel, attr = '') => `<button class="kpi as-kpi ${sel ? 'sel' : ''}" ${attr}><div class="k-lbl">${esc(label)}</div><div class="k-val">${fmtInt(val)}</div><div class="k-sub">${esc(sub || '')}</div></button>`;
   el.innerHTML = `
     <div class="panel as-head">
@@ -84,7 +99,7 @@ window.renderBrevo = function renderBrevo(el) {
         ${d.messages.slice(0, 40).map((m) => `<tr><td>${esc(m.subject || '—')}${m.templateId != null ? `<div class="muted" style="font-size:11px">#${esc(m.templateId)}</div>` : ''}</td><td class="num">${fmtInt(m.sent)}</td><td class="num">${fmtInt(m.delivered)}</td><td class="num">${fmtInt(m.opened)} <span class="muted">${pct(m.opened, m.delivered || m.sent, 0)}</span></td><td class="num">${fmtInt(m.clicked)} <span class="muted">${pct(m.clicked, m.delivered || m.sent, 0)}</span></td><td>${m.lastAt ? fmtDT(m.lastAt) : '—'}</td></tr>`).join('')}</tbody></table></div>` : `<p class="muted">${esc(t('bv_noEmails'))}</p>`}
     </div>
     <div class="panel">
-      <div class="panel-head"><div><h2>${esc(t('bv_people'))}</h2><div class="panel-sub">${esc(t('bv_peopleSub', { n: fmtInt(rows.length) }))}</div></div></div>
+      <div class="panel-head"><div><h2>${esc(t('bv_people'))}</h2><div class="panel-sub">${esc(t('bv_peopleSub', { n: fmtInt(rows.length) }))}</div></div><input type="search" class="as-search" data-bv-q placeholder="${esc(t('bv_search'))}" value="${esc(BV.q)}"></div>
       ${rows.length ? `<div class="as-wrap"><table class="as-table"><thead><tr><th>${esc(t('bv_person'))}</th><th>${esc(t('bv_program'))}</th><th>${esc(t('bv_step'))}</th><th>${esc(t('bv_entered'))}</th><th>${esc(t('bv_source'))}</th><th>${esc(t('bv_mail'))}</th><th>${esc(t('bv_crm'))}</th></tr></thead><tbody>
         ${rows.slice(0, BV.shown).map((r) => `<tr>
           <td>${r.crm ? `<button class="q-name" data-open="${esc(r.crm.dealId)}">${esc(r.namePartial || r.emailPartial || '—')}</button>` : `<strong>${esc(r.namePartial || r.emailPartial || '—')}</strong>`}<div class="muted" style="font-size:11px">${esc(r.emailPartial || '')}${r.location ? ' · ' + esc(r.location) : ''}${r.unsubscribed ? ` · ${esc(t('bv_unsub'))}` : ''}</div></td>
@@ -92,12 +107,14 @@ window.renderBrevo = function renderBrevo(el) {
           <td><span class="badge plain ${r.stage === 'lead' ? 'b-neutral' : 'b-won'}">${esc(t('st_' + r.stage))}</span></td>
           <td>${r.createdAt ? fmtDT(r.createdAt) : '—'}</td>
           <td>${esc([r.source, r.medium].filter(Boolean).join(' / ') || '—')}</td>
-          <td>${fmtInt(r.sent.sent)} · ${fmtInt(r.sent.opened)} · ${fmtInt(r.sent.clicked)}</td>
-          <td>${r.crm ? `${esc(r.crm.region || '')}${r.crm.score ? ' ' + scoreBadge(r.crm.score) : ''}<div class="muted" style="font-size:11px">${esc(String(r.crm.stage || '').slice(0, 48))}</div>` : `<span class="muted">${esc(t('bv_notInCrm'))}</span>`}</td></tr>`).join('')}</tbody></table></div>
+          <td>${fmtInt(r.sent.sent)} · ${fmtInt(r.sent.opened)} · ${fmtInt(r.sent.clicked)}<div><button class="qa" data-bv-tl="${esc(r.email)}">${esc(t(BV.open.has(r.email) ? 'bv_hideEmails' : 'bv_seeEmails'))}</button></div></td>
+          <td>${r.crm ? `${esc(r.crm.region || '')}${r.crm.score ? ' ' + scoreBadge(r.crm.score) : ''}<div class="muted" style="font-size:11px">${esc(String(r.crm.stage || '').slice(0, 48))}</div>` : `<span class="muted">${esc(t('bv_notInCrm'))}</span>`}</td></tr>${BV.open.has(r.email) ? `<tr><td colspan="7" style="background:var(--bg-soft, #f7f9fc)">${brevoTimelineHtml(r.timeline, t('bv_noneSent', { d: d.days }))}</td></tr>` : ''}`).join('')}</tbody></table></div>
         ${rows.length > BV.shown ? `<button class="btn ghost sm" data-bv-more style="margin-top:10px">${esc(t('bv_more', { n: fmtInt(Math.min(100, rows.length - BV.shown)) }))}</button>` : ''}` : `<p class="muted">${esc(t('bv_none'))}</p>`}
     </div>`;
   $$('[data-bv-program]', el).forEach((b) => b.addEventListener('click', () => { BV.program = b.dataset.bvProgram; BV.shown = 100; renderBrevo(el); }));
   $$('[data-bv-stage]', el).forEach((b) => b.addEventListener('click', () => { BV.stage = BV.stage === b.dataset.bvStage ? 'all' : b.dataset.bvStage; BV.shown = 100; renderBrevo(el); }));
+  $$('[data-bv-tl]', el).forEach((b) => b.addEventListener('click', () => { const k = b.dataset.bvTl; if (BV.open.has(k)) BV.open.delete(k); else BV.open.add(k); renderBrevo(el); }));
+  $$('[data-bv-q]', el).forEach((i) => i.addEventListener('input', () => { BV.q = i.value; BV.shown = 100; const pos = i.selectionStart; renderBrevo(el); const n = $('[data-bv-q]', el); if (n) { n.focus(); n.setSelectionRange(pos, pos); } }));
   $$('[data-bv-more]', el).forEach((b) => b.addEventListener('click', () => { BV.shown += 100; renderBrevo(el); }));
   $$('[data-bv-refresh]', el).forEach((b) => b.addEventListener('click', () => { b.disabled = true; loadBrevo(true); }));
   $$('[data-open]', el).forEach((b) => b.addEventListener('click', () => openLead(b.dataset.open)));
@@ -127,4 +144,18 @@ window.loadLeadCdp = function loadLeadCdp(dealId) {
       ${kv(t('cdp_activity'), (p.activity || []).map((x) => `<div style="font-size:12.5px">${esc(x.event)} <span class="muted">· ${esc(x.source || '')} · ${esc(day(x.at))}</span></div>`).join(''))}
       ${kv(t('cdp_nurture'), nurture)}</dl>`);
   }).catch((e) => set(`<p class="muted">${esc(t('cdp_err', { e: e.message }))}</p>`));
+};
+
+// ───────────── Brevo emails inside the lead drawer ─────────────
+// Any lead of the Hub: the emails Brevo sent to that person (the drawer has <div id="ld-brevo">).
+window.loadLeadBrevo = function loadLeadBrevo(dealId) {
+  const head = `<h3>${icon('mail')}${esc(t('bvl_title'))}</h3>`;
+  const set = (html) => { const box = $('#ld-brevo'); if (box && box.dataset.deal === String(dealId)) box.innerHTML = head + html; };
+  api(`/api/sources/brevo/lead/${encodeURIComponent(dealId)}`).then(async (res) => {
+    const p = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(p.error || res.statusText);
+    if (!p.enabled) return set(`<p class="muted">${esc(t('bvl_off'))}</p>`);
+    const where = p.inFunnel ? `<p class="muted" style="font-size:12px;margin:0 0 6px">${esc(t('bvl_inFunnel', { s: [p.program, t('st_' + p.stage)].filter(Boolean).join(' · ') }))}</p>` : '';
+    set(where + brevoTimelineHtml(p.timeline, t('bvl_none', { d: p.days || 90 })));
+  }).catch((e) => set(`<p class="muted">${esc(t('bvl_err', { e: e.message }))}</p>`));
 };

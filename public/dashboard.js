@@ -819,6 +819,7 @@ async function openLead(id) {
         ${kvRow(t('offerSent'), r.offerSentDate ? fmtDate(r.offerSentDate, { day: 'numeric', month: 'short', year: 'numeric' }) : null)}${kvRow(r.bucket === 'Won' ? t('wonDate') : t('lostDate'), r.bucket === 'Won' ? (r.wonDate ? fmtDate(r.wonDate, { day: 'numeric', month: 'short', year: 'numeric' }) : null) : (r.lostDate ? fmtDate(r.lostDate, { day: 'numeric', month: 'short', year: 'numeric' }) : null))}
         ${kvRow(t('feedback'), r.feedback ? esc(r.feedback) : null, true)}</dl></div>
       <div class="lsec" id="ld-cdp" data-deal="${esc(r.id)}"><h3>${icon('users')}${esc(t('cdp_title'))}</h3><div class="skeleton" style="width:55%"></div><div class="muted" style="font-size:12px">${esc(t('cdp_loading'))}</div></div>
+      <div class="lsec" id="ld-brevo" data-deal="${esc(r.id)}"><h3>${icon('mail')}${esc(t('bvl_title'))}</h3><div class="skeleton" style="width:55%"></div></div>
       <div class="lsec" id="ld-eng"><h3>${icon('mail')}${esc(t('leadEngagement'))}</h3><div class="skeleton" style="width:60%"></div><div class="skeleton" style="width:85%"></div><div class="muted" style="font-size:12px">${esc(t('loadingEngagement'))}</div></div>
     </div>`;
   $('[data-close]', d).addEventListener('click', closeDrawers);
@@ -827,6 +828,7 @@ async function openLead(id) {
 
   // What the CDP knows about this lead (background; public/sources.js).
   if (window.loadLeadCdp) window.loadLeadCdp(r.id);
+  if (window.loadLeadBrevo) window.loadLeadBrevo(r.id);
 
   // Engagement (background).
   const t0 = performance.now();
