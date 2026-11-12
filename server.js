@@ -656,6 +656,11 @@ app.get('/api/sources/brevo', requireAuth, (req, res) => {
     if (req.query.summary) return res.json({ enabled: v.enabled, at: v.at, error: v.error, people: v.rows.length, lists: v.lists });
     res.json(v);
 });
+app.get('/api/sources/brevo/lead/:id', requireAuth, async (req, res) => {
+    const rec = findRecord(req.params.id);
+    if (!rec) return res.status(404).json({ error: 'Lead not in the current data window' });
+    try { res.json(await brevo.personEmails(rec.email, String(rec.name || '').trim().split(/\s+/)[0])); } catch (e) { res.status(502).json({ error: e.message }); }
+});
 app.post('/api/sources/brevo/refresh', requireAuth, (req, res) => { brevo.refresh(); res.json({ started: true }); });
 app.get('/api/sources/cdp', requireAuth, async (req, res) => res.json(await cdp.status()));
 app.get('/api/sources/cdp/lead/:id', requireAuth, async (req, res) => {

@@ -62,6 +62,17 @@ test('brevo: reads only the matching lists, counts each email once, joins the CR
   // One row per email template, the person's name taken out of the subject.
   assert.strictEqual(v.messages.length, 1);
   assert.deepStrictEqual({ subject: v.messages[0].subject, sent: v.messages[0].sent, opened: v.messages[0].opened, clicked: v.messages[0].clicked }, { subject: 'Tu guía, {name}', sent: 2, opened: 1, clicked: 1 });
+  // Each person's own emails: one line per email, with what they did with it.
+  assert.deepStrictEqual(ana.timeline, [{ subject: 'Tu guía, {name}', templateId: 225, at: '2026-11-10T10:01:00Z', delivered: true, opened: true, clicked: true, bounced: false, unsubscribed: false }]);
+  assert.strictEqual(v.rows.find((r) => r.email === 'bo@x.com').timeline[0].opened, false);
+  const one = await brevo.personEmails('ANA@x.com');
+  assert.strictEqual(one.inFunnel, true);
+  assert.strictEqual(one.timeline.length, 1);
+  // A lead outside the funnel lists is asked to Brevo live, by email.
+  const other = await brevo.personEmails('someone-else@x.com');
+  assert.ok(calls.some((c) => c.url.includes('email=someone-else%40x.com')));
+  assert.strictEqual(other.inFunnel, false);
+  assert.deepStrictEqual(await brevo.personEmails(''), { enabled: true, found: false, reason: 'no_email' });
   // What reaches the browser: identity hashed, counters intact.
   const out = redactPii(v, { partials: true });
   const row = out.rows.find((r) => r.sent.opened === 1);
