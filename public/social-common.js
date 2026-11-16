@@ -147,7 +147,16 @@ function socPeriodBar(onChange, { compare = true } = {}) {
 const socPct = (x) => (x == null ? '—' : `${(x * 100).toLocaleString(locale(), { maximumFractionDigits: 1 })}%`);
 const socSigned = (n) => (n == null ? '—' : `${n > 0 ? '+' : ''}${fmtN(n)}`);
 const socAccName = (a) => (a.username ? `@${a.username}` : a.name);
-const socNet = (n) => `<span class="soc-net soc-${esc(n)}">${esc({ instagram: 'IG', facebook: 'FB', tiktok: 'TT' }[n] || n)}</span>`;
+// Platform icon (simple glyphs drawn here, white on the platform's colour; see .soc-net in social.css).
+const SOC_NET_ICON = {
+  facebook: '<path fill="#fff" d="M15.6 5.5h-2.3c-2 0-3.2 1.2-3.2 3.3v1.8H8.2v2.6h1.9V20h2.7v-6.8h2.3l.4-2.6h-2.7V9.1c0-.6.3-1 1-1h1.8z"/>',
+  instagram: '<rect x="4.5" y="4.5" width="15" height="15" rx="4.5" fill="none" stroke="#fff" stroke-width="2"/><circle cx="12" cy="12" r="3.4" fill="none" stroke="#fff" stroke-width="2"/><circle cx="16.6" cy="7.4" r="1.1" fill="#fff"/>',
+  tiktok: ['#25F4EE', '#FE2C55', '#fff'].map((c, i) => `<path fill="${c}" transform="translate(${[-0.6, 0.6, 0][i]} ${[-0.6, 0.6, 0][i]})" d="M13.4 4h2.5c.2 1.8 1.4 3 3.1 3.2v2.5c-1.2 0-2.3-.4-3.1-1v5.5a4.5 4.5 0 1 1-4.5-4.5h.5v2.6h-.5a1.9 1.9 0 1 0 1.9 1.9z"/>`).join(''),
+};
+const SOC_NET_NAME = { facebook: 'Facebook', instagram: 'Instagram', tiktok: 'TikTok' };
+const socNet = (n) => (SOC_NET_ICON[n]
+  ? `<span class="soc-net soc-${esc(n)}" title="${SOC_NET_NAME[n]}" role="img" aria-label="${SOC_NET_NAME[n]}"><svg viewBox="0 0 24 24" aria-hidden="true">${SOC_NET_ICON[n]}</svg></span>`
+  : `<span class="soc-net">${esc(n)}</span>`);
 const socMoney = (spend) => (spend ? Object.entries(spend).map(([cur, v]) => `${Number(v).toLocaleString(locale(), { maximumFractionDigits: 0 })} ${cur}`).join(' · ') : '—');
 
 /** KPI tile. k = {current, previous, change_pct} from the API, or a plain number. */
