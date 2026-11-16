@@ -418,6 +418,7 @@ Instagram profiles are synced from Meta into Postgres and shown in the sidebar s
 - **API:** listed at the top of `lib/social/routes.js` (status, switches, sites, requests, analytics).
 - **Storage:** tables `social_*` in the same Postgres (`DATABASE_URL`); without it, memory only.
 - **Env:** `META_ACCESS_TOKEN` (required to turn it on), optional `META_GRAPH_API_VERSION`,
-  `SOCIAL_SYNC_DISABLED=true`, `SOCIAL_TZ`.
+  `SOCIAL_SYNC_DISABLED=true`, `SOCIAL_TZ`, `SOCIAL_SEED` (JSON: Facebook page / Meta ad account /
+  TikTok advertiser ids → site; kept out of the repo, format in `lib/social/defaults.js`).
 - **Tests:** `npm test` uses a fake Graph API (`test/social-fake-meta.js`), never Meta.
   `SOCIAL_TEST_DATABASE_URL=<throwaway db> npm test` also runs them on Postgres.

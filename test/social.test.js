@@ -1,4 +1,5 @@
 'use strict';
+require('./social-seed'); // before lib/social: made-up account ids
 // Social (lib/social): Meta connector and sync, against a fake Graph API and the memory store.
 const test = require('node:test');
 const assert = require('node:assert');

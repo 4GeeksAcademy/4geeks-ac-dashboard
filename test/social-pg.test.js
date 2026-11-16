@@ -1,4 +1,5 @@
 'use strict';
+require('./social-seed'); // before lib/social: made-up account ids
 // Social on real Postgres (lib/social/store.js pgStore). Skipped unless
 // SOCIAL_TEST_DATABASE_URL points to a THROWAWAY database: its social_* tables are dropped.
 const test = require('node:test');
