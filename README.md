@@ -360,3 +360,65 @@ Channels (`lib/attribution/channel.js`): gclid = Google Ads even without UTMs; f
 - **Attribution (Intelligence → Marketing)** answers one question in %: where enrollments (or Good / Very Good, or all leads) come from, by paid vs organic, channel, source or campaign, with credit shared across touches (default), first touch or last touch. Every lead counts: its GA path when linked, otherwise the CRM channel. Below, every enrolled lead with its path (`POST /api/attribution/share`).
 - **Score changes (Intelligence → Sales)**: first rating vs rating at enrollment (or now), e.g. Good → Very Good before enrolling, with the leads listed. Dated from the Hub's score snapshots and the Google Ads sync log; ActiveCampaign keeps no score history.
 - **Meta sync**: the same Good / Very Good leads go to Meta through the n8n workflow "Qualified Leads → Meta (Conversions API, Marketing Hub)" as CRM events `VeryGoodLead` / `GoodLead` on pixel 414048075447471, matched by hashed email + phone + Meta click (fbc), with the expected value. n8n asks the Hub (`/api/pipeline/meta-sync/verify`) before sending, so it stores no secret. Own log under Ads sync → Meta. On when `META_SYNC_WEBHOOK_URL` is set (key: `META_SYNC_KEY`, defaults to `ADS_SYNC_KEY`).
+
+## Social analytics (Nov 2026, in progress)
+
+Central RRSS moving into the Hub (`lib/social/`, `public/social-*.js`). Facebook pages and
+Instagram profiles are synced from Meta into Postgres and shown in the sidebar section **Social**.
+
+- **Analytics:** every account switched on side by side (followers, growth, views, % organic,
+  interactions, posts, engagement), then per account: Community, Account, Posts, Reels (IG),
+  Organic vs paid and Demographics (IG). Period of 7 / 28 / 90 days or custom, compared with the
+  previous period or a year before; a change is hidden when the earlier period has too few days
+  with data. Instagram paid views are an estimate (total views − organic views).
+- **Social settings:** accounts and ad accounts on/off and their site; sites (add, rename,
+  market USA / Spain / LATAM, remove); sync status, failed steps and requests (refresh,
+  discover, load history). Changes are admin-only (editors see it read-only) and audited.
+- **TikTok (ads only**, until TikTok approves access to the organic account; `lib/social/tiktok/`):
+  ad accounts are discovered daily and appear as TikTok accounts (they start off). For the ones
+  switched on: daily spend, impressions, plays, clicks and follows per ad, the TikTok post each ad
+  uses and who signs it. Campaign spend TikTok doesn't split by ad is kept as an "Unattributed"
+  row so totals match TikTok; it never counts per post. Analytics → a TikTok account: Ads and
+  Promoted posts. Env: `TIKTOK_ACCESS_TOKEN`, `TIKTOK_APP_ID`, `TIKTOK_APP_SECRET` (without the
+  token TikTok is skipped).
+- **Inbox (admins only)** (`lib/social/inbox.js`, `public/social-inbox.js`): comments (organic and
+  on ads with impressions in the last 14 days) and Instagram DMs of the accounts switched on,
+  refreshed every 5 minutes (only posts whose comment count changed are downloaded again). Status
+  new / in review / replied / closed and a category, one by one or in bulk; the sync never
+  overwrites them. The account's own comments stay out, and its replies mark a comment as replied;
+  a DM conversation reopens when the person writes again. Replies are written in Instagram /
+  Business Suite (link in the detail). Browser notifications while the Hub is open ("Turn on
+  notifications"). DM texts are erased after 60 days; texts are never logged or audited. Inbox
+  categories are managed in Social settings (never deleted, switched off). FB comments on ads
+  come without author (Meta doesn't give it).
+- **DM webhook** (`lib/social/webhook.js`, `/api/social/webhook/meta`, mounted before
+  `express.json()`): Meta's notice only queues the conversations of the people who wrote; the
+  5-minute refresh stays as a safety net. Big inboxes time out when listed: after a timeout the
+  5-minute refresh skips that account for an hour and its DMs come through the webhook. Env:
+  `META_APP_SECRET` (signature), `META_WEBHOOK_VERIFY_TOKEN`. In the Meta app the callback URL
+  becomes `https://<hub domain>/api/social/webhook/meta`.
+- **Social calendar filled in** (`lib/social/calendar-fill.js`, after every hourly and daily
+  sync, or *Fill Social calendar* in Social settings): calendar posts with a post URL get
+  views, likes, comments, saves and shares from Meta (DMs are never touched; follows only when
+  empty), and every calendar account gets its weekly metrics for complete weeks (Monday–Sunday,
+  all 7 days with data) as `meta sync` rows. Weeks typed by hand are never changed. Calendar
+  accounts are matched by network and @handle, or by market when the handle is empty.
+
+- **What is synced:** accounts (discovered from the token), posts of the last 30 days
+  with a daily snapshot of their metrics, daily account metrics, Instagram follower
+  demographics and daily spend per Meta ad, matched to the post it promotes.
+- **When:** pending requests every 20 s, hourly at :10 (posts, today's metrics, spend),
+  daily at 03:30 (discover accounts, close the last 3 days, demographics). One syncer
+  at a time (Postgres advisory lock); it pauses while the ActiveCampaign refresh runs.
+  First boot with no accounts: discover + 30 days of history.
+- **Accounts on/off:** only accounts switched on are synced. New accounts start off,
+  except @4geeksacademy, @4geeksacademyes and @4geeksacademylatam and their Facebook
+  pages (`lib/social/defaults.js`). Admins switch them in Social settings; switching one on
+  loads its last 30 days.
+- **API:** listed at the top of `lib/social/routes.js` (status, switches, sites, requests, analytics).
+- **Storage:** tables `social_*` in the same Postgres (`DATABASE_URL`); without it, memory only.
+- **Env:** `META_ACCESS_TOKEN` (required to turn it on), optional `META_GRAPH_API_VERSION`,
+  `SOCIAL_SYNC_DISABLED=true`, `SOCIAL_TZ`, `SOCIAL_SEED` (JSON: Facebook page / Meta ad account /
+  TikTok advertiser ids → site; kept out of the repo, format in `lib/social/defaults.js`).
+- **Tests:** `npm test` uses a fake Graph API (`test/social-fake-meta.js`), never Meta.
+  `SOCIAL_TEST_DATABASE_URL=<throwaway db> npm test` also runs them on Postgres.

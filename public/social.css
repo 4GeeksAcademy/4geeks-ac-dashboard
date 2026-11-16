@@ -1,0 +1,18 @@
+/* Social section (social-*.js). Only what the Hub's styles.css / brand.css don't already have. */
+.soc-period{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.soc-acc{display:flex;align-items:center;gap:8px;margin:0;font-size:17px;font-weight:800;}
+.soc-acc .muted{font-size:13px;font-weight:600;}
+.soc-net{display:inline-flex;align-items:center;justify-content:center;flex:none;min-width:20px;height:20px;padding:0;border-radius:6px;font-size:10px;font-weight:800;color:#fff;background:var(--muted);vertical-align:-5px;}
+.soc-net svg{width:16px;height:16px;display:block;}
+.soc-net.soc-facebook{background:#1877F2;}
+.soc-net.soc-instagram{background:radial-gradient(circle at 30% 107%,#fdf497 0%,#fd5949 40%,#d6249f 62%,#285AEB 95%);}
+.soc-net.soc-tiktok{background:#000;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);}
+/* Inbox */
+.soc-bulk{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px;margin-bottom:12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);}
+.soc-cat{background:color-mix(in srgb,var(--cat) 16%,transparent);color:var(--ink);border:1px solid color-mix(in srgb,var(--cat) 45%,transparent);}
+.soc-origin{padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:12px;font-size:13px;}
+.soc-thread{display:flex;flex-direction:column;gap:8px;margin-bottom:10px;}
+.soc-msg{max-width:85%;padding:8px 12px;border-radius:12px;background:var(--surface-3);font-size:13.5px;white-space:pre-wrap;overflow-wrap:anywhere;}
+.soc-msg.mine{align-self:flex-end;background:var(--blue-tint);}
+.soc-msg.focus{outline:2px solid var(--blue);}
+.soc-msg-h{font-size:11.5px;color:var(--muted);margin-bottom:2px;}
