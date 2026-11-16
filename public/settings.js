@@ -57,7 +57,7 @@ async function loadSettingsStatus(el) {
   const box = $('#set-status', el);
   if (!box) return;
   const get = (u) => api(u).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-  const [intel, ads] = await Promise.all([get('/api/pipeline/status'), get('/api/pipeline/ads-sync')]);
+  const [intel, ads, brevo, cdp] = await Promise.all([get('/api/pipeline/status'), get('/api/pipeline/ads-sync'), get('/api/sources/brevo?summary=1'), get('/api/sources/cdp')]);
   if (!document.body.contains(box)) return;
   const tm = META.generatedAt ? new Date(META.generatedAt).toLocaleString(LANG === 'es' ? 'es-ES' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
   const row = (ic, label, val, extra = '', action = '') => `<div class="set-row"><span class="set-label">${icon(ic)}${esc(label)}</span><span class="set-val">${val}${extra}</span>${action}</div>`;
@@ -70,6 +70,11 @@ async function loadSettingsStatus(el) {
     ads ? row('upload', t('set_ads'), ads.enabled ? esc(t('set_adsOn', { u: fmtInt(c.uploaded || 0), w: fmtInt(c.queued || 0), f: fmtInt(c.failed || 0) })) : esc(t('set_adsOff')),
       ads.lastError ? `<div class="set-err" title="${esc(ads.lastError)}">${esc(t('set_lastErr', { e: ads.lastError.slice(0, 120) }))}</div>` : '',
       `<button class="btn ghost sm" data-go="adsync">${esc(t('set_open'))}</button>`) : '',
+    brevo ? row('mail', t('set_brevo'), brevo.enabled ? esc(t('set_brevoOn', { n: fmtInt(brevo.people || 0), l: fmtInt((brevo.lists || []).length) })) : esc(t('set_srcOff')),
+      brevo.error ? `<div class="set-err" title="${esc(brevo.error)}">${esc(t('set_lastErr', { e: brevo.error.slice(0, 120) }))}</div>` : '',
+      `<button class="btn ghost sm" data-go="aifunnel">${esc(t('set_open'))}</button>`) : '',
+    cdp ? row('users', t('set_cdp'), !cdp.enabled ? esc(t('set_srcOff')) : cdp.ok ? esc(t('set_cdpOn', { n: cdp.leads != null ? fmtInt(cdp.leads) : '—' })) : esc(t('set_cdpBad')),
+      cdp.enabled && !cdp.ok && cdp.error ? `<div class="set-err" title="${esc(cdp.error)}">${esc(t('set_lastErr', { e: cdp.error.slice(0, 120) }))}</div>` : '') : '',
   ].join('');
   $$('[data-go]', box).forEach((b) => b.addEventListener('click', () => go(b.dataset.go)));
 }
