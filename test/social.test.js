@@ -234,6 +234,8 @@ test('calendar fill: results come from Meta, hand-typed dms and weeks are kept',
   const day = (d, i) => ({ account_id: ig.id, day: D.addDays(d, i), metric: 'views', breakdown: '', value: 100 });
   await store.upsert('account_metrics', [...Array(7)].map((_, i) => day(ws, i)));
   await store.upsert('account_metrics', [...Array(3)].map((_, i) => day(D.addDays(ws, -7), i)));
+  // Followers snapshot on that week's Sunday: on Mondays the sync's own snapshot (today) falls in the next week.
+  await store.upsert('account_metrics', [{ account_id: ig.id, day: D.addDays(ws, 6), metric: 'followers', breakdown: '', value: 6950 }]);
   const nextWeek = new Date(D.addDays(ws, 7) + 'T12:00:00Z'); // the Monday after: that week is now complete
 
   const res = await fillCalendar(store, hub, { now: nextWeek });
