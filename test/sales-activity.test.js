@@ -74,3 +74,23 @@ test('report: same formulas as admisiones_spain, Madrid days, offers by quality,
   assert.equal(posted.at(-1).url, 'https://n8n/brief');
   assert.equal(sa.checkKey('k'), true); assert.equal(sa.checkKey('x'), false);
 });
+
+test('rep names match across ActiveCampaign and Ringover; offer quality falls back to the offer stage', async () => {
+  const recs = [
+    { id: 1, region: 'Spain', assignTo: 'Pablo Han @4Geeks Academy', date: '2026-11-24', offerSentDate: '2026-11-24', offerQuality: '1', stage: 'SOFT FEEDBACK -30% DE QUE SE INSCRIBA', bucket: 'Active / Other', course: 'AI Engineering' },
+    { id: 2, region: 'Spain', assignTo: 'Pablo Ballesteros  de 4Geeks Academy', date: '2026-11-20', offerSentDate: '2026-11-24', stage: 'SUPER SOFT FEEDBACK - OFERTA TIRADA', bucket: 'Active / Other' },
+  ];
+  const store = (() => { const m = new Map(); return { async getBlob(id) { return m.get(id) || null; }, async putBlob(id, data) { m.set(id, { data }); } }; })();
+  const sa = createSalesActivity({ store, getRecords: () => recs, getEnrollments: () => ({ rows: [] }), env: {}, log: { log() {}, warn() {} } });
+  sa._cache.set('2026-11-24', [{ id: 'a', dir: 'out', state: 'ANSWERED', at: '2026-11-24T10:00:00Z', inCall: 30, total: 40, rep: 'Pablo Han' }]);
+  let r = await sa.report({ from: '2026-11-24', to: '2026-11-24' });
+  assert.deepEqual(r.total.offers, { strong: 0, soft: 1, supersoft: 1, other: 0 });
+  const ph = r.reps.filter((x) => x.rep === 'Pablo Han');
+  assert.equal(ph.length, 1); assert.equal(ph[0].calls.emitidas, 1); assert.equal(ph[0].offersTotal, 1);
+  assert.equal(r.reps.some((x) => /4Geeks/.test(x.rep)), false);
+  assert.deepEqual(r.total.leadsByCourse, { AI: 1 });
+  // Deal 2 is later Won: it keeps the Super soft quality the Hub saw.
+  recs[1].stage = 'WON AI ENG'; recs[1].bucket = 'Won';
+  r = await sa.report({ from: '2026-11-24', to: '2026-11-24' });
+  assert.equal(r.total.offers.supersoft, 1);
+});
