@@ -33,14 +33,15 @@ test('report: same formulas as admisiones_spain, Madrid days, offers by quality,
     return { ok: true, status: 200, text: async () => '{}' };
   };
   const recs = [
-    { id: 1, region: 'Spain', assignTo: 'Pablo Han', date: '2026-11-23', offerSentDate: '2026-11-23', offerQuality: 'STRONG_FEEDBACK', bucket: 'Active / Other', dealCourse: 'AI' },
-    { id: 2, region: 'Spain', assignTo: 'Pablo Han', date: '2026-11-20', offerSentDate: '2026-11-23', offerQuality: 'SUPER_SOFT_FEEDBACK', bucket: 'Active / Other' },
-    { id: 3, region: 'Spain', assignTo: 'Ana Ruiz', date: '2026-11-01', offerSentDate: '2026-11-23 15:00:00', offerQuality: 'SOFT_FEEDBACK', bucket: 'Won', wonDate: '2026-11-23', dealCourse: 'FS', name: 'Laura' },
-    { id: 4, region: 'USA', assignTo: 'X', date: '2026-11-23', offerSentDate: '2026-11-23', offerQuality: 'STRONG_FEEDBACK' },
+    { id: 1, region: 'Spain', assignTo: 'Pablo Han', date: '2026-11-23', offerSentDate: '2026-11-23', stage: 'STRONG FEEDBACK + 50% DE QUE SE INSCRIBA', bucket: 'Active / Other', dealCourse: 'AI' },
+    { id: 2, region: 'Spain', assignTo: 'Pablo Han', date: '2026-11-20', offerSentDate: '2026-11-23', stage: 'SUPER SOFT FEEDBACK - OFERTA TIRADA SIN', bucket: 'Active / Other' },
+    { id: 3, region: 'Spain', assignTo: 'Ana Ruiz', date: '2026-11-01', offerSentDate: '2026-11-23 15:00:00', stage: 'WON AI ENG', bucket: 'Won', wonDate: '2026-11-23', dealCourse: 'FS', name: 'Laura' },
+    { id: 4, region: 'USA', assignTo: 'X', date: '2026-11-23', offerSentDate: '2026-11-23', stage: 'STRONG FEEDBACK' },
   ];
   Object.defineProperty(recs[1], 'title', { value: 'DUP - Juan', enumerable: false });
   recs[1].date = '2026-11-23';
-  const sa = createSalesActivity({ store, getRecords: () => recs, getEnrollments: () => ({ rows: [{ id: '3', region: 'Spain', converted: '2026-11-23', name: 'Laura', program: 'Full Stack', assignTo: 'Ana Ruiz' }] }),
+  const stageHistory = async (id) => (String(id) === '3' ? [{ at: '2026-11-10T10:00:00Z', stage: 'TO CONTACT' }, { at: '2026-11-23T09:00:00Z', stage: 'SOFT FEEDBACK -30% DE QUE SE INSCRIBA' }, { at: '2026-11-23T16:00:00Z', stage: 'WON AI ENG' }] : []);
+  const sa = createSalesActivity({ store, stageHistory, getRecords: () => recs, getEnrollments: () => ({ rows: [{ id: '3', region: 'Spain', converted: '2026-11-23', name: 'Laura', program: 'Full Stack', assignTo: 'Ana Ruiz' }] }),
     env: { RINGOVER_WEBHOOK_URL: 'https://n8n/calls', BRIEF_WEBHOOK_URL: 'https://n8n/brief', ADS_SYNC_KEY: 'k' }, fetchImpl, log: { log() {}, warn() {} }, now: () => Date.parse('2026-11-23T20:00:00Z') });
   await sa.sync({ days: 2 });
   assert.equal(posted[0].key, 'k');
@@ -77,7 +78,7 @@ test('report: same formulas as admisiones_spain, Madrid days, offers by quality,
 
 test('rep names match across ActiveCampaign and Ringover; offer quality falls back to the offer stage', async () => {
   const recs = [
-    { id: 1, region: 'Spain', assignTo: 'Pablo Han @4Geeks Academy', date: '2026-11-24', offerSentDate: '2026-11-24', offerQuality: '1', stage: 'SOFT FEEDBACK -30% DE QUE SE INSCRIBA', bucket: 'Active / Other', course: 'AI Engineering' },
+    { id: 1, region: 'Spain', assignTo: 'Pablo Han @4Geeks Academy', date: '2026-11-24', offerSentDate: '2026-11-24', stage: 'SOFT FEEDBACK -30% DE QUE SE INSCRIBA', bucket: 'Active / Other', course: 'AI Engineering' },
     { id: 2, region: 'Spain', assignTo: 'Pablo Ballesteros  de 4Geeks Academy', date: '2026-11-20', offerSentDate: '2026-11-24', stage: 'SUPER SOFT FEEDBACK - OFERTA TIRADA', bucket: 'Active / Other' },
   ];
   const store = (() => { const m = new Map(); return { async getBlob(id) { return m.get(id) || null; }, async putBlob(id, data) { m.set(id, { data }); } }; })();
