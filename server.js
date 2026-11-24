@@ -643,7 +643,18 @@ if (client) metaSync.start();
 // Spain daily activity: Ringover calls (via n8n), offers by quality, sales, leads, enrollments,
 // and the 21:00 Madrid Slack briefing. lib/pipeline/sales-activity.js
 const { createSalesActivity, madridDay, addDays } = require('./lib/pipeline/sales-activity');
-const salesActivity = createSalesActivity({ store: createPipelineStore(), getRecords: () => cache.records, getEnrollments: () => enrollments.get() });
+const salesActivity = createSalesActivity({
+    store: createPipelineStore(), getRecords: () => cache.records, getEnrollments: () => enrollments.get(),
+    // Stage changes of a deal (AC deal activities, d_stageid), as stage names: how an offer's feedback
+    // stage is found once the deal has moved on.
+    stageHistory: client ? async (dealId) => {
+        const acts = await client.listDealActivities(dealId);
+        const name = (id) => { const st = lookups.stagesById.get(String(id)); return st ? st.title : null; };
+        return acts.filter((a) => a.dataType === 'd_stageid' || a.dataType === 'stage')
+            .flatMap((a) => [{ at: a.cdate, stage: name(a.dataNewval) }, { at: a.cdate, stage: name(a.dataOldval) }])
+            .filter((x) => x.stage);
+    } : null,
+});
 const isDay = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''));
 app.get('/api/sales-activity', requireAuth, async (req, res) => {
     if (!cache.records) return res.status(503).json({ error: 'Data still loading', loading: true });
