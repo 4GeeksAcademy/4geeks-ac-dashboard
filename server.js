@@ -640,6 +640,37 @@ app.post('/api/pipeline/meta-sync/result', async (req, res) => {
 });
 if (client) metaSync.start();
 
+// Spain daily activity: Ringover calls (via n8n), offers by quality, sales, leads, enrollments,
+// and the 21:00 Madrid Slack briefing. lib/pipeline/sales-activity.js
+const { createSalesActivity, madridDay, addDays } = require('./lib/pipeline/sales-activity');
+const salesActivity = createSalesActivity({ store: createPipelineStore(), getRecords: () => cache.records, getEnrollments: () => enrollments.get() });
+const isDay = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''));
+app.get('/api/sales-activity', requireAuth, async (req, res) => {
+    if (!cache.records) return res.status(503).json({ error: 'Data still loading', loading: true });
+    const today = madridDay(Date.now());
+    const to = isDay(req.query.to) ? req.query.to : today;
+    const from = isDay(req.query.from) ? req.query.from : to;
+    if (from > to || Date.parse(to) - Date.parse(from) > 120 * 864e5) return res.status(400).json({ error: 'Pick up to 120 days' });
+    try { res.json({ ...(await salesActivity.report({ from, to })), status: salesActivity.status() }); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/sales-activity/sync', auth.requireAdmin, async (req, res) => {
+    try { res.json(await salesActivity.sync({ days: Math.min(60, Number((req.body || {}).days) || 7) })); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Preview (send: false) or send now (admins) the briefing of a day.
+app.post('/api/sales-activity/brief', auth.requireAdmin, async (req, res) => {
+    const b = req.body || {};
+    const day = isDay(b.day) ? b.day : madridDay(Date.now());
+    try { res.json(b.send ? await salesActivity.sendBriefOnce(day) : await salesActivity.brief(day, { send: false })); } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+});
+// n8n asks before answering or posting anything: the request carries the Hub's key, and a briefing
+// must be one the Hub is sending right now. So n8n stores no secret.
+app.post('/api/sales-activity/verify', (req, res) => {
+    if (!salesActivity.checkKey(req.get('x-hub-key'))) return res.status(401).json({ ok: false });
+    const b = req.body || {};
+    res.json({ ok: b.kind === 'brief' ? salesActivity.isPendingBrief(b.day) : true });
+});
+if (client) salesActivity.start();
+
 // ---------------------------------------------------------------------------
 // Other sources, both read-only (lib/sources/*):
 //   Brevo  the AI Fluency / AI Flex funnel: lists + automation emails, joined
