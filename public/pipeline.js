@@ -279,12 +279,14 @@ function renderRecommendations(o = {}) {
   const scrollY = window.scrollY;
   const key = rowsKey(rows);
   el.innerHTML = `${intelTabsHtml()}
+    <div id="sa-root"></div>
     <div class="panel"><div class="panel-head" style="margin:0"><div><h2>${esc(t('recTitle'))}</h2><div class="panel-sub">${esc(t('recSub', { n: fmtInt(openCount) }))}</div></div>
       <div class="seg" id="rec-period"><button data-p="0" class="${usePeriod ? '' : 'active'}">${esc(t('recWholePipeline'))}</button><button data-p="1" class="${usePeriod ? 'active' : ''}">${esc(t('recOnlyPeriod', { p: dateLabel() }))}</button></div></div></div>
     <div id="pi-insights">${insightsHtml(PIPE.insights[key], PIPE.scores[key], rows.length)}</div>
     <div id="pi-scores">${scoresHtml(PIPE.scores[key])}</div>
     <div class="rec-grid">${REC_GROUPS.map((g) => recCardHtml(g, groups[g.key].sort(recSort(g.key)))).join('')}</div>
     <div id="bulk-bar"></div>`;
+  if (window.renderSalesActivity) { try { window.renderSalesActivity($('#sa-root', el)); } catch (e) { console.error('[sales-activity]', e); } }
   if (o.fromLoad) window.scrollTo(0, scrollY);
   bindIntelTabs(el);
   $$('#rec-period button', el).forEach((b) => b.addEventListener('click', () => { state.recUsePeriod = b.dataset.p; renderRecommendations(); }));

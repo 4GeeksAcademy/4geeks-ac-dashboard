@@ -714,3 +714,19 @@ a.sb-item:hover{text-decoration:none;}
 .mv-more{margin-top:10px;} .mv-more summary{cursor:pointer;font-weight:600;font-size:13px;}
 .as-pf{margin-bottom:12px;}
 .enr-split{border-top:1px dashed var(--border);margin:10px 0;}
+/* Spain daily activity */
+.sa-panel .panel-head{flex-wrap:wrap;gap:10px;}
+.sa-ctl{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.sa-daypick{font-size:12.5px;color:var(--muted);display:flex;gap:6px;align-items:center;}
+.sa-daypick input{border:1px solid var(--border);border-radius:8px;padding:4px 8px;font:inherit;color:var(--ink);background:var(--surface);}
+.sa-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:6px 0 14px;}
+.sa-kpi.hl{border-top:3px solid var(--amber);}
+.sa-table td.num,.sa-table th.num{text-align:right;white-space:nowrap;}
+.sa-table tr.sa-tot td{font-weight:700;border-top:2px solid var(--border);background:var(--bg-gray,#F5F7FA);}
+.sa-q-strong{color:#166B43;} .sa-q-soft{color:#8A5A00;} .sa-q-ss{color:var(--muted);}
+.sa-badge{font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--border);}
+.sa-badge.q-strong{background:#E7F6EE;color:#166B43;} .sa-badge.q-soft{background:var(--amber-soft);color:var(--amber-ink);} .sa-badge.q-supersoft{background:#EEF0F3;color:var(--muted);}
+.sa-note{font-size:12.5px;margin:4px 0 10px;} .sa-note.warn{background:var(--amber-soft);color:var(--amber-ink);padding:8px 12px;border-radius:8px;}
+.sa-more{margin-top:12px;} .sa-more summary{cursor:pointer;font-weight:700;font-size:13.5px;margin-bottom:6px;}
+.sa-admin{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+.sa-preview{white-space:pre-wrap;background:var(--bg-gray,#F5F7FA);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font:13px/1.5 ui-monospace,Menlo,monospace;margin-top:10px;}
